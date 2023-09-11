@@ -1,7 +1,7 @@
 package test
 
 import (
-	"gitee.com/MetaphysicCoding/light-flow/core"
+	"gitee.com/MetaphysicCoding/light-flow"
 	"slices"
 	"testing"
 	"time"
@@ -30,86 +30,86 @@ type Dst struct {
 }
 
 func TestExplainStatus1(t *testing.T) {
-	if !slices.Contains(core.ExplainStatus(core.Cancel), "Cancel") {
+	if !slices.Contains(light_flow.ExplainStatus(light_flow.Cancel), "Cancel") {
 		t.Errorf("cancel status explain error")
 	}
-	if !slices.Contains(core.ExplainStatus(core.Pause), "Pause") {
+	if !slices.Contains(light_flow.ExplainStatus(light_flow.Pause), "Pause") {
 		t.Errorf("pause status explain error")
 	}
-	if !slices.Contains(core.ExplainStatus(core.Running), "Running") {
+	if !slices.Contains(light_flow.ExplainStatus(light_flow.Running), "Running") {
 		t.Errorf("running status explain error")
 	}
-	if !slices.Contains(core.ExplainStatus(core.Success), "Success") {
+	if !slices.Contains(light_flow.ExplainStatus(light_flow.Success), "Success") {
 		t.Errorf("success status explain error")
 	}
-	if !slices.Contains(core.ExplainStatus(core.Failed), "Failed") {
+	if !slices.Contains(light_flow.ExplainStatus(light_flow.Failed), "Failed") {
 		t.Errorf("failed status explain error")
 	}
-	if !slices.Contains(core.ExplainStatus(core.Timeout), "Timeout") {
+	if !slices.Contains(light_flow.ExplainStatus(light_flow.Timeout), "Timeout") {
 		t.Errorf("timeout status explain error")
 	}
-	if !slices.Contains(core.ExplainStatus(core.Panic), "Panic") {
+	if !slices.Contains(light_flow.ExplainStatus(light_flow.Panic), "Panic") {
 		t.Errorf("panic status explain error")
 	}
-	if !slices.Contains(core.ExplainStatus(core.Pending), "Pending") {
+	if !slices.Contains(light_flow.ExplainStatus(light_flow.Pending), "Pending") {
 		t.Errorf("pending status explain error")
 	}
 }
 
 func TestExplainStatus2(t *testing.T) {
 	status := int64(0)
-	core.AppendStatus(&status, core.Cancel)
-	core.AppendStatus(&status, core.Panic)
-	core.AppendStatus(&status, core.Failed)
-	core.AppendStatus(&status, core.Timeout)
-	core.AppendStatus(&status, core.Success)
-	if slices.Contains(core.ExplainStatus(status), "Success") {
+	light_flow.AppendStatus(&status, light_flow.Cancel)
+	light_flow.AppendStatus(&status, light_flow.Panic)
+	light_flow.AppendStatus(&status, light_flow.Failed)
+	light_flow.AppendStatus(&status, light_flow.Timeout)
+	light_flow.AppendStatus(&status, light_flow.Success)
+	if slices.Contains(light_flow.ExplainStatus(status), "Success") {
 		t.Errorf("explain success while error occur")
 	}
-	if !slices.Contains(core.ExplainStatus(status), "Failed") {
+	if !slices.Contains(light_flow.ExplainStatus(status), "Failed") {
 		t.Errorf("failed status explain error")
 	}
-	if !slices.Contains(core.ExplainStatus(status), "Timeout") {
+	if !slices.Contains(light_flow.ExplainStatus(status), "Timeout") {
 		t.Errorf("timeout status explain error")
 	}
-	if !slices.Contains(core.ExplainStatus(status), "Panic") {
+	if !slices.Contains(light_flow.ExplainStatus(status), "Panic") {
 		t.Errorf("panic status explain error")
 	}
-	if !slices.Contains(core.ExplainStatus(status), "Cancel") {
+	if !slices.Contains(light_flow.ExplainStatus(status), "Cancel") {
 		t.Errorf("cancel status explain error")
 	}
 	status = 0
-	core.AppendStatus(&status, core.Pause)
-	core.AppendStatus(&status, core.Running)
-	core.AppendStatus(&status, core.Pending)
-	if !core.IsStatusNormal(status) {
+	light_flow.AppendStatus(&status, light_flow.Pause)
+	light_flow.AppendStatus(&status, light_flow.Running)
+	light_flow.AppendStatus(&status, light_flow.Pending)
+	if !light_flow.IsStatusNormal(status) {
 		t.Errorf("normal status judge error")
 	}
-	if !slices.Contains(core.ExplainStatus(status), "Pause") {
+	if !slices.Contains(light_flow.ExplainStatus(status), "Pause") {
 		t.Errorf("pause status explain error")
 	}
-	if !slices.Contains(core.ExplainStatus(status), "Running") {
+	if !slices.Contains(light_flow.ExplainStatus(status), "Running") {
 		t.Errorf("running status explain error")
 	}
-	if !slices.Contains(core.ExplainStatus(status), "Pending") {
+	if !slices.Contains(light_flow.ExplainStatus(status), "Pending") {
 		t.Errorf("pending status explain error")
 	}
-	core.AppendStatus(&status, core.Success)
-	if !slices.Contains(core.ExplainStatus(status), "Success") {
+	light_flow.AppendStatus(&status, light_flow.Success)
+	if !slices.Contains(light_flow.ExplainStatus(status), "Success") {
 		t.Errorf("success status explain error")
 	}
 }
 
 func TestIsStatusNormal(t *testing.T) {
-	normal := []int64{core.Pending, core.Running, core.Pause, core.Success}
-	abnormal := []int64{core.Cancel, core.Timeout, core.Panic, core.Failed}
+	normal := []int64{light_flow.Pending, light_flow.Running, light_flow.Pause, light_flow.Success}
+	abnormal := []int64{light_flow.Cancel, light_flow.Timeout, light_flow.Panic, light_flow.Failed}
 	for _, status := range normal {
-		if !core.IsStatusNormal(status) {
+		if !light_flow.IsStatusNormal(status) {
 			t.Errorf("normal status %d judge to abnormal", status)
 		}
 	}
 	for _, status := range abnormal {
-		if core.IsStatusNormal(status) {
+		if light_flow.IsStatusNormal(status) {
 			t.Errorf("abnormal status %d judge to normal", status)
 		}
 	}
@@ -124,7 +124,7 @@ func TestCreateStruct(t *testing.T) {
 		SameName: "same",
 		Exist:    true,
 	}
-	dst := core.CreateStruct[Dst](&src)
+	dst := light_flow.CreateStruct[Dst](&src)
 	if dst.Name != src.Name {
 		t.Errorf("dst.Name != src.Name")
 	}
@@ -153,7 +153,7 @@ func TestCopyProperties(t *testing.T) {
 		Exist:    true,
 	}
 	dst := Dst{}
-	core.CopyProperties(&src, &dst)
+	light_flow.CopyProperties(&src, &dst)
 	if dst.Name != src.Name {
 		t.Errorf("dst.Name != src.Name")
 	}

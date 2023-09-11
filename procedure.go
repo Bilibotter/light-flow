@@ -1,4 +1,4 @@
-package core
+package light_flow
 
 import (
 	"fmt"
