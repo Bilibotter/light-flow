@@ -20,12 +20,19 @@ type Procedure struct {
 	conf              *ProduceConfig
 }
 
+type ProcedureInfo struct {
+	Name    string
+	StepMap map[string]*StepInfo
+	Ctx     *Context
+}
+
 type ProduceConfig struct {
-	StepTimeout      time.Duration
-	ProcedureTimeout time.Duration
-	StepRetry        int
-	PreProcessor     func(stepName string, ctx *Context)
-	PostProcessor    func(info *StepInfo)
+	StepTimeout       time.Duration
+	ProcedureTimeout  time.Duration
+	StepRetry         int
+	PreProcessor      func(stepName string, ctx *Context)
+	PostProcessor     func(info *StepInfo)
+	CompleteProcessor func(info *ProcedureInfo)
 }
 
 func (pcd *Procedure) SupplyCtxByMap(update map[string]any) {
@@ -235,8 +242,16 @@ func (pcd *Procedure) updateStatusAfterFinish() {
 	finish := make(chan bool, 1)
 	go func() {
 		pcd.running.Wait()
-		for _, step := range pcd.stepMap {
-			AppendStatus(&pcd.status, step.status)
+		info := &ProcedureInfo{
+			Name:    pcd.name,
+			StepMap: make(map[string]*StepInfo, len(pcd.stepMap)),
+			Ctx:     pcd.context,
+		}
+		for name, step := range pcd.stepMap {
+			info.StepMap[name] = buildInfo(step)
+		}
+		if pcd.conf != nil && pcd.conf.CompleteProcessor != nil {
+			pcd.conf.CompleteProcessor(info)
 		}
 		finish <- true
 	}()

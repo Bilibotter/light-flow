@@ -23,6 +23,8 @@ type StepInfo struct {
 	Id     string
 	Name   string
 	Status int64
+	Prev   []string
+	Next   []string
 	Ctx    *Context
 	Config *StepConfig
 	Start  time.Time
@@ -45,6 +47,14 @@ func buildInfo(step *Step) *StepInfo {
 		Start:  step.Start,
 		End:    step.End,
 		Err:    step.Err,
+		Prev:   make([]string, 0, len(step.receive)),
+		Next:   make([]string, 0, len(step.send)),
+	}
+	for _, prev := range step.receive {
+		info.Prev = append(info.Prev, prev.name)
+	}
+	for _, next := range step.send {
+		info.Next = append(info.Next, next.name)
 	}
 	return info
 }
