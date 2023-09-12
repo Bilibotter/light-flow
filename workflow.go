@@ -14,7 +14,7 @@ type Workflow struct {
 
 func NewWorkflow[T any](input map[string]T) *Workflow {
 	context := Context{
-		scope:         ProcessCtx,
+		scope:         WorkflowCtx,
 		scopeContexts: make(map[string]*Context),
 		table:         sync.Map{},
 		priority:      make(map[string]any),
@@ -23,7 +23,7 @@ func NewWorkflow[T any](input map[string]T) *Workflow {
 		context.table.Store(k, v)
 	}
 
-	context.scopeContexts[ProcessCtx] = &context
+	context.scopeContexts[WorkflowCtx] = &context
 
 	flow := Workflow{
 		lock:       sync.Mutex{},
