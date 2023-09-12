@@ -8,7 +8,6 @@ type Workflow struct {
 	processMap map[string]*Process
 	context    *Context
 	features   map[string]*Feature
-	pause      sync.WaitGroup
 	finish     sync.WaitGroup
 	lock       sync.Mutex
 }
@@ -30,7 +29,6 @@ func NewWorkflow[T any](input map[string]T) *Workflow {
 		lock:       sync.Mutex{},
 		context:    &context,
 		processMap: make(map[string]*Process),
-		pause:      sync.WaitGroup{},
 		finish:     sync.WaitGroup{},
 	}
 
@@ -61,6 +59,28 @@ func (wf *Workflow) AsyncFlow() map[string]*Feature {
 	}
 	wf.features = features
 	return features
+}
+
+func (wf *Workflow) Pause() {
+	for _, process := range wf.processMap {
+		process.pauses()
+	}
+}
+
+func (wf *Workflow) KeepOn() {
+	for _, process := range wf.processMap {
+		process.keepOn()
+	}
+}
+
+func (wf *Workflow) PauseProcess(name string) {
+	process := wf.processMap[name]
+	process.pauses()
+}
+
+func (wf *Workflow) KeepOnProcess(name string) {
+	process := wf.processMap[name]
+	process.keepOn()
 }
 
 func (wf *Workflow) AddProcess(name string, conf *ProcessConfig) *Process {

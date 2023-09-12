@@ -29,6 +29,39 @@ type Dst struct {
 	UnExist  bool
 }
 
+func TestPopStatus(t *testing.T) {
+	status := int64(0)
+	light_flow.AppendStatus(&status, light_flow.Cancel)
+	light_flow.AppendStatus(&status, light_flow.Panic)
+	light_flow.AppendStatus(&status, light_flow.Failed)
+	light_flow.AppendStatus(&status, light_flow.Timeout)
+	light_flow.PopStatus(&status, light_flow.Cancel)
+	if slices.Contains(light_flow.ExplainStatus(status), "Cancel") {
+		t.Errorf("cancel status pop error")
+	}
+	if !slices.Contains(light_flow.ExplainStatus(status), "Panic") {
+		t.Errorf("cancel status pop but pop panic")
+	}
+	light_flow.PopStatus(&status, light_flow.Panic)
+	if slices.Contains(light_flow.ExplainStatus(status), "Panic") {
+		t.Errorf("panic status pop error")
+	}
+	if !slices.Contains(light_flow.ExplainStatus(status), "Failed") {
+		t.Errorf("panic status pop but pop failed")
+	}
+	light_flow.PopStatus(&status, light_flow.Failed)
+	if slices.Contains(light_flow.ExplainStatus(status), "Failed") {
+		t.Errorf("failed status pop error")
+	}
+	if !slices.Contains(light_flow.ExplainStatus(status), "Timeout") {
+		t.Errorf("failed status pop but pop timeout")
+	}
+	light_flow.PopStatus(&status, light_flow.Timeout)
+	if slices.Contains(light_flow.ExplainStatus(status), "Timeout") {
+		t.Errorf("timeout status pop error")
+	}
+}
+
 func TestExplainStatus1(t *testing.T) {
 	if !slices.Contains(light_flow.ExplainStatus(light_flow.Cancel), "Cancel") {
 		t.Errorf("cancel status explain error")

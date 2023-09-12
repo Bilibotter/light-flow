@@ -3,6 +3,7 @@ package test
 import (
 	"fmt"
 	"gitee.com/MetaphysicCoding/light-flow"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -247,6 +248,82 @@ func TestMultipleNormalSteps(t *testing.T) {
 	procedure.AddStepWithAlias("12", GenerateStep(12), "11")
 	procedure.AddStepWithAlias("13", GenerateStep(13), "12")
 	features := workflow.WaitToDone()
+	for name, feature := range features {
+		explain := strings.Join(feature.GetStatusExplain(), ", ")
+		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
+		if !feature.IsSuccess() {
+			t.Errorf("procedure[%s] fail", name)
+		}
+	}
+	if current != 6 {
+		t.Errorf("excute 6 step, but current = %d", current)
+	}
+}
+
+func TestWorkFlowPause(t *testing.T) {
+	defer resetCurrent()
+	workflow := light_flow.NewWorkflow[any](nil)
+	procedure := workflow.AddProcess("test1", nil)
+	procedure.AddStepWithAlias("1", GenerateStep(1))
+	procedure.AddStepWithAlias("2", GenerateStep(2), "1")
+	procedure.AddStepWithAlias("3", GenerateStep(3), "2")
+	procedure.AddStepWithAlias("11", GenerateStep(11))
+	procedure.AddStepWithAlias("12", GenerateStep(12), "11")
+	procedure.AddStepWithAlias("13", GenerateStep(13), "12")
+	features := workflow.AsyncFlow()
+	time.Sleep(10 * time.Millisecond)
+	workflow.Pause()
+	time.Sleep(200 * time.Millisecond)
+	if current != 2 {
+		t.Errorf("excute 2 step, but current = %d", current)
+	}
+	for name, feature := range features {
+		explain := strings.Join(feature.GetStatusExplain(), ", ")
+		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
+		if !slices.Contains(feature.GetStatusExplain(), "Pause") {
+			t.Errorf("procedure[%s] pause fail", name)
+		}
+	}
+	workflow.KeepOn()
+	workflow.WaitToDone()
+	for name, feature := range features {
+		explain := strings.Join(feature.GetStatusExplain(), ", ")
+		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
+		if !feature.IsSuccess() {
+			t.Errorf("procedure[%s] fail", name)
+		}
+	}
+	if current != 6 {
+		t.Errorf("excute 6 step, but current = %d", current)
+	}
+}
+
+func TestProcessPause(t *testing.T) {
+	defer resetCurrent()
+	workflow := light_flow.NewWorkflow[any](nil)
+	procedure := workflow.AddProcess("test1", nil)
+	procedure.AddStepWithAlias("1", GenerateStep(1))
+	procedure.AddStepWithAlias("2", GenerateStep(2), "1")
+	procedure.AddStepWithAlias("3", GenerateStep(3), "2")
+	procedure.AddStepWithAlias("11", GenerateStep(11))
+	procedure.AddStepWithAlias("12", GenerateStep(12), "11")
+	procedure.AddStepWithAlias("13", GenerateStep(13), "12")
+	features := workflow.AsyncFlow()
+	time.Sleep(10 * time.Millisecond)
+	workflow.PauseProcess("test1")
+	time.Sleep(200 * time.Millisecond)
+	if current != 2 {
+		t.Errorf("excute 2 step, but current = %d", current)
+	}
+	for name, feature := range features {
+		explain := strings.Join(feature.GetStatusExplain(), ", ")
+		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
+		if !slices.Contains(feature.GetStatusExplain(), "Pause") {
+			t.Errorf("procedure[%s] pause fail", name)
+		}
+	}
+	workflow.KeepOnProcess("test1")
+	workflow.WaitToDone()
 	for name, feature := range features {
 		explain := strings.Join(feature.GetStatusExplain(), ", ")
 		fmt.Printf("procedure[%s] explain=%s\n", name, explain)

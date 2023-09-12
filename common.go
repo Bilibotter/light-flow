@@ -63,12 +63,21 @@ type Feature struct {
 	finish  *int64
 }
 
-func AppendStatus(addr *int64, update int64) (change bool) {
-	for status := atomic.LoadInt64(addr); status&update != update; {
-		if atomic.CompareAndSwapInt64(addr, status, status|update) {
+func PopStatus(addr *int64, status int64) (change bool) {
+	for current := atomic.LoadInt64(addr); status&current == status; {
+		if atomic.CompareAndSwapInt64(addr, current, current^status) {
 			return true
 		}
-		status = atomic.LoadInt64(addr)
+	}
+	return false
+}
+
+func AppendStatus(addr *int64, update int64) (change bool) {
+	for current := atomic.LoadInt64(addr); current&update != update; {
+		if atomic.CompareAndSwapInt64(addr, current, current|update) {
+			return true
+		}
+		current = atomic.LoadInt64(addr)
 	}
 	return false
 }

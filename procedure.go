@@ -117,7 +117,13 @@ func (pcd *Process) AddStepWithAlias(alias string, run func(ctx *Context) (any, 
 	return step
 }
 
-func (pcd *Process) Pause() {
+func (pcd *Process) keepOn() {
+	if PopStatus(&pcd.status, Pause) {
+		pcd.pause.Done()
+	}
+}
+
+func (pcd *Process) pauses() {
 	if AppendStatus(&pcd.status, Pause) {
 		pcd.pause.Add(1)
 	}
