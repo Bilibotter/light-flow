@@ -69,7 +69,7 @@ func TestSinglePanicStep(t *testing.T) {
 	defer resetCurrent()
 	t.Parallel()
 	workflow := light_flow.NewWorkflow(nil)
-	procedure := workflow.AddProcedure("test1", nil)
+	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddStepWithAlias("1", GeneratePanicStep(1))
 	features := workflow.WaitToDone()
 	for name, feature := range features {
@@ -87,7 +87,7 @@ func TestSinglePanicStep(t *testing.T) {
 func TestGoAheadWithoutDependPanicStep(t *testing.T) {
 	defer resetCurrent()
 	workflow := light_flow.NewWorkflow(nil)
-	procedure := workflow.AddProcedure("test1", nil)
+	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddStepWithAlias("1", GeneratePanicStep(1))
 	procedure.AddStepWithAlias("-1", GenerateStep(-1), "1")
 	procedure.AddStepWithAlias("-2", GenerateStep(-2), "-1")
@@ -111,7 +111,7 @@ func TestGoAheadWithoutDependPanicStep(t *testing.T) {
 func TestSingleErrorStep(t *testing.T) {
 	defer resetCurrent()
 	workflow := light_flow.NewWorkflow(nil)
-	procedure := workflow.AddProcedure("test1", nil)
+	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddStepWithAlias("1", GenerateErrorStep(1))
 	features := workflow.WaitToDone()
 	for name, feature := range features {
@@ -129,7 +129,7 @@ func TestSingleErrorStep(t *testing.T) {
 func TestGoAheadWithoutDependErrorStep(t *testing.T) {
 	defer resetCurrent()
 	workflow := light_flow.NewWorkflow(nil)
-	procedure := workflow.AddProcedure("test1", nil)
+	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddStepWithAlias("1", GenerateErrorStep(1))
 	procedure.AddStepWithAlias("-1", GenerateStep(-1), "1")
 	procedure.AddStepWithAlias("-2", GenerateStep(-2), "-1")
@@ -153,7 +153,7 @@ func TestGoAheadWithoutDependErrorStep(t *testing.T) {
 func TestSingleNormalStep(t *testing.T) {
 	defer resetCurrent()
 	workflow := light_flow.NewWorkflow(nil)
-	procedure := workflow.AddProcedure("test1", nil)
+	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddStepWithAlias("1", GenerateStep(1))
 	features := workflow.WaitToDone()
 	for name, feature := range features {
@@ -171,7 +171,7 @@ func TestSingleNormalStep(t *testing.T) {
 func TestTestMultipleNormalStepWithoutAlias(t *testing.T) {
 	defer resetCurrent()
 	workflow := light_flow.NewWorkflow(nil)
-	procedure := workflow.AddProcedure("test1", nil)
+	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddStep(NormalStep1)
 	procedure.AddStep(NormalStep2)
 	procedure.AddStep(NormalStep3)
@@ -193,7 +193,7 @@ func TestTestMultipleNormalStepWithoutAlias(t *testing.T) {
 func TestMultipleNormalStepWithMultipleBranches(t *testing.T) {
 	defer resetCurrent()
 	workflow := light_flow.NewWorkflow(nil)
-	procedure := workflow.AddProcedure("test1", nil)
+	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddStepWithAlias("1", GenerateStep(1))
 	procedure.AddStepWithAlias("2", GenerateStep(2), "1")
 	procedure.AddStepWithAlias("3", GenerateStep(3), "2")
@@ -216,7 +216,7 @@ func TestMultipleNormalStepWithMultipleBranches(t *testing.T) {
 func TestMultipleNormalStepsWithWaitBefore(t *testing.T) {
 	defer resetCurrent()
 	workflow := light_flow.NewWorkflow(nil)
-	procedure := workflow.AddProcedure("test1", nil)
+	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddStepWithAlias("1", GenerateStep(1))
 	procedure.AddWaitBefore("2", GenerateStep(2))
 	procedure.AddWaitBefore("3", GenerateStep(3))
@@ -239,7 +239,7 @@ func TestMultipleNormalStepsWithWaitBefore(t *testing.T) {
 func TestMultipleNormalSteps(t *testing.T) {
 	defer resetCurrent()
 	workflow := light_flow.NewWorkflow(nil)
-	procedure := workflow.AddProcedure("test1", nil)
+	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddStepWithAlias("1", GenerateStep(1))
 	procedure.AddStepWithAlias("2", GenerateStep(2), "1")
 	procedure.AddStepWithAlias("3", GenerateStep(3), "2")

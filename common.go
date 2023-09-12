@@ -9,7 +9,7 @@ import (
 const (
 	InternalPrefix = "~"
 	WorkflowCtx    = "~workflow~"
-	ProcedureCtx   = "~procedure~"
+	ProcessCtx     = "~process~"
 )
 
 const (

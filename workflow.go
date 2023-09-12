@@ -5,17 +5,17 @@ import (
 )
 
 type Workflow struct {
-	procedureMap map[string]*Procedure
-	context      *Context
-	features     map[string]*Feature
-	pause        sync.WaitGroup
-	finish       sync.WaitGroup
-	lock         sync.Mutex
+	processMap map[string]*Process
+	context    *Context
+	features   map[string]*Feature
+	pause      sync.WaitGroup
+	finish     sync.WaitGroup
+	lock       sync.Mutex
 }
 
 func NewWorkflow(input map[string]any) *Workflow {
 	context := Context{
-		scope:         ProcedureCtx,
+		scope:         ProcessCtx,
 		scopeContexts: make(map[string]*Context),
 		table:         sync.Map{},
 		priority:      make(map[string]any),
@@ -24,14 +24,14 @@ func NewWorkflow(input map[string]any) *Workflow {
 		context.table.Store(k, v)
 	}
 
-	context.scopeContexts[ProcedureCtx] = &context
+	context.scopeContexts[ProcessCtx] = &context
 
 	flow := Workflow{
-		lock:         sync.Mutex{},
-		context:      &context,
-		procedureMap: make(map[string]*Procedure),
-		pause:        sync.WaitGroup{},
-		finish:       sync.WaitGroup{},
+		lock:       sync.Mutex{},
+		context:    &context,
+		processMap: make(map[string]*Process),
+		pause:      sync.WaitGroup{},
+		finish:     sync.WaitGroup{},
 	}
 
 	return &flow
@@ -55,35 +55,35 @@ func (wf *Workflow) AsyncFlow() map[string]*Feature {
 	if wf.features != nil {
 		return wf.features
 	}
-	features := make(map[string]*Feature, len(wf.procedureMap))
-	for name, procedure := range wf.procedureMap {
-		features[name] = procedure.run()
+	features := make(map[string]*Feature, len(wf.processMap))
+	for name, process := range wf.processMap {
+		features[name] = process.schedule()
 	}
 	wf.features = features
 	return features
 }
 
-func (wf *Workflow) AddProcedure(name string, conf *ProduceConfig) *Procedure {
-	procedureCtx := Context{
-		scope:         ProcedureCtx,
+func (wf *Workflow) AddProcess(name string, conf *ProcessConfig) *Process {
+	processCtx := Context{
+		scope:         ProcessCtx,
 		scopeContexts: make(map[string]*Context),
 		table:         sync.Map{},
 	}
-	procedureCtx.scopeContexts[ProcedureCtx] = &procedureCtx
+	processCtx.scopeContexts[ProcessCtx] = &processCtx
 
-	procedure := Procedure{
-		name:              name,
-		stepMap:           make(map[string]*Step),
-		procedureContexts: procedureCtx.scopeContexts,
-		context:           &procedureCtx,
-		pause:             sync.WaitGroup{},
-		running:           sync.WaitGroup{},
-		conf:              conf,
+	process := Process{
+		name:            name,
+		stepMap:         make(map[string]*Step),
+		processContexts: processCtx.scopeContexts,
+		context:         &processCtx,
+		pause:           sync.WaitGroup{},
+		running:         sync.WaitGroup{},
+		conf:            conf,
 	}
 
-	wf.procedureMap[procedure.name] = &procedure
+	wf.processMap[process.name] = &process
 	wf.finish.Add(1)
-	procedure.context.parents = append(procedure.context.parents, wf.context)
+	process.context.parents = append(process.context.parents, wf.context)
 
-	return &procedure
+	return &process
 }

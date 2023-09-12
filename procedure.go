@@ -7,57 +7,57 @@ import (
 	"time"
 )
 
-type Procedure struct {
-	name              string
-	stepMap           map[string]*Step
-	procedureContexts map[string]*Context
-	tail              string
-	context           *Context
-	pause             sync.WaitGroup
-	running           sync.WaitGroup
-	finish            int64
-	status            int64
-	conf              *ProduceConfig
+type Process struct {
+	name            string
+	stepMap         map[string]*Step
+	processContexts map[string]*Context
+	tail            string
+	context         *Context
+	pause           sync.WaitGroup
+	running         sync.WaitGroup
+	finish          int64
+	status          int64
+	conf            *ProcessConfig
 }
 
-type ProcedureInfo struct {
+type ProcessInfo struct {
 	Name    string
 	StepMap map[string]*StepInfo
 	Ctx     *Context
 }
 
-type ProduceConfig struct {
+type ProcessConfig struct {
 	StepTimeout        time.Duration
-	ProcedureTimeout   time.Duration
+	ProcessTimeout     time.Duration
 	StepRetry          int
 	PreProcessors      []func(stepName string, ctx *Context) (keepOn bool)
 	PostProcessors     []func(info *StepInfo) (keepOn bool)
-	CompleteProcessors []func(info *ProcedureInfo) (keepOn bool)
+	CompleteProcessors []func(info *ProcessInfo) (keepOn bool)
 }
 
-func (pcd *Procedure) SupplyCtxByMap(update map[string]any) {
+func (pcd *Process) SupplyCtxByMap(update map[string]any) {
 	for key, value := range update {
 		pcd.context.Set(key, value)
 	}
 }
 
-func (pcd *Procedure) SupplyCtx(key string, value any) {
+func (pcd *Process) SupplyCtx(key string, value any) {
 	pcd.context.Set(key, value)
 }
 
-func (pcd *Procedure) AddConfig(config *ProduceConfig) {
+func (pcd *Process) AddConfig(config *ProcessConfig) {
 	pcd.conf = config
 }
 
-func (pcd *Procedure) AddStep(run func(ctx *Context) (any, error), depends ...any) *Step {
+func (pcd *Process) AddStep(run func(ctx *Context) (any, error), depends ...any) *Step {
 	return pcd.AddStepWithAlias(GetFuncName(run), run, depends...)
 }
 
-func (pcd *Procedure) AddWaitBefore(alias string, run func(ctx *Context) (any, error)) *Step {
+func (pcd *Process) AddWaitBefore(alias string, run func(ctx *Context) (any, error)) *Step {
 	return pcd.AddStepWithAlias(alias, run, pcd.tail)
 }
 
-func (pcd *Procedure) AddWaitAll(alias string, run func(ctx *Context) (any, error)) *Step {
+func (pcd *Process) AddWaitAll(alias string, run func(ctx *Context) (any, error)) *Step {
 	depends := make([]any, 0)
 	for name, step := range pcd.stepMap {
 		if step.position == End {
@@ -70,7 +70,7 @@ func (pcd *Procedure) AddWaitAll(alias string, run func(ctx *Context) (any, erro
 	return pcd.AddStepWithAlias(alias, run, depends...)
 }
 
-func (pcd *Procedure) AddStepWithAlias(alias string, run func(ctx *Context) (any, error), depends ...any) *Step {
+func (pcd *Process) AddStepWithAlias(alias string, run func(ctx *Context) (any, error), depends ...any) *Step {
 	step := &Step{
 		run:     run,
 		name:    alias,
@@ -79,8 +79,8 @@ func (pcd *Procedure) AddStepWithAlias(alias string, run func(ctx *Context) (any
 		receive: make([]*Step, 0, len(depends)),
 		send:    make([]*Step, 0),
 		ctx: &Context{
-			scopeContexts: pcd.procedureContexts,
-			scope:         ProcedureCtx,
+			scopeContexts: pcd.processContexts,
+			scope:         ProcessCtx,
 			table:         sync.Map{},
 		},
 	}
@@ -107,7 +107,7 @@ func (pcd *Procedure) AddStepWithAlias(alias string, run func(ctx *Context) (any
 
 	pcd.tail = step.name
 	pcd.stepMap[alias] = step
-	pcd.procedureContexts[alias] = step.ctx
+	pcd.processContexts[alias] = step.ctx
 	if len(depends) == 0 {
 		step.ctx.parents = append(step.ctx.parents, pcd.context)
 		step.position = Start
@@ -117,14 +117,14 @@ func (pcd *Procedure) AddStepWithAlias(alias string, run func(ctx *Context) (any
 	return step
 }
 
-func (pcd *Procedure) Pause() {
+func (pcd *Process) Pause() {
 	if AppendStatus(&pcd.status, Pause) {
 		pcd.pause.Add(1)
 	}
 }
 
-func (pcd *Procedure) DrawRelation() (procedureName string, depends map[string][]string) {
-	procedureName = pcd.name
+func (pcd *Process) DrawRelation() (processName string, depends map[string][]string) {
+	processName = pcd.name
 	for name, step := range pcd.stepMap {
 		depends[name] = make([]string, 0, len(step.send))
 		for _, send := range step.send {
@@ -134,15 +134,15 @@ func (pcd *Procedure) DrawRelation() (procedureName string, depends map[string][
 	return
 }
 
-func (pcd *Procedure) run() *Feature {
+func (pcd *Process) schedule() *Feature {
 	AppendStatus(&pcd.status, Running)
 	for _, step := range pcd.stepMap {
 		if step.position == Start {
-			go pcd.planStep(step)
+			go pcd.scheduleStep(step)
 		}
 	}
 
-	go pcd.updateStatusAfterFinish()
+	go pcd.finalize()
 
 	feature := Feature{
 		status:  &pcd.status,
@@ -153,15 +153,15 @@ func (pcd *Procedure) run() *Feature {
 	return &feature
 }
 
-func (pcd *Procedure) planStep(step *Step) {
-	defer pcd.planNextSteps(step)
+func (pcd *Process) scheduleStep(step *Step) {
+	defer pcd.scheduleNextSteps(step)
 
 	if _, finish := pcd.getStepResult(step.name); finish {
 		AppendStatus(&step.status, Success)
 		return
 	}
 	status := atomic.LoadInt64(&pcd.status)
-	// If a step fails, the procedure fails.
+	// If a step fails, the process fails.
 	// But other tasks that do not depend on the failed task will continue to execute
 	if !IsStatusNormal(status) {
 		AppendStatus(&step.status, Cancel)
@@ -178,7 +178,7 @@ func (pcd *Procedure) planStep(step *Step) {
 		status = atomic.LoadInt64(&pcd.status)
 	}
 
-	go pcd.executeStep(step)
+	go pcd.runStep(step)
 
 	timeout := 3 * time.Hour
 	if pcd.conf != nil && pcd.conf.StepTimeout != 0 {
@@ -197,7 +197,7 @@ func (pcd *Procedure) planStep(step *Step) {
 	}
 }
 
-func (pcd *Procedure) executeStep(step *Step) {
+func (pcd *Process) runStep(step *Step) {
 	step.Start = time.Now().UTC()
 
 	if pcd.conf != nil && len(pcd.conf.PreProcessors) > 0 {
@@ -242,17 +242,17 @@ func (pcd *Procedure) executeStep(step *Step) {
 			AppendStatus(&step.status, Failed)
 			continue
 		}
-		pcd.storeStepResult(step.name, result)
+		pcd.setStepResult(step.name, result)
 		AppendStatus(&step.status, Success)
 		break
 	}
 }
 
-func (pcd *Procedure) updateStatusAfterFinish() {
+func (pcd *Process) finalize() {
 	finish := make(chan bool, 1)
 	go func() {
 		pcd.running.Wait()
-		info := &ProcedureInfo{
+		info := &ProcessInfo{
 			Name:    pcd.name,
 			StepMap: make(map[string]*StepInfo, len(pcd.stepMap)),
 			Ctx:     pcd.context,
@@ -273,8 +273,8 @@ func (pcd *Procedure) updateStatusAfterFinish() {
 	}()
 
 	timeout := 3 * time.Hour
-	if pcd.conf != nil && pcd.conf.ProcedureTimeout != 0 {
-		timeout = pcd.conf.ProcedureTimeout
+	if pcd.conf != nil && pcd.conf.ProcessTimeout != 0 {
+		timeout = pcd.conf.ProcessTimeout
 	}
 
 	timer := time.NewTimer(timeout)
@@ -293,8 +293,8 @@ func (pcd *Procedure) updateStatusAfterFinish() {
 	atomic.StoreInt64(&pcd.finish, 1)
 }
 
-func (pcd *Procedure) planNextSteps(step *Step) {
-	// all step not execute should cancel while procedure is timeout
+func (pcd *Process) scheduleNextSteps(step *Step) {
+	// all step not execute should cancel while process is timeout
 	cancel := !IsStatusNormal(step.status) || !IsStatusNormal(pcd.status)
 	for _, send := range step.send {
 		current := atomic.AddInt64(&send.waiting, -1)
@@ -307,24 +307,24 @@ func (pcd *Procedure) planNextSteps(step *Step) {
 		if step.status&Success == Success {
 			AppendStatus(&send.status, Running)
 		}
-		go pcd.planStep(send)
+		go pcd.scheduleStep(send)
 	}
 
 	pcd.running.Done()
 }
 
-func (pcd *Procedure) SkipFinishedStep(name string, result any) {
-	pcd.storeStepResult(name, result)
+func (pcd *Process) SkipFinishedStep(name string, result any) {
+	pcd.setStepResult(name, result)
 }
 
-func (pcd *Procedure) storeStepResult(name string, value any) {
+func (pcd *Process) setStepResult(name string, value any) {
 	key := InternalPrefix + name
 	if _, exist := pcd.context.Get(key); !exist {
 		pcd.context.Set(key, value)
 	}
 }
 
-func (pcd *Procedure) getStepResult(name string) (any, bool) {
+func (pcd *Process) getStepResult(name string) (any, bool) {
 	key := InternalPrefix + name
 	return pcd.context.Get(key)
 }
