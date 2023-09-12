@@ -69,7 +69,7 @@ func GenerateStepIncAddr(i int) func(ctx *light_flow.Context) (any, error) {
 
 func TestPtrReuse(t *testing.T) {
 	defer resetCtx()
-	workflow := light_flow.NewWorkflow(map[string]any{addrKey: &ctx1})
+	workflow := light_flow.NewWorkflow[any](map[string]any{addrKey: &ctx1})
 	procedure1 := workflow.AddProcess("test1", nil)
 	procedure1.AddStepWithAlias("1", GenerateStepIncAddr(1))
 	procedure1.AddStepWithAlias("2", GenerateStepIncAddr(2), "1")
@@ -93,7 +93,7 @@ func TestPtrReuse(t *testing.T) {
 
 func TestWaitToDoneInMultiple(t *testing.T) {
 	defer resetCtx()
-	workflow := light_flow.NewWorkflow(map[string]any{addrKey: &ctx1})
+	workflow := light_flow.NewWorkflow[any](map[string]any{addrKey: &ctx1})
 	procedure1 := workflow.AddProcess("test1", nil)
 	procedure1.AddStepWithAlias("1", GenerateStepIncAddr(1))
 	procedure1.AddStepWithAlias("2", GenerateStepIncAddr(2), "1")
@@ -118,7 +118,7 @@ func TestWaitToDoneInMultiple(t *testing.T) {
 
 func TestWorkFlowCtx(t *testing.T) {
 	defer resetCtx()
-	workflow := light_flow.NewWorkflow(map[string]any{addrKey: &ctx1})
+	workflow := light_flow.NewWorkflow[any](map[string]any{addrKey: &ctx1})
 	procedure1 := workflow.AddProcess("test1", nil)
 	procedure1.AddStepWithAlias("1", GenerateStepIncAddr(1))
 	procedure1.AddStepWithAlias("2", GenerateStepIncAddr(2), "1")
@@ -142,7 +142,7 @@ func TestWorkFlowCtx(t *testing.T) {
 
 func TestMultipleNormalProcedure(t *testing.T) {
 	defer resetCtx()
-	workflow := light_flow.NewWorkflow(nil)
+	workflow := light_flow.NewWorkflow[any](nil)
 	procedure := workflow.AddProcess("test1", nil)
 	procedure.SupplyCtxByMap(map[string]any{addrKey: &ctx1})
 	procedure.AddStepWithAlias("1", GenerateStepIncAddr(1))
@@ -171,7 +171,7 @@ func TestMultipleNormalProcedure(t *testing.T) {
 
 func TestProcedureAndWorkflowCtx(t *testing.T) {
 	defer resetCtx()
-	workflow := light_flow.NewWorkflow(map[string]any{addrKey: &ctx1})
+	workflow := light_flow.NewWorkflow[any](map[string]any{addrKey: &ctx1})
 	procedure := workflow.AddProcess("test1", nil)
 	procedure.SupplyCtxByMap(map[string]any{addrKey: &ctx2})
 	procedure.AddStepWithAlias("1", GenerateStepIncAddr(1))
@@ -200,7 +200,7 @@ func TestProcedureAndWorkflowCtx(t *testing.T) {
 
 func TestStepCtx(t *testing.T) {
 	defer resetCtx()
-	workflow := light_flow.NewWorkflow(map[string]any{addrKey: &ctx1})
+	workflow := light_flow.NewWorkflow[any](map[string]any{addrKey: &ctx1})
 	procedure := workflow.AddProcess("test1", nil)
 	procedure.SupplyCtxByMap(map[string]any{addrKey: &ctx2})
 	procedure.AddStepWithAlias("1", ChangeCtxStepFunc(&ctx3))
@@ -235,7 +235,7 @@ func TestStepCtx(t *testing.T) {
 
 func TestDependStepCtx(t *testing.T) {
 	defer resetCtx()
-	workflow := light_flow.NewWorkflow(map[string]any{addrKey: &ctx1})
+	workflow := light_flow.NewWorkflow[any](map[string]any{addrKey: &ctx1})
 	procedure := workflow.AddProcess("test1", nil)
 	procedure.SupplyCtxByMap(map[string]any{addrKey: &ctx2})
 	procedure.AddStepWithAlias("1", ChangeCtxStepFunc(&ctx3))

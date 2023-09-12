@@ -59,7 +59,7 @@ func CompleteProcessor(info *light_flow.ProcessInfo) bool {
 
 func TestPreAndPostProcessor(t *testing.T) {
 	defer resetCurrent()
-	workflow := light_flow.NewWorkflow(nil)
+	workflow := light_flow.NewWorkflow[any](nil)
 	config := light_flow.ProcessConfig{
 		PreProcessors:      []func(string, *light_flow.Context) bool{PreProcessor},
 		PostProcessors:     []func(*light_flow.StepInfo) bool{PostProcessor},
@@ -84,7 +84,7 @@ func TestPreAndPostProcessor(t *testing.T) {
 
 func TestWithLongProcedureTimeout(t *testing.T) {
 	defer resetCurrent()
-	workflow := light_flow.NewWorkflow(nil)
+	workflow := light_flow.NewWorkflow[any](nil)
 	config := light_flow.ProcessConfig{ProcessTimeout: 1 * time.Second}
 	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddConfig(&config)
@@ -105,7 +105,7 @@ func TestWithLongProcedureTimeout(t *testing.T) {
 
 func TestWithShortProcedureTimeout(t *testing.T) {
 	defer resetCurrent()
-	workflow := light_flow.NewWorkflow(nil)
+	workflow := light_flow.NewWorkflow[any](nil)
 	config := light_flow.ProcessConfig{ProcessTimeout: 1 * time.Millisecond}
 	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddConfig(&config)
@@ -127,7 +127,7 @@ func TestWithShortProcedureTimeout(t *testing.T) {
 
 func TestParallelWithLongDefaultStepTimeout(t *testing.T) {
 	defer resetCurrent()
-	workflow := light_flow.NewWorkflow(nil)
+	workflow := light_flow.NewWorkflow[any](nil)
 	config := light_flow.ProcessConfig{StepRetry: 3, StepTimeout: 300 * time.Millisecond}
 	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddConfig(&config)
@@ -150,7 +150,7 @@ func TestParallelWithLongDefaultStepTimeout(t *testing.T) {
 
 func TestWithLongDefaultStepTimeout(t *testing.T) {
 	defer resetCurrent()
-	workflow := light_flow.NewWorkflow(nil)
+	workflow := light_flow.NewWorkflow[any](nil)
 	config := light_flow.ProcessConfig{StepRetry: 3, StepTimeout: 1 * time.Second}
 	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddConfig(&config)
@@ -173,7 +173,7 @@ func TestWithLongDefaultStepTimeout(t *testing.T) {
 
 func TestWithShortDefaultStepTimeout(t *testing.T) {
 	defer resetCurrent()
-	workflow := light_flow.NewWorkflow(nil)
+	workflow := light_flow.NewWorkflow[any](nil)
 	config := light_flow.ProcessConfig{StepRetry: 3, StepTimeout: 1 * time.Millisecond}
 	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddConfig(&config)
@@ -197,7 +197,7 @@ func TestWithShortDefaultStepTimeout(t *testing.T) {
 
 func TestWithLongStepTimeout(t *testing.T) {
 	defer resetCurrent()
-	workflow := light_flow.NewWorkflow(nil)
+	workflow := light_flow.NewWorkflow[any](nil)
 	procedure := workflow.AddProcess("test1", nil)
 	config := light_flow.StepConfig{MaxRetry: 3, Timeout: 1 * time.Second}
 	procedure.AddStepWithAlias("1", GenerateStep(1)).AddConfig(&config)
@@ -219,7 +219,7 @@ func TestWithLongStepTimeout(t *testing.T) {
 
 func TestWithShortStepTimeout(t *testing.T) {
 	defer resetCurrent()
-	workflow := light_flow.NewWorkflow(nil)
+	workflow := light_flow.NewWorkflow[any](nil)
 	procedure := workflow.AddProcess("test1", nil)
 	config := light_flow.StepConfig{MaxRetry: 3, Timeout: 1 * time.Millisecond}
 	procedure.AddStepWithAlias("1", GenerateStep(1)).AddConfig(&config)
@@ -242,7 +242,7 @@ func TestWithShortStepTimeout(t *testing.T) {
 
 func TestSingleErrorStepWithProcedureRetry(t *testing.T) {
 	defer resetCurrent()
-	workflow := light_flow.NewWorkflow(nil)
+	workflow := light_flow.NewWorkflow[any](nil)
 	config := light_flow.ProcessConfig{StepRetry: 3}
 	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddConfig(&config)
@@ -262,7 +262,7 @@ func TestSingleErrorStepWithProcedureRetry(t *testing.T) {
 
 func TestSingleErrorStepWithStepRetry(t *testing.T) {
 	defer resetCurrent()
-	workflow := light_flow.NewWorkflow(nil)
+	workflow := light_flow.NewWorkflow[any](nil)
 	config := light_flow.StepConfig{MaxRetry: 3}
 	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddStepWithAlias("1", GenerateErrorStep(1)).AddConfig(&config)
@@ -281,7 +281,7 @@ func TestSingleErrorStepWithStepRetry(t *testing.T) {
 
 func TestSingleErrorStepWithProcedureAndStepRetry(t *testing.T) {
 	defer resetCurrent()
-	workflow := light_flow.NewWorkflow(nil)
+	workflow := light_flow.NewWorkflow[any](nil)
 	config := light_flow.ProcessConfig{StepRetry: 3}
 	stepConfig := light_flow.StepConfig{MaxRetry: 2}
 	procedure := workflow.AddProcess("test1", nil)
@@ -302,7 +302,7 @@ func TestSingleErrorStepWithProcedureAndStepRetry(t *testing.T) {
 
 func TestRecoverSerialStep(t *testing.T) {
 	defer resetCurrent()
-	workflow := light_flow.NewWorkflow(nil)
+	workflow := light_flow.NewWorkflow[any](nil)
 	procedure := workflow.AddProcess("test1", nil)
 	config := light_flow.StepConfig{MaxRetry: 3, Timeout: 1 * time.Second}
 	procedure.AddStepWithAlias("1", GenerateStep(1)).AddConfig(&config)
@@ -327,7 +327,7 @@ func TestRecoverSerialStep(t *testing.T) {
 
 func TestRecoverParallelStep(t *testing.T) {
 	defer resetCurrent()
-	workflow := light_flow.NewWorkflow(nil)
+	workflow := light_flow.NewWorkflow[any](nil)
 	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddStepWithAlias("1", GenerateStep(1))
 	procedure.AddStepWithAlias("11", GenerateStep(11), "1")
@@ -356,7 +356,7 @@ func TestRecoverParallelStep(t *testing.T) {
 
 func TestRecoverAndWaitAll(t *testing.T) {
 	defer resetCurrent()
-	workflow := light_flow.NewWorkflow(nil)
+	workflow := light_flow.NewWorkflow[any](nil)
 	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddStepWithAlias("1", GenerateStep(1))
 	procedure.AddStepWithAlias("2", GenerateStep(2))

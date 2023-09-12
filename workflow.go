@@ -13,7 +13,7 @@ type Workflow struct {
 	lock       sync.Mutex
 }
 
-func NewWorkflow(input map[string]any) *Workflow {
+func NewWorkflow[T any](input map[string]T) *Workflow {
 	context := Context{
 		scope:         ProcessCtx,
 		scopeContexts: make(map[string]*Context),
