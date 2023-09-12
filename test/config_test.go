@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func PreProcessor(stepName string, ctx *light_flow.Context) {
+func PreProcessor(stepName string, ctx *light_flow.Context) bool {
 	if stepName == "" {
 		panic("step name is empty")
 	}
@@ -18,9 +18,10 @@ func PreProcessor(stepName string, ctx *light_flow.Context) {
 	}
 	atomic.AddInt64(&current, 1)
 	fmt.Printf("step[%s] start\n", stepName)
+	return true
 }
 
-func PostProcessor(info *light_flow.StepInfo) {
+func PostProcessor(info *light_flow.StepInfo) bool {
 	if info.Name == "" {
 		panic("step name is empty")
 	}
@@ -38,14 +39,31 @@ func PostProcessor(info *light_flow.StepInfo) {
 	}
 	atomic.AddInt64(&current, 1)
 	fmt.Printf("step[%s] finish\n", info.Name)
+	return true
+}
+
+func CompleteProcessor(info *light_flow.ProcedureInfo) bool {
+	if info.Name == "" {
+		panic("procedure name is empty")
+	}
+	if info.Ctx == nil {
+		panic("procedure context is nil")
+	}
+	if len(info.StepMap) == 0 {
+		panic("procedure step map is empty")
+	}
+	atomic.AddInt64(&current, 1)
+	fmt.Printf("procedure[%s] finish\n", info.Name)
+	return true
 }
 
 func TestPreAndPostProcessor(t *testing.T) {
 	defer resetCurrent()
 	workflow := light_flow.NewWorkflow(nil)
 	config := light_flow.ProduceConfig{
-		PreProcessor:  PreProcessor,
-		PostProcessor: PostProcessor,
+		PreProcessors:      []func(string, *light_flow.Context) bool{PreProcessor},
+		PostProcessors:     []func(*light_flow.StepInfo) bool{PostProcessor},
+		CompleteProcessors: []func(*light_flow.ProcedureInfo) bool{CompleteProcessor},
 	}
 	procedure := workflow.AddProcedure("test1", nil)
 	procedure.AddConfig(&config)
@@ -59,8 +77,8 @@ func TestPreAndPostProcessor(t *testing.T) {
 			t.Errorf("procedure[%s] fail", name)
 		}
 	}
-	if current != 12 {
-		t.Errorf("excute 12 step, but current = %d", current)
+	if current != 13 {
+		t.Errorf("excute 13 step, but current = %d", current)
 	}
 }
 

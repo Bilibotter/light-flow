@@ -27,12 +27,12 @@ type ProcedureInfo struct {
 }
 
 type ProduceConfig struct {
-	StepTimeout       time.Duration
-	ProcedureTimeout  time.Duration
-	StepRetry         int
-	PreProcessor      func(stepName string, ctx *Context)
-	PostProcessor     func(info *StepInfo)
-	CompleteProcessor func(info *ProcedureInfo)
+	StepTimeout        time.Duration
+	ProcedureTimeout   time.Duration
+	StepRetry          int
+	PreProcessors      []func(stepName string, ctx *Context) (keepOn bool)
+	PostProcessors     []func(info *StepInfo) (keepOn bool)
+	CompleteProcessors []func(info *ProcedureInfo) (keepOn bool)
 }
 
 func (pcd *Procedure) SupplyCtxByMap(update map[string]any) {
@@ -200,8 +200,12 @@ func (pcd *Procedure) planStep(step *Step) {
 func (pcd *Procedure) executeStep(step *Step) {
 	step.Start = time.Now().UTC()
 
-	if pcd.conf != nil && pcd.conf.PreProcessor != nil {
-		pcd.conf.PreProcessor(step.name, step.ctx)
+	if pcd.conf != nil && len(pcd.conf.PreProcessors) > 0 {
+		for _, processor := range pcd.conf.PreProcessors {
+			if !processor(step.name, step.ctx) {
+				break
+			}
+		}
 	}
 
 	retry := 1
@@ -217,8 +221,14 @@ func (pcd *Procedure) executeStep(step *Step) {
 			AppendStatus(&step.status, Panic)
 			step.finish <- true
 		}
-		if pcd.conf != nil && pcd.conf.PostProcessor != nil {
-			pcd.conf.PostProcessor(buildInfo(step))
+		if pcd.conf == nil || len(pcd.conf.PostProcessors) == 0 {
+			step.finish <- true
+			return
+		}
+		for _, processor := range pcd.conf.PostProcessors {
+			if !processor(buildInfo(step)) {
+				break
+			}
 		}
 		step.finish <- true
 	}()
@@ -250,8 +260,14 @@ func (pcd *Procedure) updateStatusAfterFinish() {
 		for name, step := range pcd.stepMap {
 			info.StepMap[name] = buildInfo(step)
 		}
-		if pcd.conf != nil && pcd.conf.CompleteProcessor != nil {
-			pcd.conf.CompleteProcessor(info)
+		if pcd.conf == nil || len(pcd.conf.CompleteProcessors) == 0 {
+			finish <- true
+			return
+		}
+		for _, processor := range pcd.conf.CompleteProcessors {
+			if !processor(info) {
+				break
+			}
 		}
 		finish <- true
 	}()
