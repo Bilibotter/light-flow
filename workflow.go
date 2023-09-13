@@ -93,7 +93,9 @@ func (wf *Workflow) AddProcess(name string, conf *ProcessConfig) *Process {
 		table:         sync.Map{},
 	}
 	processCtx.scopeContexts[ProcessCtx] = &processCtx
-
+	if conf == nil {
+		conf = defaultProcessConfig
+	}
 	process := Process{
 		name:            name,
 		stepMap:         make(map[string]*Step),

@@ -7,6 +7,11 @@ import (
 	"time"
 )
 
+var (
+	lock                 = sync.Mutex{}
+	defaultProcessConfig *ProcessConfig
+)
+
 type Process struct {
 	name            string
 	stepMap         map[string]*Step
@@ -33,6 +38,12 @@ type ProcessConfig struct {
 	PreProcessors      []func(stepName string, ctx *Context) (keepOn bool)
 	PostProcessors     []func(info *StepInfo) (keepOn bool)
 	CompleteProcessors []func(info *ProcessInfo) (keepOn bool)
+}
+
+func SetDefaultProcessConfig(config *ProcessConfig) {
+	lock.Lock()
+	defer lock.Unlock()
+	defaultProcessConfig = config
 }
 
 func (pcd *Process) SupplyCtxByMap(update map[string]any) {

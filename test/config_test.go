@@ -57,6 +57,34 @@ func CompleteProcessor(info *light_flow.ProcessInfo) bool {
 	return true
 }
 
+func TestDefaultProcessConfig(t *testing.T) {
+	defer resetCurrent()
+	defer func() {
+		light_flow.SetDefaultProcessConfig(nil)
+	}()
+	config := light_flow.ProcessConfig{
+		PreProcessors:      []func(string, *light_flow.Context) bool{PreProcessor},
+		PostProcessors:     []func(*light_flow.StepInfo) bool{PostProcessor},
+		CompleteProcessors: []func(*light_flow.ProcessInfo) bool{CompleteProcessor},
+	}
+	light_flow.SetDefaultProcessConfig(&config)
+	workflow := light_flow.NewWorkflow[any](nil)
+	procedure := workflow.AddProcess("test1", nil)
+	procedure.AddStepWithAlias("1", GenerateStep(1))
+	procedure.AddStepWithAlias("2", GenerateStep(2), "1")
+	procedure.AddStepWithAlias("3", GenerateStep(3), "2")
+	procedure.AddStepWithAlias("4", GenerateStep(4), "3")
+	features := workflow.Done()
+	for name, feature := range features {
+		if !feature.Success() {
+			t.Errorf("procedure[%s] fail", name)
+		}
+	}
+	if current != 13 {
+		t.Errorf("excute 13 step, but current = %d", current)
+	}
+}
+
 func TestPreAndPostProcessor(t *testing.T) {
 	defer resetCurrent()
 	workflow := light_flow.NewWorkflow[any](nil)
