@@ -71,9 +71,9 @@ func TestPreAndPostProcessor(t *testing.T) {
 	procedure.AddStepWithAlias("2", GenerateStep(2), "1")
 	procedure.AddStepWithAlias("3", GenerateStep(3), "2")
 	procedure.AddStepWithAlias("4", GenerateStep(4), "3")
-	features := workflow.WaitToDone()
+	features := workflow.Done()
 	for name, feature := range features {
-		if !feature.IsSuccess() {
+		if !feature.Success() {
 			t.Errorf("procedure[%s] fail", name)
 		}
 	}
@@ -92,9 +92,9 @@ func TestWithLongProcedureTimeout(t *testing.T) {
 	procedure.AddStepWithAlias("2", GenerateStep(2), "1")
 	procedure.AddStepWithAlias("3", GenerateStep(3), "2")
 	procedure.AddStepWithAlias("4", GenerateStep(4), "3")
-	features := workflow.WaitToDone()
+	features := workflow.Done()
 	for name, feature := range features {
-		if !feature.IsSuccess() {
+		if !feature.Success() {
 			t.Errorf("procedure[%s] fail", name)
 		}
 	}
@@ -113,9 +113,9 @@ func TestWithShortProcedureTimeout(t *testing.T) {
 	procedure.AddStepWithAlias("2", GenerateStep(2), "1")
 	procedure.AddStepWithAlias("3", GenerateStep(3), "2")
 	procedure.AddStepWithAlias("4", GenerateStep(4), "3")
-	features := workflow.WaitToDone()
+	features := workflow.Done()
 	for name, feature := range features {
-		if feature.IsSuccess() {
+		if feature.Success() {
 			t.Errorf("procedure[%s] success with timeout", name)
 		}
 	}
@@ -135,11 +135,11 @@ func TestParallelWithLongDefaultStepTimeout(t *testing.T) {
 	procedure.AddStepWithAlias("2", GenerateStep(2))
 	procedure.AddStepWithAlias("3", GenerateStep(3))
 	procedure.AddStepWithAlias("4", GenerateStep(4))
-	features := workflow.WaitToDone()
+	features := workflow.Done()
 	for name, feature := range features {
-		explain := strings.Join(feature.GetStatusExplain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
-		if !feature.IsSuccess() {
+		if !feature.Success() {
 			t.Errorf("procedure[%s] fail", name)
 		}
 	}
@@ -158,11 +158,11 @@ func TestWithLongDefaultStepTimeout(t *testing.T) {
 	procedure.AddStepWithAlias("2", GenerateStep(2), "1")
 	procedure.AddStepWithAlias("3", GenerateStep(3), "2")
 	procedure.AddStepWithAlias("4", GenerateStep(4), "3")
-	features := workflow.WaitToDone()
+	features := workflow.Done()
 	for name, feature := range features {
-		explain := strings.Join(feature.GetStatusExplain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
-		if !feature.IsSuccess() {
+		if !feature.Success() {
 			t.Errorf("procedure[%s] fail", name)
 		}
 	}
@@ -181,11 +181,11 @@ func TestWithShortDefaultStepTimeout(t *testing.T) {
 	procedure.AddStepWithAlias("2", GenerateStep(2), "1")
 	procedure.AddStepWithAlias("3", GenerateStep(3), "2")
 	procedure.AddStepWithAlias("4", GenerateStep(4), "3")
-	features := workflow.WaitToDone()
+	features := workflow.Done()
 	for name, feature := range features {
-		explain := strings.Join(feature.GetStatusExplain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
-		if feature.IsSuccess() {
+		if feature.Success() {
 			t.Errorf("procedure[%s] success with timeout", name)
 		}
 	}
@@ -204,11 +204,11 @@ func TestWithLongStepTimeout(t *testing.T) {
 	procedure.AddStepWithAlias("2", GenerateStep(2), "1")
 	procedure.AddStepWithAlias("3", GenerateStep(3), "2")
 	procedure.AddStepWithAlias("4", GenerateStep(4), "3")
-	features := workflow.WaitToDone()
+	features := workflow.Done()
 	for name, feature := range features {
-		explain := strings.Join(feature.GetStatusExplain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
-		if !feature.IsSuccess() {
+		if !feature.Success() {
 			t.Errorf("procedure[%s] failed", name)
 		}
 	}
@@ -226,11 +226,11 @@ func TestWithShortStepTimeout(t *testing.T) {
 	procedure.AddStepWithAlias("2", GenerateStep(2), "1")
 	procedure.AddStepWithAlias("3", GenerateStep(3), "2")
 	procedure.AddStepWithAlias("4", GenerateStep(4), "3")
-	features := workflow.WaitToDone()
+	features := workflow.Done()
 	for name, feature := range features {
-		explain := strings.Join(feature.GetStatusExplain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
-		if feature.IsSuccess() {
+		if feature.Success() {
 			t.Errorf("procedure[%s] success with timeout", name)
 		}
 	}
@@ -247,11 +247,11 @@ func TestSingleErrorStepWithProcedureRetry(t *testing.T) {
 	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddConfig(&config)
 	procedure.AddStepWithAlias("1", GenerateErrorStep(1))
-	features := workflow.WaitToDone()
+	features := workflow.Done()
 	for name, feature := range features {
-		explain := strings.Join(feature.GetStatusExplain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
-		if feature.IsSuccess() {
+		if feature.Success() {
 			t.Errorf("procedure[%s] success, but expected failed", name)
 		}
 	}
@@ -266,11 +266,11 @@ func TestSingleErrorStepWithStepRetry(t *testing.T) {
 	config := light_flow.StepConfig{MaxRetry: 3}
 	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddStepWithAlias("1", GenerateErrorStep(1)).AddConfig(&config)
-	features := workflow.WaitToDone()
+	features := workflow.Done()
 	for name, feature := range features {
-		explain := strings.Join(feature.GetStatusExplain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
-		if feature.IsSuccess() {
+		if feature.Success() {
 			t.Errorf("procedure[%s] success, but expected failed", name)
 		}
 	}
@@ -287,11 +287,11 @@ func TestSingleErrorStepWithProcedureAndStepRetry(t *testing.T) {
 	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddConfig(&config)
 	procedure.AddStepWithAlias("1", GenerateErrorStep(1)).AddConfig(&stepConfig)
-	features := workflow.WaitToDone()
+	features := workflow.Done()
 	for name, feature := range features {
-		explain := strings.Join(feature.GetStatusExplain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
-		if feature.IsSuccess() {
+		if feature.Success() {
 			t.Errorf("procedure[%s] success, but expected failed", name)
 		}
 	}
@@ -312,11 +312,11 @@ func TestRecoverSerialStep(t *testing.T) {
 	procedure.AddStepWithAlias("5", GenerateStep(5), "4")
 	procedure.SkipFinishedStep("1", nil)
 	procedure.SkipFinishedStep("2", nil)
-	features := workflow.WaitToDone()
+	features := workflow.Done()
 	for name, feature := range features {
-		explain := strings.Join(feature.GetStatusExplain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
-		if !feature.IsSuccess() {
+		if !feature.Success() {
 			t.Errorf("procedure[%s] failed", name)
 		}
 	}
@@ -341,11 +341,11 @@ func TestRecoverParallelStep(t *testing.T) {
 	procedure.SkipFinishedStep("2", nil)
 	procedure.SkipFinishedStep("3", nil)
 	procedure.SkipFinishedStep("4", nil)
-	features := workflow.WaitToDone()
+	features := workflow.Done()
 	for name, feature := range features {
-		explain := strings.Join(feature.GetStatusExplain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
-		if !feature.IsSuccess() {
+		if !feature.Success() {
 			t.Errorf("procedure[%s] fail", name)
 		}
 	}
@@ -367,11 +367,11 @@ func TestRecoverAndWaitAll(t *testing.T) {
 	procedure.SkipFinishedStep("2", nil)
 	procedure.SkipFinishedStep("3", nil)
 	procedure.SkipFinishedStep("4", nil)
-	features := workflow.WaitToDone()
+	features := workflow.Done()
 	for name, feature := range features {
-		explain := strings.Join(feature.GetStatusExplain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
-		if !feature.IsSuccess() {
+		if !feature.Success() {
 			t.Errorf("procedure[%s] fail", name)
 		}
 	}

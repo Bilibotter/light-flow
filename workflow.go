@@ -12,6 +12,7 @@ type Workflow struct {
 	lock       sync.Mutex
 }
 
+// NewWorkflow function creates a workflow and use input as global context.
 func NewWorkflow[T any](input map[string]T) *Workflow {
 	context := Context{
 		scope:         WorkflowCtx,
@@ -35,15 +36,17 @@ func NewWorkflow[T any](input map[string]T) *Workflow {
 	return &flow
 }
 
-func (wf *Workflow) WaitToDone() map[string]*Feature {
-	features := wf.AsyncFlow()
+// Done function will block util all process done.
+func (wf *Workflow) Done() map[string]*Feature {
+	features := wf.Flow()
 	for _, feature := range features {
-		feature.WaitToDone()
+		feature.Done()
 	}
 	return features
 }
 
-func (wf *Workflow) AsyncFlow() map[string]*Feature {
+// Flow function asynchronous execute process of workflow and return immediately.
+func (wf *Workflow) Flow() map[string]*Feature {
 	if wf.features != nil {
 		return wf.features
 	}
@@ -67,9 +70,9 @@ func (wf *Workflow) Pause() {
 	}
 }
 
-func (wf *Workflow) KeepOn() {
+func (wf *Workflow) Resume() {
 	for _, process := range wf.processMap {
-		process.keepOn()
+		process.resume()
 	}
 }
 
@@ -78,9 +81,9 @@ func (wf *Workflow) PauseProcess(name string) {
 	process.pauses()
 }
 
-func (wf *Workflow) KeepOnProcess(name string) {
+func (wf *Workflow) ResumeProcess(name string) {
 	process := wf.processMap[name]
-	process.keepOn()
+	process.resume()
 }
 
 func (wf *Workflow) AddProcess(name string, conf *ProcessConfig) *Process {

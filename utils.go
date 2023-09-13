@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+// GetFuncName function retrieves the name of a provided function.
+// If the provided function is anonymous function, it panics.
 func GetFuncName(f interface{}) string {
 	funcValue := reflect.ValueOf(f)
 	funcType := funcValue.Type()

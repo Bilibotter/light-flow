@@ -78,11 +78,11 @@ func TestPtrReuse(t *testing.T) {
 	procedure1.AddStepWithAlias("11", GenerateStepIncAddr(11))
 	procedure1.AddStepWithAlias("12", GenerateStepIncAddr(12), "11")
 	procedure1.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
-	features := workflow.WaitToDone()
+	features := workflow.Done()
 	for name, feature := range features {
-		explain := strings.Join(feature.GetStatusExplain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
-		if !feature.IsSuccess() {
+		if !feature.Success() {
 			t.Errorf("procedure[%s] fail", name)
 		}
 	}
@@ -103,11 +103,11 @@ func TestWaitToDoneInMultiple(t *testing.T) {
 	procedure2.AddStepWithAlias("12", GenerateStepIncAddr(12), "11")
 	procedure2.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
 	procedure2.AddStepWithAlias("14", GenerateSleep(1*time.Second), "13")
-	features := workflow.WaitToDone()
+	features := workflow.Done()
 	for name, feature := range features {
-		explain := strings.Join(feature.GetStatusExplain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
-		if !feature.IsSuccess() {
+		if !feature.Success() {
 			t.Errorf("procedure[%s] fail", name)
 		}
 	}
@@ -127,11 +127,11 @@ func TestWorkFlowCtx(t *testing.T) {
 	procedure2.AddStepWithAlias("11", GenerateStepIncAddr(11))
 	procedure2.AddStepWithAlias("12", GenerateStepIncAddr(12), "11")
 	procedure2.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
-	features := workflow.WaitToDone()
+	features := workflow.Done()
 	for name, feature := range features {
-		explain := strings.Join(feature.GetStatusExplain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
-		if !feature.IsSuccess() {
+		if !feature.Success() {
 			t.Errorf("procedure[%s] fail", name)
 		}
 	}
@@ -153,11 +153,11 @@ func TestMultipleNormalProcedure(t *testing.T) {
 	procedure.AddStepWithAlias("11", GenerateStepIncAddr(11))
 	procedure.AddStepWithAlias("12", GenerateStepIncAddr(12), "11")
 	procedure.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
-	features := workflow.WaitToDone()
+	features := workflow.Done()
 	for name, feature := range features {
-		explain := strings.Join(feature.GetStatusExplain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
-		if !feature.IsSuccess() {
+		if !feature.Success() {
 			t.Errorf("procedure[%s] fail", name)
 		}
 	}
@@ -182,11 +182,11 @@ func TestProcedureAndWorkflowCtx(t *testing.T) {
 	procedure.AddStepWithAlias("11", GenerateStepIncAddr(11))
 	procedure.AddStepWithAlias("12", GenerateStepIncAddr(12), "11")
 	procedure.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
-	features := workflow.WaitToDone()
+	features := workflow.Done()
 	for name, feature := range features {
-		explain := strings.Join(feature.GetStatusExplain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
-		if !feature.IsSuccess() {
+		if !feature.Success() {
 			t.Errorf("procedure[%s] fail", name)
 		}
 	}
@@ -211,11 +211,11 @@ func TestStepCtx(t *testing.T) {
 	procedure.AddStepWithAlias("11", ChangeCtxStepFunc(&ctx4))
 	procedure.AddStepWithAlias("12", GenerateStepIncAddr(12), "11")
 	procedure.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
-	features := workflow.WaitToDone()
+	features := workflow.Done()
 	for name, feature := range features {
-		explain := strings.Join(feature.GetStatusExplain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
-		if !feature.IsSuccess() {
+		if !feature.Success() {
 			t.Errorf("procedure[%s] fail", name)
 		}
 	}
@@ -246,11 +246,11 @@ func TestDependStepCtx(t *testing.T) {
 	procedure.AddStepWithAlias("11", ChangeCtxStepFunc(&ctx4))
 	procedure.AddStepWithAlias("12", ChangeCtxStepFunc(&ctx6), "11")
 	procedure.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
-	features := workflow.WaitToDone()
+	features := workflow.Done()
 	for name, feature := range features {
-		explain := strings.Join(feature.GetStatusExplain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
-		if !feature.IsSuccess() {
+		if !feature.Success() {
 			t.Errorf("procedure[%s] fail", name)
 		}
 	}

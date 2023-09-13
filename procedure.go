@@ -86,7 +86,7 @@ func (pcd *Process) AddStepWithAlias(alias string, run func(ctx *Context) (any, 
 	}
 
 	for _, depend := range depends {
-		index := GetIndex(depend)
+		index := getIndex(depend)
 		prev, exist := pcd.stepMap[index]
 		if !exist {
 			panic(fmt.Sprintf("can't find step named %s", index))
@@ -117,7 +117,7 @@ func (pcd *Process) AddStepWithAlias(alias string, run func(ctx *Context) (any, 
 	return step
 }
 
-func (pcd *Process) keepOn() {
+func (pcd *Process) resume() {
 	if PopStatus(&pcd.status, Pause) {
 		pcd.pause.Done()
 	}
@@ -127,17 +127,6 @@ func (pcd *Process) pauses() {
 	if AppendStatus(&pcd.status, Pause) {
 		pcd.pause.Add(1)
 	}
-}
-
-func (pcd *Process) DrawRelation() (processName string, depends map[string][]string) {
-	processName = pcd.name
-	for name, step := range pcd.stepMap {
-		depends[name] = make([]string, 0, len(step.send))
-		for _, send := range step.send {
-			depends[name] = append(depends[name], send.name)
-		}
-	}
-	return
 }
 
 func (pcd *Process) schedule() *Feature {
@@ -317,6 +306,17 @@ func (pcd *Process) scheduleNextSteps(step *Step) {
 	}
 
 	pcd.running.Done()
+}
+
+func (pcd *Process) DrawRelation() (processName string, depends map[string][]string) {
+	processName = pcd.name
+	for name, step := range pcd.stepMap {
+		depends[name] = make([]string, 0, len(step.send))
+		for _, send := range step.send {
+			depends[name] = append(depends[name], send.name)
+		}
+	}
+	return
 }
 
 func (pcd *Process) SkipFinishedStep(name string, result any) {

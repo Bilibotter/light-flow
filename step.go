@@ -51,10 +51,10 @@ func buildInfo(step *Step) *StepInfo {
 		Next:   make([]string, 0, len(step.send)),
 	}
 	for _, prev := range step.receive {
-		info.Prev = append(info.Prev, prev.name)
+		info.Prev = append(info.Prev, prev.id)
 	}
 	for _, next := range step.send {
-		info.Next = append(info.Next, next.name)
+		info.Next = append(info.Next, next.id)
 	}
 	return info
 }

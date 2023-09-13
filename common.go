@@ -6,18 +6,21 @@ import (
 	"sync/atomic"
 )
 
+// these constants are used to indicate the scope of the context
 const (
 	InternalPrefix = "~"
 	WorkflowCtx    = "~workflow~"
 	ProcessCtx     = "~process~"
 )
 
+// these constants are used to indicate the position of the process
 const (
 	NoUse = int64(-1)
 	End   = int64(0)
 	Start = int64(1)
 )
 
+// these constants are used to indicate the status of the process
 const (
 	Pending    = int64(0)
 	Running    = int64(0b1)
@@ -63,6 +66,10 @@ type Feature struct {
 	finish  *int64
 }
 
+// PopStatus function pops a status bit from the specified address.
+// The function checks if the specified status bit exists in the current value.
+// If it exists, it removes the status bit, and returns true indicating successful removal of the status bit.
+// Otherwise, it returns false.
 func PopStatus(addr *int64, status int64) (change bool) {
 	for current := atomic.LoadInt64(addr); status&current == status; {
 		if atomic.CompareAndSwapInt64(addr, current, current^status) {
@@ -72,6 +79,11 @@ func PopStatus(addr *int64, status int64) (change bool) {
 	return false
 }
 
+// AppendStatus function appends a status bit to the specified address.
+// The function checks if the specified update bit is already present in the current value.
+// If it is not present, it appends the update bit,
+// and returns true indicating successful appending of the update bit.
+// Otherwise, it returns false.
 func AppendStatus(addr *int64, update int64) (change bool) {
 	for current := atomic.LoadInt64(addr); current&update != update; {
 		if atomic.CompareAndSwapInt64(addr, current, current|update) {
@@ -89,6 +101,12 @@ func IsStatusNormal(status int64) bool {
 	return false
 }
 
+// ExplainStatus function explains the status represented by the provided bitmask.
+// The function checks the status against predefined abnormal and normal flags,
+// and returns a slice of strings containing the names of the matching flags.
+// Parameter status is the bitmask representing the status.
+// The returned slice contains the names of the matching flags in the order they were found.
+// If abnormal flags are found, normal flags will be ignored.
 func ExplainStatus(status int64) []string {
 	contains := make([]string, 0)
 
@@ -114,7 +132,7 @@ func ExplainStatus(status int64) []string {
 	return contains
 }
 
-func GetIndex(value any) string {
+func getIndex(value any) string {
 	var index string
 	switch value.(type) {
 	case func(ctx *Context) (any, error):
@@ -127,17 +145,19 @@ func GetIndex(value any) string {
 	return index
 }
 
+// Set method sets the value associated with the given key in own context.
 func (ctx *Context) Set(key string, value any) {
 	ctx.table.Store(key, value)
 }
 
+// Get method retrieves the value associated with the given key from the context path.
+// The method first checks the priority context, then own context, finally parents context.
+// Returns the value associated with the key (if found) and a boolean indicating its presence.
 func (ctx *Context) Get(key string) (any, bool) {
 	if used, exist := ctx.getCtxByPriority(key); exist {
 		return used, true
 	}
 
-	defer func() {
-	}()
 	if used, exist := ctx.table.Load(key); exist {
 		return used, true
 	}
@@ -152,11 +172,17 @@ func (ctx *Context) Get(key string) (any, bool) {
 	return nil, false
 }
 
+// GetStepResult method retrieves the step execute result.
+// Each time a step is executed,
+// the execution results are saved in the context of the process.
+// So you could get the step execute result by this method.
 func (ctx *Context) GetStepResult(name string) (any, bool) {
 	key := InternalPrefix + name
 	return ctx.Get(key)
 }
 
+// checkPriority check if priority key can correspond to an existing step
+// If not it will panic.
 func (ctx *Context) checkPriority() {
 	for key := range ctx.priority {
 		ctx.getCtxByPriority(key)
@@ -168,7 +194,7 @@ func (ctx *Context) getCtxByPriority(key string) (*Context, bool) {
 	if !exist {
 		return nil, false
 	}
-	index := GetIndex(value)
+	index := getIndex(value)
 	used, exist := ctx.scopeContexts[index]
 	if !exist {
 		// If priority's value is next node, it will cause infinite loop
@@ -178,17 +204,19 @@ func (ctx *Context) getCtxByPriority(key string) (*Context, bool) {
 	return used, true
 }
 
-func (f *Feature) WaitToDone() {
+// Done method wait for the corresponding process to complete.
+func (f *Feature) Done() {
 	f.running.Wait()
 	// wait goroutine to change status
 	for finish := atomic.LoadInt64(f.finish); finish == 0; finish = atomic.LoadInt64(f.finish) {
 	}
 }
 
-func (f *Feature) IsSuccess() bool {
+func (f *Feature) Success() bool {
 	return *f.status&Success == Success && IsStatusNormal(atomic.LoadInt64(f.status))
 }
 
-func (f *Feature) GetStatusExplain() []string {
+// See common.ExplainStatus
+func (f *Feature) ExplainStatus() []string {
 	return ExplainStatus(atomic.LoadInt64(f.status))
 }
