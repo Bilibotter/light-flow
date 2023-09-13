@@ -13,6 +13,8 @@ var (
 )
 
 type Process struct {
+	id              string
+	flowId          string
 	name            string
 	stepMap         map[string]*Step
 	processContexts map[string]*Context
@@ -26,6 +28,8 @@ type Process struct {
 }
 
 type ProcessInfo struct {
+	Id      string
+	FlowId  string
 	Name    string
 	StepMap map[string]*StepInfo
 	Ctx     *Context
@@ -35,7 +39,7 @@ type ProcessConfig struct {
 	StepTimeout        time.Duration
 	ProcessTimeout     time.Duration
 	StepRetry          int
-	PreProcessors      []func(stepName string, ctx *Context) (keepOn bool)
+	PreProcessors      []func(info *StepInfo) (keepOn bool)
 	PostProcessors     []func(info *StepInfo) (keepOn bool)
 	CompleteProcessors []func(info *ProcessInfo) (keepOn bool)
 }
@@ -83,12 +87,15 @@ func (pcd *Process) AddWaitAll(alias string, run func(ctx *Context) (any, error)
 
 func (pcd *Process) AddStepWithAlias(alias string, run func(ctx *Context) (any, error), depends ...any) *Step {
 	step := &Step{
-		run:     run,
-		name:    alias,
-		waiting: int64(len(depends)),
-		finish:  make(chan bool, 1),
-		receive: make([]*Step, 0, len(depends)),
-		send:    make([]*Step, 0),
+		id:        generateId(),
+		processId: pcd.id,
+		flowId:    pcd.flowId,
+		run:       run,
+		name:      alias,
+		waiting:   int64(len(depends)),
+		finish:    make(chan bool, 1),
+		receive:   make([]*Step, 0, len(depends)),
+		send:      make([]*Step, 0),
 		ctx: &Context{
 			scopeContexts: pcd.processContexts,
 			scope:         ProcessCtx,
@@ -208,7 +215,7 @@ func (pcd *Process) runStep(step *Step) {
 
 	if pcd.conf != nil && len(pcd.conf.PreProcessors) > 0 {
 		for _, processor := range pcd.conf.PreProcessors {
-			if !processor(step.name, step.ctx) {
+			if !processor(buildInfo(step)) {
 				break
 			}
 		}
@@ -259,6 +266,8 @@ func (pcd *Process) finalize() {
 	go func() {
 		pcd.running.Wait()
 		info := &ProcessInfo{
+			Id:      pcd.id,
+			FlowId:  pcd.flowId,
 			Name:    pcd.name,
 			StepMap: make(map[string]*StepInfo, len(pcd.stepMap)),
 			Ctx:     pcd.context,

@@ -1,15 +1,27 @@
 package light_flow
 
 import (
+	"github.com/google/uuid"
 	"sync"
 )
 
+var (
+	generateId func() string
+)
+
 type Workflow struct {
+	id         string
 	processMap map[string]*Process
 	context    *Context
 	features   map[string]*Feature
 	finish     sync.WaitGroup
 	lock       sync.Mutex
+}
+
+func init() {
+	generateId = func() string {
+		return uuid.NewString()
+	}
 }
 
 // NewWorkflow function creates a workflow and use input as global context.
@@ -27,6 +39,7 @@ func NewWorkflow[T any](input map[string]T) *Workflow {
 	context.scopeContexts[WorkflowCtx] = &context
 
 	flow := Workflow{
+		id:         generateId(),
 		lock:       sync.Mutex{},
 		context:    &context,
 		processMap: make(map[string]*Process),
@@ -34,6 +47,10 @@ func NewWorkflow[T any](input map[string]T) *Workflow {
 	}
 
 	return &flow
+}
+
+func SetIdGenerator(method func() string) {
+	generateId = method
 }
 
 // Done function will block util all process done.
@@ -97,6 +114,8 @@ func (wf *Workflow) AddProcess(name string, conf *ProcessConfig) *Process {
 		conf = defaultProcessConfig
 	}
 	process := Process{
+		id:              generateId(),
+		flowId:          wf.id,
 		name:            name,
 		stepMap:         make(map[string]*Step),
 		processContexts: processCtx.scopeContexts,

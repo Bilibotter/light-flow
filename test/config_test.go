@@ -9,19 +9,37 @@ import (
 	"time"
 )
 
-func PreProcessor(stepName string, ctx *light_flow.Context) bool {
-	if stepName == "" {
+func PreProcessor(info *light_flow.StepInfo) bool {
+	if len(info.Id) == 0 {
+		panic("step id is empty")
+	}
+	if len(info.ProcessId) == 0 {
+		panic("step process id is empty")
+	}
+	if len(info.FlowId) == 0 {
+		panic("step flow id is empty")
+	}
+	if info.Name == "" {
 		panic("step name is empty")
 	}
-	if ctx == nil {
+	if info.Ctx == nil {
 		panic("step context is nil")
 	}
 	atomic.AddInt64(&current, 1)
-	fmt.Printf("step[%s] start\n", stepName)
+	fmt.Printf("step[%s] start\n", info.Name)
 	return true
 }
 
 func PostProcessor(info *light_flow.StepInfo) bool {
+	if len(info.Id) == 0 {
+		panic("step id is empty")
+	}
+	if len(info.ProcessId) == 0 {
+		panic("step process id is empty")
+	}
+	if len(info.FlowId) == 0 {
+		panic("step flow id is empty")
+	}
 	if info.Name == "" {
 		panic("step name is empty")
 	}
@@ -46,6 +64,12 @@ func CompleteProcessor(info *light_flow.ProcessInfo) bool {
 	if info.Name == "" {
 		panic("procedure name is empty")
 	}
+	if len(info.Id) == 0 {
+		panic("process id is empty")
+	}
+	if len(info.FlowId) == 0 {
+		panic("process flow id is empty")
+	}
 	if info.Ctx == nil {
 		panic("procedure context is nil")
 	}
@@ -63,7 +87,7 @@ func TestDefaultProcessConfig(t *testing.T) {
 		light_flow.SetDefaultProcessConfig(nil)
 	}()
 	config := light_flow.ProcessConfig{
-		PreProcessors:      []func(string, *light_flow.Context) bool{PreProcessor},
+		PreProcessors:      []func(*light_flow.StepInfo) bool{PreProcessor},
 		PostProcessors:     []func(*light_flow.StepInfo) bool{PostProcessor},
 		CompleteProcessors: []func(*light_flow.ProcessInfo) bool{CompleteProcessor},
 	}
@@ -89,7 +113,7 @@ func TestPreAndPostProcessor(t *testing.T) {
 	defer resetCurrent()
 	workflow := light_flow.NewWorkflow[any](nil)
 	config := light_flow.ProcessConfig{
-		PreProcessors:      []func(string, *light_flow.Context) bool{PreProcessor},
+		PreProcessors:      []func(*light_flow.StepInfo) bool{PreProcessor},
 		PostProcessors:     []func(*light_flow.StepInfo) bool{PostProcessor},
 		CompleteProcessors: []func(*light_flow.ProcessInfo) bool{CompleteProcessor},
 	}
