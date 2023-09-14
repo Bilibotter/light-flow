@@ -69,25 +69,25 @@ func GeneratePanicStep(i int) func(ctx *flow.Context) (any, error) {
 func TestMultipleExceptionStatus(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.NewWorkflow[any](nil)
-	procedure := workflow.AddProcess("test1", nil)
-	procedure.AddStepWithAlias("1", GenerateErrorStep(1))
-	procedure.AddStepWithAlias("2", GeneratePanicStep(2))
-	step := procedure.AddStepWithAlias("3", GenerateErrorStep(3))
+	process := workflow.AddProcess("test1", nil)
+	process.AddStepWithAlias("1", GenerateErrorStep(1))
+	process.AddStepWithAlias("2", GeneratePanicStep(2))
+	step := process.AddStepWithAlias("3", GenerateErrorStep(3))
 	step.AddConfig(&flow.StepConfig{Timeout: time.Millisecond})
 	features := workflow.Done()
 	for name, feature := range features {
 		if feature.Success() {
-			t.Errorf("procedure[%s] success, but expected failed", name)
+			t.Errorf("process[%s] success, but expected failed", name)
 		}
 		explain := feature.ExplainStatus()
 		if !slices.Contains(explain, "Timeout") {
-			t.Errorf("procedure[%s] timeout, but explain not cotain, explain=%v", name, explain)
+			t.Errorf("process[%s] timeout, but explain not cotain, explain=%v", name, explain)
 		}
 		if !slices.Contains(explain, "Error") {
-			t.Errorf("procedure[%s] error, but explain not cotain, but explain=%v", name, explain)
+			t.Errorf("process[%s] error, but explain not cotain, but explain=%v", name, explain)
 		}
 		if !slices.Contains(explain, "Panic") {
-			t.Errorf("procedure[%s] panic, but explain not cotain, but explain=%v", name, explain)
+			t.Errorf("process[%s] panic, but explain not cotain, but explain=%v", name, explain)
 		}
 	}
 	if current != 3 {
@@ -99,14 +99,14 @@ func TestSinglePanicStep(t *testing.T) {
 	defer resetCurrent()
 	t.Parallel()
 	workflow := flow.NewWorkflow[any](nil)
-	procedure := workflow.AddProcess("test1", nil)
-	procedure.AddStepWithAlias("1", GeneratePanicStep(1))
+	process := workflow.AddProcess("test1", nil)
+	process.AddStepWithAlias("1", GeneratePanicStep(1))
 	features := workflow.Done()
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if feature.Success() {
-			t.Errorf("procedure[%s] success, but expected failed", name)
+			t.Errorf("process[%s] success, but expected failed", name)
 		}
 	}
 	if current != 1 {
@@ -117,20 +117,20 @@ func TestSinglePanicStep(t *testing.T) {
 func TestGoAheadWithoutDependPanicStep(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.NewWorkflow[any](nil)
-	procedure := workflow.AddProcess("test1", nil)
-	procedure.AddStepWithAlias("1", GeneratePanicStep(1))
-	procedure.AddStepWithAlias("-1", GenerateStep(-1), "1")
-	procedure.AddStepWithAlias("-2", GenerateStep(-2), "-1")
-	procedure.AddStepWithAlias("11", GenerateStep(11))
-	procedure.AddStepWithAlias("12", GenerateStep(12), "11")
-	procedure.AddStepWithAlias("13", GenerateStep(13), "12")
-	procedure.AddStepWithAlias("14", GenerateStep(14), "13")
+	process := workflow.AddProcess("test1", nil)
+	process.AddStepWithAlias("1", GeneratePanicStep(1))
+	process.AddStepWithAlias("-1", GenerateStep(-1), "1")
+	process.AddStepWithAlias("-2", GenerateStep(-2), "-1")
+	process.AddStepWithAlias("11", GenerateStep(11))
+	process.AddStepWithAlias("12", GenerateStep(12), "11")
+	process.AddStepWithAlias("13", GenerateStep(13), "12")
+	process.AddStepWithAlias("14", GenerateStep(14), "13")
 	features := workflow.Done()
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if feature.Success() {
-			t.Errorf("procedure[%s] success, but expected failed", name)
+			t.Errorf("process[%s] success, but expected failed", name)
 		}
 	}
 	if current != 5 {
@@ -141,14 +141,14 @@ func TestGoAheadWithoutDependPanicStep(t *testing.T) {
 func TestSingleErrorStep(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.NewWorkflow[any](nil)
-	procedure := workflow.AddProcess("test1", nil)
-	procedure.AddStepWithAlias("1", GenerateErrorStep(1))
+	process := workflow.AddProcess("test1", nil)
+	process.AddStepWithAlias("1", GenerateErrorStep(1))
 	features := workflow.Done()
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if feature.Success() {
-			t.Errorf("procedure[%s] success, but expected failed", name)
+			t.Errorf("process[%s] success, but expected failed", name)
 		}
 	}
 	if current != 1 {
@@ -159,20 +159,20 @@ func TestSingleErrorStep(t *testing.T) {
 func TestGoAheadWithoutDependErrorStep(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.NewWorkflow[any](nil)
-	procedure := workflow.AddProcess("test1", nil)
-	procedure.AddStepWithAlias("1", GenerateErrorStep(1))
-	procedure.AddStepWithAlias("-1", GenerateStep(-1), "1")
-	procedure.AddStepWithAlias("-2", GenerateStep(-2), "-1")
-	procedure.AddStepWithAlias("11", GenerateStep(11))
-	procedure.AddStepWithAlias("12", GenerateStep(12), "11")
-	procedure.AddStepWithAlias("13", GenerateStep(13), "12")
-	procedure.AddStepWithAlias("14", GenerateStep(14), "13")
+	process := workflow.AddProcess("test1", nil)
+	process.AddStepWithAlias("1", GenerateErrorStep(1))
+	process.AddStepWithAlias("-1", GenerateStep(-1), "1")
+	process.AddStepWithAlias("-2", GenerateStep(-2), "-1")
+	process.AddStepWithAlias("11", GenerateStep(11))
+	process.AddStepWithAlias("12", GenerateStep(12), "11")
+	process.AddStepWithAlias("13", GenerateStep(13), "12")
+	process.AddStepWithAlias("14", GenerateStep(14), "13")
 	features := workflow.Done()
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if feature.Success() {
-			t.Errorf("procedure[%s] success, but expected failed", name)
+			t.Errorf("process[%s] success, but expected failed", name)
 		}
 	}
 	if current != 5 {
@@ -183,14 +183,14 @@ func TestGoAheadWithoutDependErrorStep(t *testing.T) {
 func TestSingleNormalStep(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.NewWorkflow[any](nil)
-	procedure := workflow.AddProcess("test1", nil)
-	procedure.AddStepWithAlias("1", GenerateStep(1))
+	process := workflow.AddProcess("test1", nil)
+	process.AddStepWithAlias("1", GenerateStep(1))
 	features := workflow.Done()
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
-			t.Errorf("procedure[%s] fail", name)
+			t.Errorf("process[%s] fail", name)
 		}
 	}
 	if current != 1 {
@@ -201,18 +201,18 @@ func TestSingleNormalStep(t *testing.T) {
 func TestTestMultipleNormalStepWithoutAlias(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.NewWorkflow[any](nil)
-	procedure := workflow.AddProcess("test1", nil)
-	procedure.AddStep(NormalStep1)
-	procedure.AddStep(NormalStep2)
-	procedure.AddStep(NormalStep3)
-	procedure.AddStepWithAlias("4", NormalStep1, NormalStep1)
-	procedure.AddStepWithAlias("5", NormalStep1, "NormalStep1")
+	process := workflow.AddProcess("test1", nil)
+	process.AddStep(NormalStep1)
+	process.AddStep(NormalStep2)
+	process.AddStep(NormalStep3)
+	process.AddStepWithAlias("4", NormalStep1, NormalStep1)
+	process.AddStepWithAlias("5", NormalStep1, "NormalStep1")
 	features := workflow.Done()
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
-			t.Errorf("procedure[%s] fail", name)
+			t.Errorf("process[%s] fail", name)
 		}
 	}
 	if current != 5 {
@@ -223,19 +223,19 @@ func TestTestMultipleNormalStepWithoutAlias(t *testing.T) {
 func TestMultipleNormalStepWithMultipleBranches(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.NewWorkflow[any](nil)
-	procedure := workflow.AddProcess("test1", nil)
-	procedure.AddStepWithAlias("1", GenerateStep(1))
-	procedure.AddStepWithAlias("2", GenerateStep(2), "1")
-	procedure.AddStepWithAlias("3", GenerateStep(3), "2")
-	procedure.AddStepWithAlias("4", GenerateStep(4), "2")
-	procedure.AddStepWithAlias("5", GenerateStep(5), "2")
-	procedure.AddWaitAll("6", GenerateStep(6))
+	process := workflow.AddProcess("test1", nil)
+	process.AddStepWithAlias("1", GenerateStep(1))
+	process.AddStepWithAlias("2", GenerateStep(2), "1")
+	process.AddStepWithAlias("3", GenerateStep(3), "2")
+	process.AddStepWithAlias("4", GenerateStep(4), "2")
+	process.AddStepWithAlias("5", GenerateStep(5), "2")
+	process.AddWaitAll("6", GenerateStep(6))
 	features := workflow.Done()
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
-			t.Errorf("procedure[%s] fail", name)
+			t.Errorf("process[%s] fail", name)
 		}
 	}
 	if current != 6 {
@@ -246,19 +246,19 @@ func TestMultipleNormalStepWithMultipleBranches(t *testing.T) {
 func TestMultipleNormalStepsWithWaitBefore(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.NewWorkflow[any](nil)
-	procedure := workflow.AddProcess("test1", nil)
-	procedure.AddStepWithAlias("1", GenerateStep(1))
-	procedure.AddWaitBefore("2", GenerateStep(2))
-	procedure.AddWaitBefore("3", GenerateStep(3))
-	procedure.AddStepWithAlias("11", GenerateStep(11))
-	procedure.AddWaitBefore("12", GenerateStep(12))
-	procedure.AddWaitBefore("13", GenerateStep(13))
+	process := workflow.AddProcess("test1", nil)
+	process.AddStepWithAlias("1", GenerateStep(1))
+	process.AddWaitBefore("2", GenerateStep(2))
+	process.AddWaitBefore("3", GenerateStep(3))
+	process.AddStepWithAlias("11", GenerateStep(11))
+	process.AddWaitBefore("12", GenerateStep(12))
+	process.AddWaitBefore("13", GenerateStep(13))
 	features := workflow.Done()
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
-			t.Errorf("procedure[%s] fail", name)
+			t.Errorf("process[%s] fail", name)
 		}
 	}
 	if current != 6 {
@@ -269,19 +269,19 @@ func TestMultipleNormalStepsWithWaitBefore(t *testing.T) {
 func TestMultipleNormalSteps(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.NewWorkflow[any](nil)
-	procedure := workflow.AddProcess("test1", nil)
-	procedure.AddStepWithAlias("1", GenerateStep(1))
-	procedure.AddStepWithAlias("2", GenerateStep(2), "1")
-	procedure.AddStepWithAlias("3", GenerateStep(3), "2")
-	procedure.AddStepWithAlias("11", GenerateStep(11))
-	procedure.AddStepWithAlias("12", GenerateStep(12), "11")
-	procedure.AddStepWithAlias("13", GenerateStep(13), "12")
+	process := workflow.AddProcess("test1", nil)
+	process.AddStepWithAlias("1", GenerateStep(1))
+	process.AddStepWithAlias("2", GenerateStep(2), "1")
+	process.AddStepWithAlias("3", GenerateStep(3), "2")
+	process.AddStepWithAlias("11", GenerateStep(11))
+	process.AddStepWithAlias("12", GenerateStep(12), "11")
+	process.AddStepWithAlias("13", GenerateStep(13), "12")
 	features := workflow.Done()
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
-			t.Errorf("procedure[%s] fail", name)
+			t.Errorf("process[%s] fail", name)
 		}
 	}
 	if current != 6 {
@@ -292,13 +292,13 @@ func TestMultipleNormalSteps(t *testing.T) {
 func TestWorkFlowPause(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.NewWorkflow[any](nil)
-	procedure := workflow.AddProcess("test1", nil)
-	procedure.AddStepWithAlias("1", GenerateStep(1))
-	procedure.AddStepWithAlias("2", GenerateStep(2), "1")
-	procedure.AddStepWithAlias("3", GenerateStep(3), "2")
-	procedure.AddStepWithAlias("11", GenerateStep(11))
-	procedure.AddStepWithAlias("12", GenerateStep(12), "11")
-	procedure.AddStepWithAlias("13", GenerateStep(13), "12")
+	process := workflow.AddProcess("test1", nil)
+	process.AddStepWithAlias("1", GenerateStep(1))
+	process.AddStepWithAlias("2", GenerateStep(2), "1")
+	process.AddStepWithAlias("3", GenerateStep(3), "2")
+	process.AddStepWithAlias("11", GenerateStep(11))
+	process.AddStepWithAlias("12", GenerateStep(12), "11")
+	process.AddStepWithAlias("13", GenerateStep(13), "12")
 	features := workflow.Flow()
 	time.Sleep(10 * time.Millisecond)
 	workflow.Pause()
@@ -308,18 +308,18 @@ func TestWorkFlowPause(t *testing.T) {
 	}
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !slices.Contains(feature.ExplainStatus(), "Pause") {
-			t.Errorf("procedure[%s] pause fail", name)
+			t.Errorf("process[%s] pause fail", name)
 		}
 	}
 	workflow.Resume()
 	workflow.Done()
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
-			t.Errorf("procedure[%s] fail", name)
+			t.Errorf("process[%s] fail", name)
 		}
 	}
 	if current != 6 {
@@ -330,13 +330,13 @@ func TestWorkFlowPause(t *testing.T) {
 func TestProcessPause(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.NewWorkflow[any](nil)
-	procedure := workflow.AddProcess("test1", nil)
-	procedure.AddStepWithAlias("1", GenerateStep(1))
-	procedure.AddStepWithAlias("2", GenerateStep(2), "1")
-	procedure.AddStepWithAlias("3", GenerateStep(3), "2")
-	procedure.AddStepWithAlias("11", GenerateStep(11))
-	procedure.AddStepWithAlias("12", GenerateStep(12), "11")
-	procedure.AddStepWithAlias("13", GenerateStep(13), "12")
+	process := workflow.AddProcess("test1", nil)
+	process.AddStepWithAlias("1", GenerateStep(1))
+	process.AddStepWithAlias("2", GenerateStep(2), "1")
+	process.AddStepWithAlias("3", GenerateStep(3), "2")
+	process.AddStepWithAlias("11", GenerateStep(11))
+	process.AddStepWithAlias("12", GenerateStep(12), "11")
+	process.AddStepWithAlias("13", GenerateStep(13), "12")
 	features := workflow.Flow()
 	time.Sleep(10 * time.Millisecond)
 	workflow.PauseProcess("test1")
@@ -346,18 +346,18 @@ func TestProcessPause(t *testing.T) {
 	}
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !slices.Contains(feature.ExplainStatus(), "Pause") {
-			t.Errorf("procedure[%s] pause fail", name)
+			t.Errorf("process[%s] pause fail", name)
 		}
 	}
 	workflow.ResumeProcess("test1")
 	workflow.Done()
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
-			t.Errorf("procedure[%s] fail", name)
+			t.Errorf("process[%s] fail", name)
 		}
 	}
 	if current != 6 {

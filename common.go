@@ -202,7 +202,7 @@ func (ctx *Context) checkPriority() {
 		// check if priority's value can correspond to an existing step
 		ctx.getCtxByPriority(key)
 		if _, find := ctx.backTrackSearch(toStepName(value)); !find {
-			panic("priority value ust be a step that can be back tracking by the current step")
+			panic("priority value must be a step that can be back tracking by the current step")
 		}
 	}
 }

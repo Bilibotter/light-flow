@@ -75,22 +75,53 @@ func ExposeAddrFunc(addr *int64) func(ctx *light_flow.Context) (any, error) {
 	}
 }
 
-func TestPriority(t *testing.T) {
+func TestPriorityCheck(t *testing.T) {
 	defer resetCtx()
 	workflow := light_flow.NewWorkflow[any](nil)
-	procedure := workflow.AddProcess("test1", nil)
-	procedure.AddStepWithAlias("1", ChangeCtxStepFunc(&ctx1))
-	procedure.AddStepWithAlias("2", GenerateStepIncAddr(1), "1")
-	procedure.AddStepWithAlias("3", ChangeCtxStepFunc(&ctx2), "1")
-	step := procedure.AddStepWithAlias("4", GenerateStepIncAddr(1), "2", "3")
-	step.AddPriority(map[string]any{addrKey: "3"})
+	process := workflow.AddProcess("test1", nil)
+	process.AddStepWithAlias("0", ChangeCtxStepFunc(&ctx1))
+	process.AddStepWithAlias("1", ChangeCtxStepFunc(&ctx1))
+	process.AddStepWithAlias("2", GenerateStepIncAddr(1), "1")
+	process.AddStepWithAlias("3", ChangeCtxStepFunc(&ctx2), "1")
+	step := process.AddStepWithAlias("4", GenerateStepIncAddr(1), "2", "3")
+	defer func() {
+		if r := recover(); r != nil {
+			t.Logf("%v", r)
+		}
+	}()
+	step.AddPriority(map[string]any{addrKey: "0"})
 	features := workflow.Done()
 	println(ctx1, ctx2)
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
-			t.Errorf("procedure[%s] fail", name)
+			t.Errorf("process[%s] fail", name)
+		}
+	}
+	if ctx1 != 2 {
+		t.Errorf("excute 2 step, but ctx1 = %d", ctx1)
+	}
+	if ctx2 != 2 {
+		t.Errorf("excute 2 step, but ctx2 = %d", ctx2)
+	}
+}
+
+func TestPriority(t *testing.T) {
+	defer resetCtx()
+	workflow := light_flow.NewWorkflow[any](nil)
+	process := workflow.AddProcess("test1", nil)
+	process.AddStepWithAlias("1", ChangeCtxStepFunc(&ctx1))
+	process.AddStepWithAlias("2", GenerateStepIncAddr(1), "1")
+	process.AddStepWithAlias("3", ChangeCtxStepFunc(&ctx2), "1")
+	step := process.AddStepWithAlias("4", GenerateStepIncAddr(1), "2", "3")
+	step.AddPriority(map[string]any{addrKey: "3"})
+	features := workflow.Done()
+	for name, feature := range features {
+		explain := strings.Join(feature.ExplainStatus(), ", ")
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		if !feature.Success() {
+			t.Errorf("process[%s] fail", name)
 		}
 	}
 	if ctx1 != 2 {
@@ -104,20 +135,20 @@ func TestPriority(t *testing.T) {
 func TestExpose(t *testing.T) {
 	defer resetCtx()
 	workflow := light_flow.NewWorkflow[any](nil)
-	procedure := workflow.AddProcess("test1", nil)
-	procedure.AddStepWithAlias("1", ExposeAddrFunc(&ctx1))
-	procedure.AddStepWithAlias("2", GenerateStepIncAddr(2))
-	procedure.AddStepWithAlias("3", GenerateStepIncAddr(3))
-	procedure = workflow.AddProcess("test2", nil)
-	procedure.AddStepWithAlias("11", ExposeAddrFunc(&ctx2))
-	procedure.AddStepWithAlias("12", GenerateStepIncAddr(12))
-	procedure.AddStepWithAlias("13", GenerateStepIncAddr(13))
+	process := workflow.AddProcess("test1", nil)
+	process.AddStepWithAlias("1", ExposeAddrFunc(&ctx1))
+	process.AddStepWithAlias("2", GenerateStepIncAddr(2))
+	process.AddStepWithAlias("3", GenerateStepIncAddr(3))
+	process = workflow.AddProcess("test2", nil)
+	process.AddStepWithAlias("11", ExposeAddrFunc(&ctx2))
+	process.AddStepWithAlias("12", GenerateStepIncAddr(12))
+	process.AddStepWithAlias("13", GenerateStepIncAddr(13))
 	features := workflow.Done()
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
-			t.Errorf("procedure[%s] fail", name)
+			t.Errorf("process[%s] fail", name)
 		}
 	}
 	if ctx1 != 3 {
@@ -131,20 +162,20 @@ func TestExpose(t *testing.T) {
 func TestPtrReuse(t *testing.T) {
 	defer resetCtx()
 	workflow := light_flow.NewWorkflow[any](map[string]any{addrKey: &ctx1})
-	procedure1 := workflow.AddProcess("test1", nil)
-	procedure1.AddStepWithAlias("1", GenerateStepIncAddr(1))
-	procedure1.AddStepWithAlias("2", GenerateStepIncAddr(2), "1")
-	procedure1.AddStepWithAlias("3", GenerateStepIncAddr(3), "2")
-	procedure1 = workflow.AddProcess("test2", nil)
-	procedure1.AddStepWithAlias("11", GenerateStepIncAddr(11))
-	procedure1.AddStepWithAlias("12", GenerateStepIncAddr(12), "11")
-	procedure1.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
+	process1 := workflow.AddProcess("test1", nil)
+	process1.AddStepWithAlias("1", GenerateStepIncAddr(1))
+	process1.AddStepWithAlias("2", GenerateStepIncAddr(2), "1")
+	process1.AddStepWithAlias("3", GenerateStepIncAddr(3), "2")
+	process1 = workflow.AddProcess("test2", nil)
+	process1.AddStepWithAlias("11", GenerateStepIncAddr(11))
+	process1.AddStepWithAlias("12", GenerateStepIncAddr(12), "11")
+	process1.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
 	features := workflow.Done()
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
-			t.Errorf("procedure[%s] fail", name)
+			t.Errorf("process[%s] fail", name)
 		}
 	}
 	if ctx1 != 6 {
@@ -155,21 +186,21 @@ func TestPtrReuse(t *testing.T) {
 func TestWaitToDoneInMultiple(t *testing.T) {
 	defer resetCtx()
 	workflow := light_flow.NewWorkflow[any](map[string]any{addrKey: &ctx1})
-	procedure1 := workflow.AddProcess("test1", nil)
-	procedure1.AddStepWithAlias("1", GenerateStepIncAddr(1))
-	procedure1.AddStepWithAlias("2", GenerateStepIncAddr(2), "1")
-	procedure1.AddStepWithAlias("3", GenerateStepIncAddr(3), "2")
-	procedure2 := workflow.AddProcess("test2", nil)
-	procedure2.AddStepWithAlias("11", GenerateStepIncAddr(11))
-	procedure2.AddStepWithAlias("12", GenerateStepIncAddr(12), "11")
-	procedure2.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
-	procedure2.AddStepWithAlias("14", GenerateSleep(1*time.Second), "13")
+	process1 := workflow.AddProcess("test1", nil)
+	process1.AddStepWithAlias("1", GenerateStepIncAddr(1))
+	process1.AddStepWithAlias("2", GenerateStepIncAddr(2), "1")
+	process1.AddStepWithAlias("3", GenerateStepIncAddr(3), "2")
+	process2 := workflow.AddProcess("test2", nil)
+	process2.AddStepWithAlias("11", GenerateStepIncAddr(11))
+	process2.AddStepWithAlias("12", GenerateStepIncAddr(12), "11")
+	process2.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
+	process2.AddStepWithAlias("14", GenerateSleep(1*time.Second), "13")
 	features := workflow.Done()
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
-			t.Errorf("procedure[%s] fail", name)
+			t.Errorf("process[%s] fail", name)
 		}
 	}
 	if ctx1 != 7 {
@@ -180,20 +211,20 @@ func TestWaitToDoneInMultiple(t *testing.T) {
 func TestWorkFlowCtx(t *testing.T) {
 	defer resetCtx()
 	workflow := light_flow.NewWorkflow[any](map[string]any{addrKey: &ctx1})
-	procedure1 := workflow.AddProcess("test1", nil)
-	procedure1.AddStepWithAlias("1", GenerateStepIncAddr(1))
-	procedure1.AddStepWithAlias("2", GenerateStepIncAddr(2), "1")
-	procedure1.AddStepWithAlias("3", GenerateStepIncAddr(3), "2")
-	procedure2 := workflow.AddProcess("test2", nil)
-	procedure2.AddStepWithAlias("11", GenerateStepIncAddr(11))
-	procedure2.AddStepWithAlias("12", GenerateStepIncAddr(12), "11")
-	procedure2.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
+	process1 := workflow.AddProcess("test1", nil)
+	process1.AddStepWithAlias("1", GenerateStepIncAddr(1))
+	process1.AddStepWithAlias("2", GenerateStepIncAddr(2), "1")
+	process1.AddStepWithAlias("3", GenerateStepIncAddr(3), "2")
+	process2 := workflow.AddProcess("test2", nil)
+	process2.AddStepWithAlias("11", GenerateStepIncAddr(11))
+	process2.AddStepWithAlias("12", GenerateStepIncAddr(12), "11")
+	process2.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
 	features := workflow.Done()
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
-			t.Errorf("procedure[%s] fail", name)
+			t.Errorf("process[%s] fail", name)
 		}
 	}
 	if ctx1 != 6 {
@@ -201,25 +232,25 @@ func TestWorkFlowCtx(t *testing.T) {
 	}
 }
 
-func TestMultipleNormalProcedure(t *testing.T) {
+func TestMultipleNormalprocess(t *testing.T) {
 	defer resetCtx()
 	workflow := light_flow.NewWorkflow[any](nil)
-	procedure := workflow.AddProcess("test1", nil)
-	procedure.SupplyCtxByMap(map[string]any{addrKey: &ctx1})
-	procedure.AddStepWithAlias("1", GenerateStepIncAddr(1))
-	procedure.AddStepWithAlias("2", GenerateStepIncAddr(2), "1")
-	procedure.AddStepWithAlias("3", GenerateStepIncAddr(3), "2")
-	procedure = workflow.AddProcess("test2", nil)
-	procedure.SupplyCtxByMap(map[string]any{addrKey: &ctx2})
-	procedure.AddStepWithAlias("11", GenerateStepIncAddr(11))
-	procedure.AddStepWithAlias("12", GenerateStepIncAddr(12), "11")
-	procedure.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
+	process := workflow.AddProcess("test1", nil)
+	process.SupplyCtxByMap(map[string]any{addrKey: &ctx1})
+	process.AddStepWithAlias("1", GenerateStepIncAddr(1))
+	process.AddStepWithAlias("2", GenerateStepIncAddr(2), "1")
+	process.AddStepWithAlias("3", GenerateStepIncAddr(3), "2")
+	process = workflow.AddProcess("test2", nil)
+	process.SupplyCtxByMap(map[string]any{addrKey: &ctx2})
+	process.AddStepWithAlias("11", GenerateStepIncAddr(11))
+	process.AddStepWithAlias("12", GenerateStepIncAddr(12), "11")
+	process.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
 	features := workflow.Done()
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
-			t.Errorf("procedure[%s] fail", name)
+			t.Errorf("process[%s] fail", name)
 		}
 	}
 	if ctx1 != 3 {
@@ -230,29 +261,29 @@ func TestMultipleNormalProcedure(t *testing.T) {
 	}
 }
 
-func TestProcedureAndWorkflowCtx(t *testing.T) {
+func TestprocessAndWorkflowCtx(t *testing.T) {
 	defer resetCtx()
 	workflow := light_flow.NewWorkflow[any](map[string]any{addrKey: &ctx1})
-	procedure := workflow.AddProcess("test1", nil)
-	procedure.SupplyCtxByMap(map[string]any{addrKey: &ctx2})
-	procedure.AddStepWithAlias("1", GenerateStepIncAddr(1))
-	procedure.AddStepWithAlias("2", GenerateStepIncAddr(2), "1")
-	procedure.AddStepWithAlias("3", GenerateStepIncAddr(3), "2")
-	procedure = workflow.AddProcess("test2", nil)
-	procedure.SupplyCtxByMap(map[string]any{addrKey: &ctx2})
-	procedure.AddStepWithAlias("11", GenerateStepIncAddr(11))
-	procedure.AddStepWithAlias("12", GenerateStepIncAddr(12), "11")
-	procedure.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
+	process := workflow.AddProcess("test1", nil)
+	process.SupplyCtxByMap(map[string]any{addrKey: &ctx2})
+	process.AddStepWithAlias("1", GenerateStepIncAddr(1))
+	process.AddStepWithAlias("2", GenerateStepIncAddr(2), "1")
+	process.AddStepWithAlias("3", GenerateStepIncAddr(3), "2")
+	process = workflow.AddProcess("test2", nil)
+	process.SupplyCtxByMap(map[string]any{addrKey: &ctx2})
+	process.AddStepWithAlias("11", GenerateStepIncAddr(11))
+	process.AddStepWithAlias("12", GenerateStepIncAddr(12), "11")
+	process.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
 	features := workflow.Done()
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
-			t.Errorf("procedure[%s] fail", name)
+			t.Errorf("process[%s] fail", name)
 		}
 	}
 	if ctx1 != 0 {
-		t.Errorf("workflow ctx has effective with duplicate key in procedure")
+		t.Errorf("workflow ctx has effective with duplicate key in process")
 	}
 	if ctx2 != 6 {
 		t.Errorf("excute 6 step, but ctx2 = %d", ctx2)
@@ -262,22 +293,22 @@ func TestProcedureAndWorkflowCtx(t *testing.T) {
 func TestStepCtx(t *testing.T) {
 	defer resetCtx()
 	workflow := light_flow.NewWorkflow[any](map[string]any{addrKey: &ctx1})
-	procedure := workflow.AddProcess("test1", nil)
-	procedure.SupplyCtxByMap(map[string]any{addrKey: &ctx2})
-	procedure.AddStepWithAlias("1", ChangeCtxStepFunc(&ctx3))
-	procedure.AddStepWithAlias("2", GenerateStepIncAddr(2), "1")
-	procedure.AddStepWithAlias("3", GenerateStepIncAddr(3), "2")
-	procedure = workflow.AddProcess("test2", nil)
-	procedure.SupplyCtxByMap(map[string]any{addrKey: &ctx2})
-	procedure.AddStepWithAlias("11", ChangeCtxStepFunc(&ctx4))
-	procedure.AddStepWithAlias("12", GenerateStepIncAddr(12), "11")
-	procedure.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
+	process := workflow.AddProcess("test1", nil)
+	process.SupplyCtxByMap(map[string]any{addrKey: &ctx2})
+	process.AddStepWithAlias("1", ChangeCtxStepFunc(&ctx3))
+	process.AddStepWithAlias("2", GenerateStepIncAddr(2), "1")
+	process.AddStepWithAlias("3", GenerateStepIncAddr(3), "2")
+	process = workflow.AddProcess("test2", nil)
+	process.SupplyCtxByMap(map[string]any{addrKey: &ctx2})
+	process.AddStepWithAlias("11", ChangeCtxStepFunc(&ctx4))
+	process.AddStepWithAlias("12", GenerateStepIncAddr(12), "11")
+	process.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
 	features := workflow.Done()
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
-			t.Errorf("procedure[%s] fail", name)
+			t.Errorf("process[%s] fail", name)
 		}
 	}
 	if ctx1 != 0 {
@@ -297,22 +328,22 @@ func TestStepCtx(t *testing.T) {
 func TestDependStepCtx(t *testing.T) {
 	defer resetCtx()
 	workflow := light_flow.NewWorkflow[any](map[string]any{addrKey: &ctx1})
-	procedure := workflow.AddProcess("test1", nil)
-	procedure.SupplyCtxByMap(map[string]any{addrKey: &ctx2})
-	procedure.AddStepWithAlias("1", ChangeCtxStepFunc(&ctx3))
-	procedure.AddStepWithAlias("2", ChangeCtxStepFunc(&ctx5), "1")
-	procedure.AddStepWithAlias("3", GenerateStepIncAddr(3), "2")
-	procedure = workflow.AddProcess("test2", nil)
-	procedure.SupplyCtxByMap(map[string]any{addrKey: &ctx2})
-	procedure.AddStepWithAlias("11", ChangeCtxStepFunc(&ctx4))
-	procedure.AddStepWithAlias("12", ChangeCtxStepFunc(&ctx6), "11")
-	procedure.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
+	process := workflow.AddProcess("test1", nil)
+	process.SupplyCtxByMap(map[string]any{addrKey: &ctx2})
+	process.AddStepWithAlias("1", ChangeCtxStepFunc(&ctx3))
+	process.AddStepWithAlias("2", ChangeCtxStepFunc(&ctx5), "1")
+	process.AddStepWithAlias("3", GenerateStepIncAddr(3), "2")
+	process = workflow.AddProcess("test2", nil)
+	process.SupplyCtxByMap(map[string]any{addrKey: &ctx2})
+	process.AddStepWithAlias("11", ChangeCtxStepFunc(&ctx4))
+	process.AddStepWithAlias("12", ChangeCtxStepFunc(&ctx6), "11")
+	process.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
 	features := workflow.Done()
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
-			t.Errorf("procedure[%s] fail", name)
+			t.Errorf("process[%s] fail", name)
 		}
 	}
 	if ctx1 != 0 {

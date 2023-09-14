@@ -178,12 +178,12 @@ We define dependencies like flow code.
 
 ```go
 workflow := flow.NewWorkflow[any](nil)
-procedure := workflow.AddProcess("process", nil)
-procedure.AddStep(TaskA)
-procedure.AddStep(TaskB, TaskA)
-procedure.AddStep(TaskC, TaskA)
-procedure.AddStep(TaskD, TaskB, TaskC)
-procedure.AddStep(TaskE, TaskC)
+process := workflow.AddProcess("process", nil)
+process.AddStep(TaskA)
+process.AddStep(TaskB, TaskA)
+process.AddStep(TaskC, TaskA)
+process.AddStep(TaskD, TaskB, TaskC)
+process.AddStep(TaskE, TaskC)
 ```
 
 The dependency relationship is shown in the figure

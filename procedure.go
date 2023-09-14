@@ -236,6 +236,7 @@ func (pcd *Process) runStep(step *Step) {
 			panicErr := fmt.Errorf("panic: %v\n\n%s", r, string(debug.Stack()))
 			AppendStatus(&step.status, Panic)
 			step.Err = panicErr
+			step.End = time.Now().UTC()
 			step.finish <- true
 		}
 		if pcd.conf == nil || len(pcd.conf.PostProcessors) == 0 {
