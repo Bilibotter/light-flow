@@ -69,10 +69,12 @@ func (pcd *Process) AddStep(run func(ctx *Context) (any, error), depends ...any)
 	return pcd.AddStepWithAlias(GetFuncName(run), run, depends...)
 }
 
+// AddWaitBefore method treats the last added step as a dependency
 func (pcd *Process) AddWaitBefore(alias string, run func(ctx *Context) (any, error)) *Step {
 	return pcd.AddStepWithAlias(alias, run, pcd.tail)
 }
 
+// AddWaitAll method waits for all previously added steps to be done before executing.
 func (pcd *Process) AddWaitAll(alias string, run func(ctx *Context) (any, error)) *Step {
 	depends := make([]any, 0)
 	for name, step := range pcd.stepMap {

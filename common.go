@@ -175,16 +175,16 @@ func (ctx *Context) Get(key string) (any, bool) {
 	return nil, false
 }
 
-// Exposed method exposed key-value to scope,
-// so that unit in scope(step in process) can get it.
+// Exposed method exposes a key-value pair to the scope,
+// so that units within the scope (steps in the process) can access it.
 func (ctx *Context) Exposed(key string, value any) {
 	ctx.scopeContexts[ctx.scope].Set(key, value)
 }
 
-// GetStepResult method retrieves the step execute result.
+// GetStepResult method retrieves the result of a step's execution.
 // Each time a step is executed,
-// the execution results are saved in the context of the process.
-// So you could get the step execute result by this method.
+// its execution result is saved in the context of the process.
+// Use this method to retrieve the execution result of a step.
 func (ctx *Context) GetStepResult(name string) (any, bool) {
 	key := InternalPrefix + name
 	return ctx.Get(key)
@@ -195,7 +195,7 @@ func (ctx *Context) setStepResult(name string, value any) {
 	ctx.scopeContexts[ctx.scope].Set(key, value)
 }
 
-// checkPriority check if priority key can correspond to an existing step
+// checkPriority checks if the priority key corresponds to an existing step.
 // If not it will panic.
 func (ctx *Context) checkPriority() {
 	for key, value := range ctx.priority {
@@ -235,7 +235,7 @@ func (ctx *Context) backTrackSearch(parentName string) (*Context, bool) {
 	return nil, false
 }
 
-// Done method wait for the corresponding process to complete.
+// Done method waits for the corresponding process to complete.
 func (f *Feature) Done() {
 	f.running.Wait()
 	// wait goroutine to change status
@@ -247,7 +247,7 @@ func (f *Feature) Success() bool {
 	return *f.status&Success == Success && IsStatusNormal(atomic.LoadInt64(f.status))
 }
 
-// See common.ExplainStatus
+// See common.ExplainStatus for details.
 func (f *Feature) ExplainStatus() []string {
 	return ExplainStatus(atomic.LoadInt64(f.status))
 }

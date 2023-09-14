@@ -65,11 +65,13 @@ func buildInfo(step *Step) *StepInfo {
 	return info
 }
 
+// AddPriority changes the order to retrieve a specified key.
 func (step *Step) AddPriority(priority map[string]any) {
 	step.ctx.priority = priority
 	step.ctx.checkPriority()
 }
 
+// AddConfig allow step not using process's config
 func (step *Step) AddConfig(config *StepConfig) {
 	step.config = config
 }
