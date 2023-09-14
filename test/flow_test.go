@@ -2,7 +2,7 @@ package test
 
 import (
 	"fmt"
-	"gitee.com/MetaphysicCoding/light-flow"
+	flow "gitee.com/MetaphysicCoding/light-flow"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -18,29 +18,29 @@ func resetCurrent() {
 	atomic.StoreInt64(&current, 0)
 }
 
-func NormalStep3(ctx *light_flow.Context) (any, error) {
+func NormalStep3(ctx *flow.Context) (any, error) {
 	atomic.AddInt64(&current, 1)
 	time.Sleep(100 * time.Millisecond)
 	fmt.Printf("3.normal step finish\n")
 	return 3, nil
 }
 
-func NormalStep2(ctx *light_flow.Context) (any, error) {
+func NormalStep2(ctx *flow.Context) (any, error) {
 	atomic.AddInt64(&current, 1)
 	time.Sleep(100 * time.Millisecond)
 	fmt.Printf("2.normal step finish\n")
 	return 2, nil
 }
 
-func NormalStep1(ctx *light_flow.Context) (any, error) {
+func NormalStep1(ctx *flow.Context) (any, error) {
 	atomic.AddInt64(&current, 1)
 	time.Sleep(100 * time.Millisecond)
 	fmt.Printf("1.normal step finish\n")
 	return 1, nil
 }
 
-func GenerateStep(i int) func(ctx *light_flow.Context) (any, error) {
-	return func(ctx *light_flow.Context) (any, error) {
+func GenerateStep(i int) func(ctx *flow.Context) (any, error) {
+	return func(ctx *flow.Context) (any, error) {
 		time.Sleep(100 * time.Millisecond)
 		fmt.Printf("%d.step finish\n", i)
 		atomic.AddInt64(&current, 1)
@@ -48,8 +48,8 @@ func GenerateStep(i int) func(ctx *light_flow.Context) (any, error) {
 	}
 }
 
-func GenerateErrorStep(i int) func(ctx *light_flow.Context) (any, error) {
-	return func(ctx *light_flow.Context) (any, error) {
+func GenerateErrorStep(i int) func(ctx *flow.Context) (any, error) {
+	return func(ctx *flow.Context) (any, error) {
 		time.Sleep(100 * time.Millisecond)
 		fmt.Printf("%d.step error occur \n", i)
 		atomic.AddInt64(&current, 1)
@@ -57,8 +57,8 @@ func GenerateErrorStep(i int) func(ctx *light_flow.Context) (any, error) {
 	}
 }
 
-func GeneratePanicStep(i int) func(ctx *light_flow.Context) (any, error) {
-	return func(ctx *light_flow.Context) (any, error) {
+func GeneratePanicStep(i int) func(ctx *flow.Context) (any, error) {
+	return func(ctx *flow.Context) (any, error) {
 		time.Sleep(100 * time.Millisecond)
 		fmt.Printf("%d.step panic \n", i)
 		atomic.AddInt64(&current, 1)
@@ -66,10 +66,39 @@ func GeneratePanicStep(i int) func(ctx *light_flow.Context) (any, error) {
 	}
 }
 
+func TestMultipleExceptionStatus(t *testing.T) {
+	defer resetCurrent()
+	workflow := flow.NewWorkflow[any](nil)
+	procedure := workflow.AddProcess("test1", nil)
+	procedure.AddStepWithAlias("1", GenerateErrorStep(1))
+	procedure.AddStepWithAlias("2", GeneratePanicStep(2))
+	step := procedure.AddStepWithAlias("3", GenerateErrorStep(3))
+	step.AddConfig(&flow.StepConfig{Timeout: time.Millisecond})
+	features := workflow.Done()
+	for name, feature := range features {
+		if feature.Success() {
+			t.Errorf("procedure[%s] success, but expected failed", name)
+		}
+		explain := feature.ExplainStatus()
+		if !slices.Contains(explain, "Timeout") {
+			t.Errorf("procedure[%s] timeout, but explain not cotain, explain=%v", name, explain)
+		}
+		if !slices.Contains(explain, "Error") {
+			t.Errorf("procedure[%s] error, but explain not cotain, but explain=%v", name, explain)
+		}
+		if !slices.Contains(explain, "Panic") {
+			t.Errorf("procedure[%s] panic, but explain not cotain, but explain=%v", name, explain)
+		}
+	}
+	if current != 3 {
+		t.Errorf("excute 3 step, but current = %d", current)
+	}
+}
+
 func TestSinglePanicStep(t *testing.T) {
 	defer resetCurrent()
 	t.Parallel()
-	workflow := light_flow.NewWorkflow[any](nil)
+	workflow := flow.NewWorkflow[any](nil)
 	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddStepWithAlias("1", GeneratePanicStep(1))
 	features := workflow.Done()
@@ -87,7 +116,7 @@ func TestSinglePanicStep(t *testing.T) {
 
 func TestGoAheadWithoutDependPanicStep(t *testing.T) {
 	defer resetCurrent()
-	workflow := light_flow.NewWorkflow[any](nil)
+	workflow := flow.NewWorkflow[any](nil)
 	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddStepWithAlias("1", GeneratePanicStep(1))
 	procedure.AddStepWithAlias("-1", GenerateStep(-1), "1")
@@ -111,7 +140,7 @@ func TestGoAheadWithoutDependPanicStep(t *testing.T) {
 
 func TestSingleErrorStep(t *testing.T) {
 	defer resetCurrent()
-	workflow := light_flow.NewWorkflow[any](nil)
+	workflow := flow.NewWorkflow[any](nil)
 	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddStepWithAlias("1", GenerateErrorStep(1))
 	features := workflow.Done()
@@ -129,7 +158,7 @@ func TestSingleErrorStep(t *testing.T) {
 
 func TestGoAheadWithoutDependErrorStep(t *testing.T) {
 	defer resetCurrent()
-	workflow := light_flow.NewWorkflow[any](nil)
+	workflow := flow.NewWorkflow[any](nil)
 	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddStepWithAlias("1", GenerateErrorStep(1))
 	procedure.AddStepWithAlias("-1", GenerateStep(-1), "1")
@@ -153,7 +182,7 @@ func TestGoAheadWithoutDependErrorStep(t *testing.T) {
 
 func TestSingleNormalStep(t *testing.T) {
 	defer resetCurrent()
-	workflow := light_flow.NewWorkflow[any](nil)
+	workflow := flow.NewWorkflow[any](nil)
 	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddStepWithAlias("1", GenerateStep(1))
 	features := workflow.Done()
@@ -171,7 +200,7 @@ func TestSingleNormalStep(t *testing.T) {
 
 func TestTestMultipleNormalStepWithoutAlias(t *testing.T) {
 	defer resetCurrent()
-	workflow := light_flow.NewWorkflow[any](nil)
+	workflow := flow.NewWorkflow[any](nil)
 	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddStep(NormalStep1)
 	procedure.AddStep(NormalStep2)
@@ -193,7 +222,7 @@ func TestTestMultipleNormalStepWithoutAlias(t *testing.T) {
 
 func TestMultipleNormalStepWithMultipleBranches(t *testing.T) {
 	defer resetCurrent()
-	workflow := light_flow.NewWorkflow[any](nil)
+	workflow := flow.NewWorkflow[any](nil)
 	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddStepWithAlias("1", GenerateStep(1))
 	procedure.AddStepWithAlias("2", GenerateStep(2), "1")
@@ -216,7 +245,7 @@ func TestMultipleNormalStepWithMultipleBranches(t *testing.T) {
 
 func TestMultipleNormalStepsWithWaitBefore(t *testing.T) {
 	defer resetCurrent()
-	workflow := light_flow.NewWorkflow[any](nil)
+	workflow := flow.NewWorkflow[any](nil)
 	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddStepWithAlias("1", GenerateStep(1))
 	procedure.AddWaitBefore("2", GenerateStep(2))
@@ -239,7 +268,7 @@ func TestMultipleNormalStepsWithWaitBefore(t *testing.T) {
 
 func TestMultipleNormalSteps(t *testing.T) {
 	defer resetCurrent()
-	workflow := light_flow.NewWorkflow[any](nil)
+	workflow := flow.NewWorkflow[any](nil)
 	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddStepWithAlias("1", GenerateStep(1))
 	procedure.AddStepWithAlias("2", GenerateStep(2), "1")
@@ -262,7 +291,7 @@ func TestMultipleNormalSteps(t *testing.T) {
 
 func TestWorkFlowPause(t *testing.T) {
 	defer resetCurrent()
-	workflow := light_flow.NewWorkflow[any](nil)
+	workflow := flow.NewWorkflow[any](nil)
 	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddStepWithAlias("1", GenerateStep(1))
 	procedure.AddStepWithAlias("2", GenerateStep(2), "1")
@@ -300,7 +329,7 @@ func TestWorkFlowPause(t *testing.T) {
 
 func TestProcessPause(t *testing.T) {
 	defer resetCurrent()
-	workflow := light_flow.NewWorkflow[any](nil)
+	workflow := flow.NewWorkflow[any](nil)
 	procedure := workflow.AddProcess("test1", nil)
 	procedure.AddStepWithAlias("1", GenerateStep(1))
 	procedure.AddStepWithAlias("2", GenerateStep(2), "1")

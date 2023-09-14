@@ -29,7 +29,8 @@ const (
 	NormalMask = int64(0b1<<16 - 1)
 	Cancel     = int64(0b1 << 16)
 	Timeout    = int64(0b1 << 17)
-	Panic      = int64(0b11 << 18)
+	Panic      = int64(0b1 << 18)
+	Error      = int64(0b1 << 19)
 	Failed     = int64(0b1 << 31)
 	// abnormal produce status will cause the cancellation of unexecuted steps during execution
 	// abnormal step status will cause the cancellation of unexecuted steps that depend on it
@@ -48,11 +49,13 @@ var (
 		Cancel:  "Cancel",
 		Timeout: "Timeout",
 		Panic:   "Panic",
+		Error:   "Error",
 		Failed:  "Failed",
 	}
 )
 
 type Context struct {
+	name          string
 	scope         string
 	scopeContexts map[string]*Context
 	parents       []*Context
@@ -132,17 +135,17 @@ func ExplainStatus(status int64) []string {
 	return contains
 }
 
-func getIndex(value any) string {
-	var index string
+func toStepName(value any) string {
+	var result string
 	switch value.(type) {
 	case func(ctx *Context) (any, error):
-		index = GetFuncName(value)
+		result = GetFuncName(value)
 	case string:
-		index = value.(string)
+		result = value.(string)
 	default:
-		panic("index's value must be func(ctx *Context) (any, error) or string")
+		panic("value must be func(ctx *Context) (any, error) or string")
 	}
-	return index
+	return result
 }
 
 // Set method sets the value associated with the given key in own context.
@@ -155,7 +158,7 @@ func (ctx *Context) Set(key string, value any) {
 // Returns the value associated with the key (if found) and a boolean indicating its presence.
 func (ctx *Context) Get(key string) (any, bool) {
 	if used, exist := ctx.getCtxByPriority(key); exist {
-		return used, true
+		return used.Get(key)
 	}
 
 	if used, exist := ctx.table.Load(key); exist {
@@ -172,6 +175,12 @@ func (ctx *Context) Get(key string) (any, bool) {
 	return nil, false
 }
 
+// Exposed method exposed key-value to scope,
+// so that unit in scope(step in process) can get it.
+func (ctx *Context) Exposed(key string, value any) {
+	ctx.scopeContexts[ctx.scope].Set(key, value)
+}
+
 // GetStepResult method retrieves the step execute result.
 // Each time a step is executed,
 // the execution results are saved in the context of the process.
@@ -181,11 +190,20 @@ func (ctx *Context) GetStepResult(name string) (any, bool) {
 	return ctx.Get(key)
 }
 
+func (ctx *Context) setStepResult(name string, value any) {
+	key := InternalPrefix + name
+	ctx.scopeContexts[ctx.scope].Set(key, value)
+}
+
 // checkPriority check if priority key can correspond to an existing step
 // If not it will panic.
 func (ctx *Context) checkPriority() {
-	for key := range ctx.priority {
+	for key, value := range ctx.priority {
+		// check if priority's value can correspond to an existing step
 		ctx.getCtxByPriority(key)
+		if _, find := ctx.backTrackSearch(toStepName(value)); !find {
+			panic("priority value ust be a step that can be back tracking by the current step")
+		}
 	}
 }
 
@@ -194,14 +212,27 @@ func (ctx *Context) getCtxByPriority(key string) (*Context, bool) {
 	if !exist {
 		return nil, false
 	}
-	index := getIndex(value)
-	used, exist := ctx.scopeContexts[index]
+	name := toStepName(value)
+	used, exist := ctx.scopeContexts[name]
 	if !exist {
-		// If priority's value is next node, it will cause infinite loop
-		// So priority's value must exist.
-		panic(fmt.Sprintf("can't find context named %s", index))
+		panic(fmt.Sprintf("can't find step named %s", name))
 	}
 	return used, true
+}
+
+func (ctx *Context) backTrackSearch(parentName string) (*Context, bool) {
+	if len(ctx.parents) == 0 {
+		return nil, false
+	}
+	for _, parent := range ctx.parents {
+		if parent.name == parentName {
+			return parent, true
+		}
+		if candidate, find := parent.backTrackSearch(parentName); find {
+			return candidate, true
+		}
+	}
+	return nil, false
 }
 
 // Done method wait for the corresponding process to complete.

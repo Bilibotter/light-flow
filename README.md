@@ -106,8 +106,8 @@ features := workflow.Done()
 ```go
 for name, feature := range features {
     if feature.Success() {
-			// ExplainStatus compresses the status of all steps in the process.
-			fmt.Printf("process[%s] result: %v \n", name, feature.ExplainStatus())
+		// ExplainStatus compresses the status of all steps in the process.
+		fmt.Printf("process[%s] result: %v \n", name, feature.ExplainStatus())
     } else {
         fmt.Printf("process[%s] occur error: %v \n", name, feature.ExplainStatus())
     }

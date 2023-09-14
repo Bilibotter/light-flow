@@ -2,6 +2,7 @@ package light_flow
 
 import (
 	"fmt"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -98,16 +99,17 @@ func (pcd *Process) AddStepWithAlias(alias string, run func(ctx *Context) (any, 
 		send:      make([]*Step, 0),
 		ctx: &Context{
 			scopeContexts: pcd.processContexts,
+			name:          alias,
 			scope:         ProcessCtx,
 			table:         sync.Map{},
 		},
 	}
 
 	for _, depend := range depends {
-		index := getIndex(depend)
-		prev, exist := pcd.stepMap[index]
+		name := toStepName(depend)
+		prev, exist := pcd.stepMap[name]
 		if !exist {
-			panic(fmt.Sprintf("can't find step named %s", index))
+			panic(fmt.Sprintf("can't find step named %s", name))
 		}
 
 		step.receive = append(step.receive, prev)
@@ -169,7 +171,7 @@ func (pcd *Process) schedule() *Feature {
 func (pcd *Process) scheduleStep(step *Step) {
 	defer pcd.scheduleNextSteps(step)
 
-	if _, finish := pcd.getStepResult(step.name); finish {
+	if _, finish := step.ctx.GetStepResult(step.name); finish {
 		AppendStatus(&step.status, Success)
 		return
 	}
@@ -231,7 +233,9 @@ func (pcd *Process) runStep(step *Step) {
 
 	defer func() {
 		if r := recover(); r != nil {
+			panicErr := fmt.Errorf("panic: %v\n\n%s", r, string(debug.Stack()))
 			AppendStatus(&step.status, Panic)
+			step.Err = panicErr
 			step.finish <- true
 		}
 		if pcd.conf == nil || len(pcd.conf.PostProcessors) == 0 {
@@ -252,10 +256,10 @@ func (pcd *Process) runStep(step *Step) {
 		step.Err = err
 		step.ctx.Set(step.name, result)
 		if err != nil {
-			AppendStatus(&step.status, Failed)
+			AppendStatus(&step.status, Error)
 			continue
 		}
-		pcd.setStepResult(step.name, result)
+		pcd.context.setStepResult(step.name, result)
 		AppendStatus(&step.status, Success)
 		break
 	}
@@ -340,17 +344,5 @@ func (pcd *Process) DrawRelation() (processName string, depends map[string][]str
 }
 
 func (pcd *Process) SkipFinishedStep(name string, result any) {
-	pcd.setStepResult(name, result)
-}
-
-func (pcd *Process) setStepResult(name string, value any) {
-	key := InternalPrefix + name
-	if _, exist := pcd.context.Get(key); !exist {
-		pcd.context.Set(key, value)
-	}
-}
-
-func (pcd *Process) getStepResult(name string) (any, bool) {
-	key := InternalPrefix + name
-	return pcd.context.Get(key)
+	pcd.context.setStepResult(name, result)
 }

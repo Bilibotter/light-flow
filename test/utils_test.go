@@ -34,31 +34,47 @@ func TestPopStatus(t *testing.T) {
 	light_flow.AppendStatus(&status, light_flow.Cancel)
 	light_flow.AppendStatus(&status, light_flow.Panic)
 	light_flow.AppendStatus(&status, light_flow.Failed)
+	light_flow.AppendStatus(&status, light_flow.Error)
 	light_flow.AppendStatus(&status, light_flow.Timeout)
+
+	if !slices.Contains(light_flow.ExplainStatus(status), "Cancel") {
+		t.Errorf("cancel appended but not exist")
+	}
 	light_flow.PopStatus(&status, light_flow.Cancel)
 	if slices.Contains(light_flow.ExplainStatus(status), "Cancel") {
 		t.Errorf("cancel status pop error")
 	}
+
 	if !slices.Contains(light_flow.ExplainStatus(status), "Panic") {
-		t.Errorf("cancel status pop but pop panic")
+		t.Errorf("panic appended but not exist")
 	}
 	light_flow.PopStatus(&status, light_flow.Panic)
 	if slices.Contains(light_flow.ExplainStatus(status), "Panic") {
 		t.Errorf("panic status pop error")
 	}
+
 	if !slices.Contains(light_flow.ExplainStatus(status), "Failed") {
-		t.Errorf("panic status pop but pop failed")
+		t.Errorf("failed appended but not exist")
 	}
 	light_flow.PopStatus(&status, light_flow.Failed)
 	if slices.Contains(light_flow.ExplainStatus(status), "Failed") {
 		t.Errorf("failed status pop error")
 	}
+
 	if !slices.Contains(light_flow.ExplainStatus(status), "Timeout") {
-		t.Errorf("failed status pop but pop timeout")
+		t.Errorf("timeout appended bu not exist")
 	}
 	light_flow.PopStatus(&status, light_flow.Timeout)
 	if slices.Contains(light_flow.ExplainStatus(status), "Timeout") {
 		t.Errorf("timeout status pop error")
+	}
+
+	if !slices.Contains(light_flow.ExplainStatus(status), "Error") {
+		t.Errorf("error appended bu not exist")
+	}
+	light_flow.PopStatus(&status, light_flow.Error)
+	if slices.Contains(light_flow.ExplainStatus(status), "Error") {
+		t.Errorf("error status pop error")
 	}
 }
 
@@ -86,6 +102,9 @@ func TestExplainStatus1(t *testing.T) {
 	}
 	if !slices.Contains(light_flow.ExplainStatus(light_flow.Pending), "Pending") {
 		t.Errorf("pending status explain error")
+	}
+	if !slices.Contains(light_flow.ExplainStatus(light_flow.Error), "Error") {
+		t.Errorf("error status explain error")
 	}
 }
 

@@ -67,6 +67,67 @@ func GenerateStepIncAddr(i int) func(ctx *light_flow.Context) (any, error) {
 	}
 }
 
+func ExposeAddrFunc(addr *int64) func(ctx *light_flow.Context) (any, error) {
+	return func(ctx *light_flow.Context) (any, error) {
+		ctx.Exposed(addrKey, addr)
+		atomic.AddInt64(addr, 1)
+		return nil, nil
+	}
+}
+
+func TestPriority(t *testing.T) {
+	defer resetCtx()
+	workflow := light_flow.NewWorkflow[any](nil)
+	procedure := workflow.AddProcess("test1", nil)
+	procedure.AddStepWithAlias("1", ChangeCtxStepFunc(&ctx1))
+	procedure.AddStepWithAlias("2", GenerateStepIncAddr(1), "1")
+	procedure.AddStepWithAlias("3", ChangeCtxStepFunc(&ctx2), "1")
+	step := procedure.AddStepWithAlias("4", GenerateStepIncAddr(1), "2", "3")
+	step.AddPriority(map[string]any{addrKey: "3"})
+	features := workflow.Done()
+	println(ctx1, ctx2)
+	for name, feature := range features {
+		explain := strings.Join(feature.ExplainStatus(), ", ")
+		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
+		if !feature.Success() {
+			t.Errorf("procedure[%s] fail", name)
+		}
+	}
+	if ctx1 != 2 {
+		t.Errorf("excute 2 step, but ctx1 = %d", ctx1)
+	}
+	if ctx2 != 2 {
+		t.Errorf("excute 2 step, but ctx2 = %d", ctx2)
+	}
+}
+
+func TestExpose(t *testing.T) {
+	defer resetCtx()
+	workflow := light_flow.NewWorkflow[any](nil)
+	procedure := workflow.AddProcess("test1", nil)
+	procedure.AddStepWithAlias("1", ExposeAddrFunc(&ctx1))
+	procedure.AddStepWithAlias("2", GenerateStepIncAddr(2))
+	procedure.AddStepWithAlias("3", GenerateStepIncAddr(3))
+	procedure = workflow.AddProcess("test2", nil)
+	procedure.AddStepWithAlias("11", ExposeAddrFunc(&ctx2))
+	procedure.AddStepWithAlias("12", GenerateStepIncAddr(12))
+	procedure.AddStepWithAlias("13", GenerateStepIncAddr(13))
+	features := workflow.Done()
+	for name, feature := range features {
+		explain := strings.Join(feature.ExplainStatus(), ", ")
+		fmt.Printf("procedure[%s] explain=%s\n", name, explain)
+		if !feature.Success() {
+			t.Errorf("procedure[%s] fail", name)
+		}
+	}
+	if ctx1 != 3 {
+		t.Errorf("excute 3 step, but ctx1 = %d", ctx1)
+	}
+	if ctx2 != 3 {
+		t.Errorf("excute 3 step, but ctx2 = %d", ctx2)
+	}
+}
+
 func TestPtrReuse(t *testing.T) {
 	defer resetCtx()
 	workflow := light_flow.NewWorkflow[any](map[string]any{addrKey: &ctx1})

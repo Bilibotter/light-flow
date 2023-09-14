@@ -27,6 +27,7 @@ func init() {
 // NewWorkflow function creates a workflow and use input as global context.
 func NewWorkflow[T any](input map[string]T) *Workflow {
 	context := Context{
+		name:          WorkflowCtx,
 		scope:         WorkflowCtx,
 		scopeContexts: make(map[string]*Context),
 		table:         sync.Map{},
@@ -105,6 +106,7 @@ func (wf *Workflow) ResumeProcess(name string) {
 
 func (wf *Workflow) AddProcess(name string, conf *ProcessConfig) *Process {
 	processCtx := Context{
+		name:          name,
 		scope:         ProcessCtx,
 		scopeContexts: make(map[string]*Context),
 		table:         sync.Map{},
