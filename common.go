@@ -157,8 +157,17 @@ func (ctx *Context) Set(key string, value any) {
 // The method first checks the priority context, then own context, finally parents context.
 // Returns the value associated with the key (if found) and a boolean indicating its presence.
 func (ctx *Context) Get(key string) (any, bool) {
+	s := NewRoutineUnsafeSet()
+	return ctx.search(key, s)
+}
+
+func (ctx *Context) search(key string, prev *Set) (any, bool) {
+	if prev.Contains(ctx.name) {
+		return nil, false
+	}
+	prev.Add(ctx.name)
 	if used, exist := ctx.getCtxByPriority(key); exist {
-		return used.Get(key)
+		return used.search(key, prev)
 	}
 
 	if used, exist := ctx.table.Load(key); exist {
@@ -166,7 +175,7 @@ func (ctx *Context) Get(key string) (any, bool) {
 	}
 
 	for _, parent := range ctx.parents {
-		used, exist := parent.Get(key)
+		used, exist := parent.search(key, prev)
 		if exist {
 			return used, exist
 		}
@@ -187,7 +196,7 @@ func (ctx *Context) Exposed(key string, value any) {
 // Use this method to retrieve the execution result of a step.
 func (ctx *Context) GetStepResult(name string) (any, bool) {
 	key := InternalPrefix + name
-	return ctx.Get(key)
+	return ctx.scopeContexts[ctx.scope].Get(key)
 }
 
 func (ctx *Context) setStepResult(name string, value any) {

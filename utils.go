@@ -6,6 +6,32 @@ import (
 	"strings"
 )
 
+type Set struct {
+	data map[string]bool
+}
+
+func NewRoutineUnsafeSet() *Set {
+	s := &Set{}
+	s.data = make(map[string]bool)
+	return s
+}
+
+func (s *Set) Add(item string) {
+	s.data[item] = true
+}
+
+func (s *Set) Contains(item string) bool {
+	return s.data[item]
+}
+
+func (s *Set) Remove(item string) {
+	delete(s.data, item)
+}
+
+func (s *Set) Size() int {
+	return len(s.data)
+}
+
 // GetFuncName function retrieves the name of a provided function.
 // If the provided function is anonymous function, it panics.
 func GetFuncName(f interface{}) string {

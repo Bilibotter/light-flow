@@ -75,6 +75,66 @@ func ExposeAddrFunc(addr *int64) func(ctx *light_flow.Context) (any, error) {
 	}
 }
 
+func getUnexist(ctx *light_flow.Context) (any, error) {
+	println("start")
+	ctx.Get("unexist")
+	println("end")
+	return nil, nil
+}
+
+func invalidUse(ctx *light_flow.Context) (any, error) {
+	return nil, nil
+}
+
+func TestSearch(t *testing.T) {
+	defer resetCtx()
+	workflow := light_flow.NewWorkflow[any](nil)
+	process := workflow.AddProcess("test1", nil)
+	process.AddStepWithAlias("1", invalidUse)
+	process.AddStepWithAlias("2", invalidUse, "1")
+	process.AddStepWithAlias("3", invalidUse, "1")
+	process.AddStepWithAlias("4", getUnexist, "2", "3")
+	features := workflow.Done()
+	for name, feature := range features {
+		explain := strings.Join(feature.ExplainStatus(), ", ")
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		if !feature.Success() {
+			t.Errorf("process[%s] fail", name)
+		}
+	}
+}
+
+func TestPriorityWithSelf(t *testing.T) {
+	defer resetCtx()
+	workflow := light_flow.NewWorkflow[any](nil)
+	process := workflow.AddProcess("test1", nil)
+	process.AddStepWithAlias("0", ChangeCtxStepFunc(&ctx1))
+	process.AddStepWithAlias("1", ChangeCtxStepFunc(&ctx1))
+	process.AddStepWithAlias("2", GenerateStepIncAddr(1), "1")
+	process.AddStepWithAlias("3", ChangeCtxStepFunc(&ctx2), "1")
+	step := process.AddStepWithAlias("4", GenerateStepIncAddr(1), "2", "3")
+	defer func() {
+		if r := recover(); r != nil {
+			t.Logf("%v", r)
+		}
+	}()
+	step.AddPriority(map[string]any{addrKey: "4"})
+	features := workflow.Done()
+	for name, feature := range features {
+		explain := strings.Join(feature.ExplainStatus(), ", ")
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		if !feature.Success() {
+			t.Errorf("process[%s] fail", name)
+		}
+	}
+	if ctx1 != 2 {
+		t.Errorf("excute 2 step, but ctx1 = %d", ctx1)
+	}
+	if ctx2 != 2 {
+		t.Errorf("excute 2 step, but ctx2 = %d", ctx2)
+	}
+}
+
 func TestPriorityCheck(t *testing.T) {
 	defer resetCtx()
 	workflow := light_flow.NewWorkflow[any](nil)
@@ -91,7 +151,6 @@ func TestPriorityCheck(t *testing.T) {
 	}()
 	step.AddPriority(map[string]any{addrKey: "0"})
 	features := workflow.Done()
-	println(ctx1, ctx2)
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)

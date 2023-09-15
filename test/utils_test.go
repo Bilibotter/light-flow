@@ -3,6 +3,7 @@ package test
 import (
 	"gitee.com/MetaphysicCoding/light-flow"
 	"slices"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -27,6 +28,23 @@ type Dst struct {
 	Internal Internal
 	SameName int
 	UnExist  bool
+}
+
+func TestSet(t *testing.T) {
+	s := light_flow.NewRoutineUnsafeSet()
+	for i := 0; i < 1000; i++ {
+		s.Add(strconv.Itoa(i))
+	}
+	for i := 0; i < 1000; i++ {
+		if !s.Contains(strconv.Itoa(i)) {
+			t.Errorf("set not contains %d", i)
+			break
+		}
+		if s.Contains(strconv.Itoa(i + 1000)) {
+			t.Errorf("set contains %d", i+1000)
+			break
+		}
+	}
 }
 
 func TestPopStatus(t *testing.T) {
