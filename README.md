@@ -192,7 +192,7 @@ The dependency relationship is shown in the figure
 
 TaskD can access the context of TaskB，TaskC，TaskA.
 
-TaskD can access the context of TaskC，TaskA, but TaskD can't access the context of TaskB.
+TaskE can access the context of TaskC，TaskA, but TaskE can't access the context of TaskB.
 
 ```
 Note:  
