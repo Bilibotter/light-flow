@@ -75,9 +75,9 @@ func ExposeAddrFunc(addr *int64) func(ctx *flow.Context) (any, error) {
 	}
 }
 
-func getUnexist(ctx *flow.Context) (any, error) {
+func getUnExist(ctx *flow.Context) (any, error) {
 	println("start")
-	ctx.Get("unexist")
+	ctx.Get("unExist")
 	println("end")
 	return nil, nil
 }
@@ -93,7 +93,7 @@ func TestSearch(t *testing.T) {
 	process.AddStepWithAlias("1", invalidUse)
 	process.AddStepWithAlias("2", invalidUse, "1")
 	process.AddStepWithAlias("3", invalidUse, "1")
-	process.AddStepWithAlias("4", getUnexist, "2", "3")
+	process.AddStepWithAlias("4", getUnExist, "2", "3")
 	features := flow.DoneFlow("TestSearch", nil)
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
@@ -387,5 +387,48 @@ func TestDependStepCtx(t *testing.T) {
 	}
 	if atomic.LoadInt64(&ctx6) != 2 {
 		t.Errorf("excute 2 step, but ctx4 = %d", ctx6)
+	}
+}
+
+func TestFlowMultipleAsyncExecute(t *testing.T) {
+	defer resetCtx()
+	workflow := flow.AddFlowFactory("TestFlowMultipleExecute")
+	process := workflow.AddProcess("TestFlowMultipleExecute1", nil)
+	process.AddPostProcessor(ErrorResultPrinter)
+	process.AddStepWithAlias("1", GenerateStepIncAddr(1))
+	process.AddStepWithAlias("2", GenerateStepIncAddr(2), "1")
+	process.AddStepWithAlias("3", GenerateStepIncAddr(3), "2")
+	process = workflow.AddProcess("TestFlowMultipleExecute2", nil)
+	process.AddStepWithAlias("11", GenerateStepIncAddr(11))
+	process.AddStepWithAlias("12", GenerateStepIncAddr(12), "11")
+	process.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
+	flow1 := flow.AsyncFlow("TestFlowMultipleExecute", map[string]any{addrKey: &ctx1})
+	flow2 := flow.AsyncFlow("TestFlowMultipleExecute", map[string]any{addrKey: &ctx2})
+	flow3 := flow.AsyncFlow("TestFlowMultipleExecute", map[string]any{addrKey: &ctx3})
+	flow4 := flow.AsyncFlow("TestFlowMultipleExecute", map[string]any{addrKey: &ctx4})
+	flow5 := flow.AsyncFlow("TestFlowMultipleExecute", map[string]any{addrKey: &ctx5})
+	for _, flowing := range []*flow.Workflow{flow1, flow2, flow3, flow4, flow5} {
+		for name, feature := range flowing.Done() {
+			explain := strings.Join(feature.ExplainStatus(), ", ")
+			fmt.Printf("process[%s] explain=%s\n", name, explain)
+			if !feature.Success() {
+				t.Errorf("process[%s] fail", name)
+			}
+		}
+	}
+	if atomic.LoadInt64(&ctx1) != 6 {
+		t.Errorf("excute 6 step, but ctx1 = %d", ctx1)
+	}
+	if atomic.LoadInt64(&ctx2) != 6 {
+		t.Errorf("excute 2 step, but ctx2 = %d", ctx3)
+	}
+	if atomic.LoadInt64(&ctx3) != 6 {
+		t.Errorf("excute 2 step, but ctx3 = %d", ctx3)
+	}
+	if atomic.LoadInt64(&ctx4) != 6 {
+		t.Errorf("excute 2 step, but ctx4 = %d", ctx4)
+	}
+	if atomic.LoadInt64(&ctx5) != 6 {
+		t.Errorf("excute 2 step, but ctx5 = %d", ctx5)
 	}
 }
