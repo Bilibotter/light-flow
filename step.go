@@ -1,20 +1,30 @@
 package light_flow
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
-type Step struct {
+type StepMeta struct {
+	stepName    string
+	funcName    string
+	order       int
+	position    int64
+	config      *StepConfig
+	depends     []*StepMeta // prev
+	waiters     []*StepMeta // next
+	ctxPriority map[string]string
+	run         func(ctx *Context) (any, error)
+}
+
+type FlowStep struct {
+	*StepMeta
+	*Context
 	id        string
 	flowId    string
 	processId string
-	name      string
 	waiting   int64 // the num of wait for dependent step to complete
 	status    int64
-	position  int64
-	ctx       *Context
-	config    *StepConfig
-	receive   []*Step // steps that the current step depends on
-	send      []*Step // steps that depend on the current step
-	run       func(ctx *Context) (any, error)
 	finish    chan bool
 	Start     time.Time
 	End       time.Time
@@ -27,8 +37,8 @@ type StepInfo struct {
 	FlowId    string
 	Name      string
 	Status    int64
-	Prev      map[string]string // prev step name to step id
-	Next      map[string]string // next step name to step id
+	Prev      map[string]string // prev step stepName to step id
+	Next      map[string]string // next step stepName to step id
 	Ctx       *Context
 	Config    *StepConfig
 	Start     time.Time
@@ -41,37 +51,42 @@ type StepConfig struct {
 	MaxRetry int
 }
 
-func buildInfo(step *Step) *StepInfo {
-	info := &StepInfo{
-		Id:        step.id,
-		ProcessId: step.processId,
-		FlowId:    step.flowId,
-		Name:      step.name,
-		Status:    step.status,
-		Ctx:       step.ctx,
-		Config:    step.config,
-		Start:     step.Start,
-		End:       step.End,
-		Err:       step.Err,
-		Prev:      make(map[string]string, len(step.receive)),
-		Next:      make(map[string]string, len(step.send)),
+func (meta *StepMeta) AddPriority(priority map[string]any) {
+	for key, stepName := range priority {
+		if meta.stepName == stepName {
+			panic(fmt.Sprintf("step [%s] can't add self to priority", stepName))
+		}
+		meta.ctxPriority[key] = toStepName(stepName)
 	}
-	for _, prev := range step.receive {
-		info.Prev[prev.name] = prev.id
-	}
-	for _, next := range step.send {
-		info.Next[next.name] = next.id
-	}
-	return info
+	meta.checkPriority()
 }
 
-// AddPriority changes the order to retrieve a specified key.
-func (step *Step) AddPriority(priority map[string]any) {
-	step.ctx.priority = priority
-	step.ctx.checkPriority()
+// checkPriority checks if the priority key corresponds to an existing step.
+// If not it will panic.
+func (meta *StepMeta) checkPriority() {
+	for _, stepName := range meta.ctxPriority {
+		if meta.backTrackSearch(stepName) {
+			continue
+		}
+		panic(fmt.Sprintf("step [%s] can't be back tracking by the current step", stepName))
+	}
+}
+
+func (meta *StepMeta) backTrackSearch(searched string) bool {
+	if meta.stepName == searched {
+		return true
+	}
+
+	for _, depend := range meta.depends {
+		if depend.backTrackSearch(searched) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // AddConfig allow step not using process's config
-func (step *Step) AddConfig(config *StepConfig) {
-	step.config = config
+func (meta *StepMeta) AddConfig(config *StepConfig) {
+	meta.config = config
 }

@@ -32,7 +32,7 @@ func (s *Set) Size() int {
 	return len(s.data)
 }
 
-// GetFuncName function retrieves the name of a provided function.
+// GetFuncName function retrieves the stepName of a provided function.
 // If the provided function is anonymous function, it panics.
 func GetFuncName(f interface{}) string {
 	funcValue := reflect.ValueOf(f)

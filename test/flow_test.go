@@ -68,13 +68,13 @@ func GeneratePanicStep(i int) func(ctx *flow.Context) (any, error) {
 
 func TestMultipleExceptionStatus(t *testing.T) {
 	defer resetCurrent()
-	workflow := flow.NewWorkflow[any](nil)
-	process := workflow.AddProcess("test1", nil)
+	workflow := flow.AddFlowFactory("TestMultipleExceptionStatus")
+	process := workflow.AddProcess("TestMultipleExceptionStatus", nil)
 	process.AddStepWithAlias("1", GenerateErrorStep(1))
 	process.AddStepWithAlias("2", GeneratePanicStep(2))
 	step := process.AddStepWithAlias("3", GenerateErrorStep(3))
 	step.AddConfig(&flow.StepConfig{Timeout: time.Millisecond})
-	features := workflow.Done()
+	features := flow.DoneFlow("TestMultipleExceptionStatus", nil)
 	for name, feature := range features {
 		if feature.Success() {
 			t.Errorf("process[%s] success, but expected failed", name)
@@ -90,7 +90,7 @@ func TestMultipleExceptionStatus(t *testing.T) {
 			t.Errorf("process[%s] panic, but explain not cotain, but explain=%v", name, explain)
 		}
 	}
-	if current != 3 {
+	if atomic.LoadInt64(&current) != 3 {
 		t.Errorf("excute 3 step, but current = %d", current)
 	}
 }
@@ -98,10 +98,10 @@ func TestMultipleExceptionStatus(t *testing.T) {
 func TestSinglePanicStep(t *testing.T) {
 	defer resetCurrent()
 	t.Parallel()
-	workflow := flow.NewWorkflow[any](nil)
-	process := workflow.AddProcess("test1", nil)
+	workflow := flow.AddFlowFactory("TestSinglePanicStep")
+	process := workflow.AddProcess("TestSinglePanicStep", nil)
 	process.AddStepWithAlias("1", GeneratePanicStep(1))
-	features := workflow.Done()
+	features := flow.DoneFlow("TestSinglePanicStep", nil)
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
@@ -109,15 +109,15 @@ func TestSinglePanicStep(t *testing.T) {
 			t.Errorf("process[%s] success, but expected failed", name)
 		}
 	}
-	if current != 1 {
+	if atomic.LoadInt64(&current) != 1 {
 		t.Errorf("excute 1 step, but current = %d", current)
 	}
 }
 
 func TestGoAheadWithoutDependPanicStep(t *testing.T) {
 	defer resetCurrent()
-	workflow := flow.NewWorkflow[any](nil)
-	process := workflow.AddProcess("test1", nil)
+	workflow := flow.AddFlowFactory("TestGoAheadWithoutDependPanicStep")
+	process := workflow.AddProcess("TestGoAheadWithoutDependPanicStep", nil)
 	process.AddStepWithAlias("1", GeneratePanicStep(1))
 	process.AddStepWithAlias("-1", GenerateStep(-1), "1")
 	process.AddStepWithAlias("-2", GenerateStep(-2), "-1")
@@ -125,7 +125,7 @@ func TestGoAheadWithoutDependPanicStep(t *testing.T) {
 	process.AddStepWithAlias("12", GenerateStep(12), "11")
 	process.AddStepWithAlias("13", GenerateStep(13), "12")
 	process.AddStepWithAlias("14", GenerateStep(14), "13")
-	features := workflow.Done()
+	features := flow.DoneFlow("TestGoAheadWithoutDependPanicStep", nil)
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
@@ -133,17 +133,17 @@ func TestGoAheadWithoutDependPanicStep(t *testing.T) {
 			t.Errorf("process[%s] success, but expected failed", name)
 		}
 	}
-	if current != 5 {
+	if atomic.LoadInt64(&current) != 5 {
 		t.Errorf("excute 5 step, but current = %d", current)
 	}
 }
 
 func TestSingleErrorStep(t *testing.T) {
 	defer resetCurrent()
-	workflow := flow.NewWorkflow[any](nil)
-	process := workflow.AddProcess("test1", nil)
+	workflow := flow.AddFlowFactory("TestSingleErrorStep")
+	process := workflow.AddProcess("TestSingleErrorStep", nil)
 	process.AddStepWithAlias("1", GenerateErrorStep(1))
-	features := workflow.Done()
+	features := flow.DoneFlow("TestSingleErrorStep", nil)
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
@@ -151,15 +151,15 @@ func TestSingleErrorStep(t *testing.T) {
 			t.Errorf("process[%s] success, but expected failed", name)
 		}
 	}
-	if current != 1 {
+	if atomic.LoadInt64(&current) != 1 {
 		t.Errorf("excute 1 step, but current = %d", current)
 	}
 }
 
 func TestGoAheadWithoutDependErrorStep(t *testing.T) {
 	defer resetCurrent()
-	workflow := flow.NewWorkflow[any](nil)
-	process := workflow.AddProcess("test1", nil)
+	workflow := flow.AddFlowFactory("TestGoAheadWithoutDependErrorStep")
+	process := workflow.AddProcess("TestGoAheadWithoutDependErrorStep", nil)
 	process.AddStepWithAlias("1", GenerateErrorStep(1))
 	process.AddStepWithAlias("-1", GenerateStep(-1), "1")
 	process.AddStepWithAlias("-2", GenerateStep(-2), "-1")
@@ -167,7 +167,7 @@ func TestGoAheadWithoutDependErrorStep(t *testing.T) {
 	process.AddStepWithAlias("12", GenerateStep(12), "11")
 	process.AddStepWithAlias("13", GenerateStep(13), "12")
 	process.AddStepWithAlias("14", GenerateStep(14), "13")
-	features := workflow.Done()
+	features := flow.DoneFlow("TestGoAheadWithoutDependErrorStep", nil)
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
@@ -175,17 +175,17 @@ func TestGoAheadWithoutDependErrorStep(t *testing.T) {
 			t.Errorf("process[%s] success, but expected failed", name)
 		}
 	}
-	if current != 5 {
+	if atomic.LoadInt64(&current) != 5 {
 		t.Errorf("excute 5 step, but current = %d", current)
 	}
 }
 
 func TestSingleNormalStep(t *testing.T) {
 	defer resetCurrent()
-	workflow := flow.NewWorkflow[any](nil)
-	process := workflow.AddProcess("test1", nil)
+	workflow := flow.AddFlowFactory("TestSingleNormalStep")
+	process := workflow.AddProcess("TestSingleNormalStep", nil)
 	process.AddStepWithAlias("1", GenerateStep(1))
-	features := workflow.Done()
+	features := flow.DoneFlow("TestSingleNormalStep", nil)
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
@@ -193,21 +193,20 @@ func TestSingleNormalStep(t *testing.T) {
 			t.Errorf("process[%s] fail", name)
 		}
 	}
-	if current != 1 {
+	if atomic.LoadInt64(&current) != 1 {
 		t.Errorf("excute 1 step, but current = %d", current)
 	}
 }
-
 func TestTestMultipleNormalStepWithoutAlias(t *testing.T) {
 	defer resetCurrent()
-	workflow := flow.NewWorkflow[any](nil)
-	process := workflow.AddProcess("test1", nil)
+	workflow := flow.AddFlowFactory("TestTestMultipleNormalStepWithoutAlias")
+	process := workflow.AddProcess("TestTestMultipleNormalStepWithoutAlias", nil)
 	process.AddStep(NormalStep1)
 	process.AddStep(NormalStep2)
 	process.AddStep(NormalStep3)
 	process.AddStepWithAlias("4", NormalStep1, NormalStep1)
 	process.AddStepWithAlias("5", NormalStep1, "NormalStep1")
-	features := workflow.Done()
+	features := flow.DoneFlow("TestTestMultipleNormalStepWithoutAlias", nil)
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
@@ -215,22 +214,22 @@ func TestTestMultipleNormalStepWithoutAlias(t *testing.T) {
 			t.Errorf("process[%s] fail", name)
 		}
 	}
-	if current != 5 {
+	if atomic.LoadInt64(&current) != 5 {
 		t.Errorf("excute 5 step, but current = %d", current)
 	}
 }
 
 func TestMultipleNormalStepWithMultipleBranches(t *testing.T) {
 	defer resetCurrent()
-	workflow := flow.NewWorkflow[any](nil)
-	process := workflow.AddProcess("test1", nil)
+	workflow := flow.AddFlowFactory("TestMultipleNormalStepWithMultipleBranches")
+	process := workflow.AddProcess("TestMultipleNormalStepWithMultipleBranches", nil)
 	process.AddStepWithAlias("1", GenerateStep(1))
 	process.AddStepWithAlias("2", GenerateStep(2), "1")
 	process.AddStepWithAlias("3", GenerateStep(3), "2")
 	process.AddStepWithAlias("4", GenerateStep(4), "2")
 	process.AddStepWithAlias("5", GenerateStep(5), "2")
 	process.AddWaitAll("6", GenerateStep(6))
-	features := workflow.Done()
+	features := flow.DoneFlow("TestMultipleNormalStepWithMultipleBranches", nil)
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
@@ -238,22 +237,22 @@ func TestMultipleNormalStepWithMultipleBranches(t *testing.T) {
 			t.Errorf("process[%s] fail", name)
 		}
 	}
-	if current != 6 {
+	if atomic.LoadInt64(&current) != 6 {
 		t.Errorf("excute 6 step, but current = %d", current)
 	}
 }
 
 func TestMultipleNormalStepsWithWaitBefore(t *testing.T) {
 	defer resetCurrent()
-	workflow := flow.NewWorkflow[any](nil)
-	process := workflow.AddProcess("test1", nil)
+	factory := flow.AddFlowFactory("TestMultipleNormalStepsWithWaitBefore")
+	process := factory.AddProcess("TestMultipleNormalStepsWithWaitBefore", nil)
 	process.AddStepWithAlias("1", GenerateStep(1))
 	process.AddWaitBefore("2", GenerateStep(2))
 	process.AddWaitBefore("3", GenerateStep(3))
 	process.AddStepWithAlias("11", GenerateStep(11))
 	process.AddWaitBefore("12", GenerateStep(12))
 	process.AddWaitBefore("13", GenerateStep(13))
-	features := workflow.Done()
+	features := flow.DoneFlow("TestMultipleNormalStepsWithWaitBefore", nil)
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
@@ -261,22 +260,22 @@ func TestMultipleNormalStepsWithWaitBefore(t *testing.T) {
 			t.Errorf("process[%s] fail", name)
 		}
 	}
-	if current != 6 {
+	if atomic.LoadInt64(&current) != 6 {
 		t.Errorf("excute 6 step, but current = %d", current)
 	}
 }
 
 func TestMultipleNormalSteps(t *testing.T) {
 	defer resetCurrent()
-	workflow := flow.NewWorkflow[any](nil)
-	process := workflow.AddProcess("test1", nil)
+	workflow := flow.AddFlowFactory("TestMultipleNormalSteps")
+	process := workflow.AddProcess("TestMultipleNormalSteps", nil)
 	process.AddStepWithAlias("1", GenerateStep(1))
 	process.AddStepWithAlias("2", GenerateStep(2), "1")
 	process.AddStepWithAlias("3", GenerateStep(3), "2")
 	process.AddStepWithAlias("11", GenerateStep(11))
 	process.AddStepWithAlias("12", GenerateStep(12), "11")
 	process.AddStepWithAlias("13", GenerateStep(13), "12")
-	features := workflow.Done()
+	features := flow.DoneFlow("TestMultipleNormalSteps", nil)
 	for name, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
@@ -284,83 +283,83 @@ func TestMultipleNormalSteps(t *testing.T) {
 			t.Errorf("process[%s] fail", name)
 		}
 	}
-	if current != 6 {
+	if atomic.LoadInt64(&current) != 6 {
 		t.Errorf("excute 6 step, but current = %d", current)
 	}
 }
 
 func TestWorkFlowPause(t *testing.T) {
 	defer resetCurrent()
-	workflow := flow.NewWorkflow[any](nil)
-	process := workflow.AddProcess("test1", nil)
+	workflow := flow.AddFlowFactory("TestWorkFlowPause")
+	process := workflow.AddProcess("TestWorkFlowPause", nil)
 	process.AddStepWithAlias("1", GenerateStep(1))
 	process.AddStepWithAlias("2", GenerateStep(2), "1")
 	process.AddStepWithAlias("3", GenerateStep(3), "2")
 	process.AddStepWithAlias("11", GenerateStep(11))
 	process.AddStepWithAlias("12", GenerateStep(12), "11")
 	process.AddStepWithAlias("13", GenerateStep(13), "12")
-	features := workflow.Flow()
+	wf := flow.AsyncFlow("TestWorkFlowPause", nil)
 	time.Sleep(10 * time.Millisecond)
-	workflow.Pause()
+	wf.Pause()
 	time.Sleep(200 * time.Millisecond)
-	if current != 2 {
+	if atomic.LoadInt64(&current) != 2 {
 		t.Errorf("excute 2 step, but current = %d", current)
 	}
-	for name, feature := range features {
+	for name, feature := range wf.GetFeatures() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !slices.Contains(feature.ExplainStatus(), "Pause") {
 			t.Errorf("process[%s] pause fail", name)
 		}
 	}
-	workflow.Resume()
-	workflow.Done()
-	for name, feature := range features {
+	wf.Resume()
+	wf.Done()
+	for name, feature := range wf.GetFeatures() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
 		}
 	}
-	if current != 6 {
+	if atomic.LoadInt64(&current) != 6 {
 		t.Errorf("excute 6 step, but current = %d", current)
 	}
 }
 
 func TestProcessPause(t *testing.T) {
 	defer resetCurrent()
-	workflow := flow.NewWorkflow[any](nil)
-	process := workflow.AddProcess("test1", nil)
+	factory := flow.AddFlowFactory("TestProcessPause")
+	process := factory.AddProcess("TestProcessPause", nil)
 	process.AddStepWithAlias("1", GenerateStep(1))
 	process.AddStepWithAlias("2", GenerateStep(2), "1")
 	process.AddStepWithAlias("3", GenerateStep(3), "2")
 	process.AddStepWithAlias("11", GenerateStep(11))
 	process.AddStepWithAlias("12", GenerateStep(12), "11")
 	process.AddStepWithAlias("13", GenerateStep(13), "12")
-	features := workflow.Flow()
+	workflow := flow.AsyncFlow("TestProcessPause", nil)
 	time.Sleep(10 * time.Millisecond)
-	workflow.PauseProcess("test1")
+	workflow.PauseProcess("TestProcessPause")
 	time.Sleep(200 * time.Millisecond)
-	if current != 2 {
+	if atomic.LoadInt64(&current) != 2 {
 		t.Errorf("excute 2 step, but current = %d", current)
 	}
-	for name, feature := range features {
+	for name, feature := range workflow.GetFeatures() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !slices.Contains(feature.ExplainStatus(), "Pause") {
 			t.Errorf("process[%s] pause fail", name)
 		}
 	}
-	workflow.ResumeProcess("test1")
+	workflow.ResumeProcess("TestProcessPause")
 	workflow.Done()
-	for name, feature := range features {
+	for name, feature := range workflow.GetFeatures() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
 		}
 	}
-	if current != 6 {
+	if atomic.LoadInt64(&current) != 6 {
 		t.Errorf("excute 6 step, but current = %d", current)
 	}
 }

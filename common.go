@@ -1,7 +1,6 @@
 package light_flow
 
 import (
-	"fmt"
 	"sync"
 	"sync/atomic"
 )
@@ -15,9 +14,9 @@ const (
 
 // these constants are used to indicate the position of the process
 const (
-	NoUse = int64(-1)
-	End   = int64(0)
-	Start = int64(1)
+	End     = int64(0)
+	Start   = int64(0b1)
+	HasNext = int64(0b1 << 1)
 )
 
 // these constants are used to indicate the status of the process
@@ -55,12 +54,12 @@ var (
 )
 
 type Context struct {
-	name          string
-	scope         string
-	scopeContexts map[string]*Context
-	parents       []*Context
-	table         sync.Map // current node's context
-	priority      map[string]any
+	name      string
+	table     sync.Map // current node's context
+	parents   []*Context
+	scopes    []string // todo use scope to provide more connect and isolate
+	scopeCtxs map[string]*Context
+	priority  map[string]string
 }
 
 type Feature struct {
@@ -95,6 +94,10 @@ func AppendStatus(addr *int64, update int64) (change bool) {
 		current = atomic.LoadInt64(addr)
 	}
 	return false
+}
+
+func Contains(addr *int64, status int64) bool {
+	return atomic.LoadInt64(addr)&status == status
 }
 
 func IsStatusNormal(status int64) bool {
@@ -166,8 +169,8 @@ func (ctx *Context) search(key string, prev *Set) (any, bool) {
 		return nil, false
 	}
 	prev.Add(ctx.name)
-	if used, exist := ctx.getCtxByPriority(key); exist {
-		return used.search(key, prev)
+	if target, find := ctx.getByPriority(key); find {
+		return target, true
 	}
 
 	if used, exist := ctx.table.Load(key); exist {
@@ -187,7 +190,7 @@ func (ctx *Context) search(key string, prev *Set) (any, bool) {
 // Exposed method exposes a key-value pair to the scope,
 // so that units within the scope (steps in the process) can access it.
 func (ctx *Context) Exposed(key string, value any) {
-	ctx.scopeContexts[ctx.scope].Set(key, value)
+	ctx.scopeCtxs[ProcessCtx].Set(key, value)
 }
 
 // GetStepResult method retrieves the result of a step's execution.
@@ -196,52 +199,20 @@ func (ctx *Context) Exposed(key string, value any) {
 // Use this method to retrieve the execution result of a step.
 func (ctx *Context) GetStepResult(name string) (any, bool) {
 	key := InternalPrefix + name
-	return ctx.scopeContexts[ctx.scope].Get(key)
+	return ctx.scopeCtxs[ProcessCtx].Get(key)
 }
 
 func (ctx *Context) setStepResult(name string, value any) {
 	key := InternalPrefix + name
-	ctx.scopeContexts[ctx.scope].Set(key, value)
+	ctx.scopeCtxs[ProcessCtx].Set(key, value)
 }
 
-// checkPriority checks if the priority key corresponds to an existing step.
-// If not it will panic.
-func (ctx *Context) checkPriority() {
-	for key, value := range ctx.priority {
-		// check if priority's value can correspond to an existing step
-		ctx.getCtxByPriority(key)
-		if _, find := ctx.backTrackSearch(toStepName(value)); !find {
-			panic("priority value must be a step that can be back tracking by the current step")
-		}
-	}
-}
-
-func (ctx *Context) getCtxByPriority(key string) (*Context, bool) {
-	value, exist := ctx.priority[key]
+func (ctx *Context) getByPriority(key string) (any, bool) {
+	name, exist := ctx.priority[key]
 	if !exist {
 		return nil, false
 	}
-	name := toStepName(value)
-	used, exist := ctx.scopeContexts[name]
-	if !exist {
-		panic(fmt.Sprintf("can't find step named %s", name))
-	}
-	return used, true
-}
-
-func (ctx *Context) backTrackSearch(parentName string) (*Context, bool) {
-	if len(ctx.parents) == 0 {
-		return nil, false
-	}
-	for _, parent := range ctx.parents {
-		if parent.name == parentName {
-			return parent, true
-		}
-		if candidate, find := parent.backTrackSearch(parentName); find {
-			return candidate, true
-		}
-	}
-	return nil, false
+	return ctx.scopeCtxs[name].search(key, NewRoutineUnsafeSet())
 }
 
 // Done method waits for the corresponding process to complete.

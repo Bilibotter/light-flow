@@ -3,6 +3,7 @@ package light_flow
 import (
 	"fmt"
 	"runtime/debug"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -13,19 +14,24 @@ var (
 	defaultProcessConfig *ProcessConfig
 )
 
-type Process struct {
-	id              string
-	flowId          string
-	name            string
-	stepMap         map[string]*Step
-	processContexts map[string]*Context
-	tail            string
-	context         *Context
-	pause           sync.WaitGroup
-	running         sync.WaitGroup
-	finish          int64
-	status          int64
-	conf            *ProcessConfig
+type ProcessMeta struct {
+	processName string
+	steps       map[string]*StepMeta
+	tailStep    string
+	conf        *ProcessConfig
+}
+
+type FlowProcess struct {
+	*ProcessMeta
+	*Context
+	id        string
+	flowId    string
+	flowSteps map[string]*FlowStep
+	pcsScope  map[string]*Context
+	pause     sync.WaitGroup
+	needRun   sync.WaitGroup
+	finish    int64
+	status    int64
 }
 
 type ProcessInfo struct {
@@ -51,133 +57,168 @@ func SetDefaultProcessConfig(config *ProcessConfig) {
 	defaultProcessConfig = config
 }
 
-func (pcd *Process) SupplyCtxByMap(update map[string]any) {
-	for key, value := range update {
-		pcd.context.Set(key, value)
+func (pm *ProcessMeta) register() {
+	_, load := allProcess.LoadOrStore(pm.processName, pm)
+	if load {
+		panic(fmt.Sprintf("process named [%s] has exist", pm.processName))
 	}
 }
 
-func (pcd *Process) SupplyCtx(key string, value any) {
-	pcd.context.Set(key, value)
+func (pm *ProcessMeta) AddConfig(config *ProcessConfig) {
+	pm.conf = config
 }
 
-func (pcd *Process) AddConfig(config *ProcessConfig) {
-	pcd.conf = config
+func (pm *ProcessMeta) AddPostProcessor(processor func(info *StepInfo) (keepOn bool)) {
+	pm.conf.PostProcessors = append(pm.conf.PostProcessors, processor)
 }
 
-func (pcd *Process) AddStep(run func(ctx *Context) (any, error), depends ...any) *Step {
-	return pcd.AddStepWithAlias(GetFuncName(run), run, depends...)
+func (pm *ProcessMeta) AddPreProcessor(processor func(info *StepInfo) (keepOn bool)) {
+	pm.conf.PreProcessors = append(pm.conf.PreProcessors, processor)
+}
+
+func (pm *ProcessMeta) AddCompleteProcessor(processor func(info *ProcessInfo) (keepOn bool)) {
+	pm.conf.CompleteProcessors = append(pm.conf.CompleteProcessors, processor)
+}
+
+func (pm *ProcessMeta) AddStep(run func(ctx *Context) (any, error), depends ...any) *StepMeta {
+	name := GetFuncName(run)
+	if len(name) == 0 {
+		panic("It is not allowed to use AddStep to an anonymous function.")
+	}
+	return pm.AddStepWithAlias(GetFuncName(run), run, depends...)
 }
 
 // AddWaitBefore method treats the last added step as a dependency
-func (pcd *Process) AddWaitBefore(alias string, run func(ctx *Context) (any, error)) *Step {
-	return pcd.AddStepWithAlias(alias, run, pcd.tail)
+func (pm *ProcessMeta) AddWaitBefore(alias string, run func(ctx *Context) (any, error)) *StepMeta {
+	return pm.AddStepWithAlias(alias, run, pm.tailStep)
 }
 
-// AddWaitAll method waits for all previously added steps to be done before executing.
-func (pcd *Process) AddWaitAll(alias string, run func(ctx *Context) (any, error)) *Step {
+func (pm *ProcessMeta) AddWaitAll(alias string, run func(ctx *Context) (any, error)) *StepMeta {
 	depends := make([]any, 0)
-	for name, step := range pcd.stepMap {
-		if step.position == End {
-			depends = append(depends, name)
-		}
-		if step.position == Start && len(step.send) == 0 {
+	for name, step := range pm.steps {
+		if !Contains(&step.position, HasNext) {
 			depends = append(depends, name)
 		}
 	}
-	return pcd.AddStepWithAlias(alias, run, depends...)
+
+	return pm.AddStepWithAlias(alias, run, depends...)
 }
 
-func (pcd *Process) AddStepWithAlias(alias string, run func(ctx *Context) (any, error), depends ...any) *Step {
-	step := &Step{
+func (pm *ProcessMeta) AddStepWithAlias(alias string, run func(ctx *Context) (any, error), depends ...any) *StepMeta {
+	if _, exist := pm.steps[alias]; exist {
+		panic(fmt.Sprintf("step named [%s] already exist, can used %s to avoid stepName duplicate",
+			alias, GetFuncName(pm.AddStepWithAlias)))
+	}
+
+	meta := StepMeta{
+		stepName:    alias,
+		funcName:    GetFuncName(run),
+		run:         run,
+		order:       len(pm.steps),
+		ctxPriority: make(map[string]string),
+	}
+
+	for _, wrap := range depends {
+		name := toStepName(wrap)
+		depend, exist := pm.steps[name]
+		if !exist {
+			panic(fmt.Sprintf("can't find step named [%s]", name))
+		}
+		meta.depends = append(meta.depends, depend)
+		depend.waiters = append(depend.waiters, &meta)
+		if depend.position == End {
+			AppendStatus(&depend.position, HasNext)
+		}
+	}
+
+	if len(depends) == 0 {
+		meta.position = Start
+	}
+
+	pm.tailStep = meta.stepName
+	pm.steps[alias] = &meta
+
+	return &meta
+}
+
+func (pm *ProcessMeta) orderStepMeta() []*StepMeta {
+	steps := make([]*StepMeta, 0, len(pm.steps))
+	for _, step := range pm.steps {
+		steps = append(steps, step)
+	}
+	sort.Slice(steps, func(i, j int) bool {
+		return steps[i].order < steps[j].order
+	})
+	return steps
+}
+
+func (fp *FlowProcess) addStep(meta *StepMeta) *FlowStep {
+	step := FlowStep{
+		StepMeta:  meta,
 		id:        generateId(),
-		processId: pcd.id,
-		flowId:    pcd.flowId,
-		run:       run,
-		name:      alias,
-		waiting:   int64(len(depends)),
+		processId: fp.id,
+		flowId:    fp.flowId,
+		waiting:   int64(len(meta.depends)),
 		finish:    make(chan bool, 1),
-		receive:   make([]*Step, 0, len(depends)),
-		send:      make([]*Step, 0),
-		ctx: &Context{
-			scopeContexts: pcd.processContexts,
-			name:          alias,
-			scope:         ProcessCtx,
-			table:         sync.Map{},
+		Context: &Context{
+			table:     sync.Map{},
+			name:      meta.stepName,
+			scopes:    []string{ProcessCtx},
+			scopeCtxs: fp.pcsScope,
+			priority:  meta.ctxPriority,
 		},
 	}
 
-	for _, depend := range depends {
-		name := toStepName(depend)
-		prev, exist := pcd.stepMap[name]
-		if !exist {
-			panic(fmt.Sprintf("can't find step named %s", name))
-		}
+	fp.flowSteps[meta.stepName] = &step
+	fp.pcsScope[meta.stepName] = step.Context
 
-		step.receive = append(step.receive, prev)
-		step.ctx.parents = append(step.ctx.parents, prev.ctx)
-		prev.send = append(prev.send, step)
-		if prev.position == End {
-			prev.position = NoUse
-		}
+	for _, depend := range meta.depends {
+		parent := step.scopeCtxs[depend.stepName]
+		step.parents = append(step.parents, parent)
 	}
-
-	if _, exist := pcd.stepMap[alias]; exist {
-		panic(fmt.Sprintf("step named %s already exist, can used %s to avoid name duplicate",
-			alias, GetFuncName(pcd.AddStepWithAlias)))
-	}
-
-	pcd.tail = step.name
-	pcd.stepMap[alias] = step
-	pcd.processContexts[alias] = step.ctx
-	if len(depends) == 0 {
-		step.ctx.parents = append(step.ctx.parents, pcd.context)
-		step.position = Start
-	}
-	pcd.running.Add(1)
-
-	return step
+	step.parents = append(step.parents, fp.Context)
+	return &step
 }
 
-func (pcd *Process) resume() {
-	if PopStatus(&pcd.status, Pause) {
-		pcd.pause.Done()
+func (fp *FlowProcess) resume() {
+	if PopStatus(&fp.status, Pause) {
+		fp.pause.Done()
 	}
 }
 
-func (pcd *Process) pauses() {
-	if AppendStatus(&pcd.status, Pause) {
-		pcd.pause.Add(1)
+func (fp *FlowProcess) pauses() {
+	if AppendStatus(&fp.status, Pause) {
+		fp.pause.Add(1)
 	}
 }
 
-func (pcd *Process) schedule() *Feature {
-	AppendStatus(&pcd.status, Running)
-	for _, step := range pcd.stepMap {
+func (fp *FlowProcess) flow() *Feature {
+	AppendStatus(&fp.status, Running)
+	for _, step := range fp.flowSteps {
 		if step.position == Start {
-			go pcd.scheduleStep(step)
+			go fp.scheduleStep(step)
 		}
 	}
 
-	go pcd.finalize()
+	go fp.finalize()
 
 	feature := Feature{
-		status:  &pcd.status,
-		finish:  &pcd.finish,
-		running: &pcd.running,
+		status:  &fp.status,
+		finish:  &fp.finish,
+		running: &fp.needRun,
 	}
 
 	return &feature
 }
 
-func (pcd *Process) scheduleStep(step *Step) {
-	defer pcd.scheduleNextSteps(step)
+func (fp *FlowProcess) scheduleStep(step *FlowStep) {
+	defer fp.scheduleNextSteps(step)
 
-	if _, finish := step.ctx.GetStepResult(step.name); finish {
+	if _, finish := step.GetStepResult(step.stepName); finish {
 		AppendStatus(&step.status, Success)
 		return
 	}
-	status := atomic.LoadInt64(&pcd.status)
+	status := atomic.LoadInt64(&fp.status)
 	// If a step fails, the process fails.
 	// But other tasks that do not depend on the failed task will continue to execute
 	if !IsStatusNormal(status) {
@@ -190,16 +231,16 @@ func (pcd *Process) scheduleStep(step *Step) {
 		return
 	}
 
-	for status = atomic.LoadInt64(&pcd.status); status&Pause == Pause; {
-		pcd.pause.Wait()
-		status = atomic.LoadInt64(&pcd.status)
+	for status = atomic.LoadInt64(&fp.status); status&Pause == Pause; {
+		fp.pause.Wait()
+		status = atomic.LoadInt64(&fp.status)
 	}
 
-	go pcd.runStep(step)
+	go fp.runStep(step)
 
 	timeout := 3 * time.Hour
-	if pcd.conf != nil && pcd.conf.StepTimeout != 0 {
-		timeout = pcd.conf.StepTimeout
+	if fp.conf != nil && fp.conf.StepTimeout != 0 {
+		timeout = fp.conf.StepTimeout
 	}
 	if step.config != nil && step.config.Timeout != 0 {
 		timeout = step.config.Timeout
@@ -214,20 +255,20 @@ func (pcd *Process) scheduleStep(step *Step) {
 	}
 }
 
-func (pcd *Process) runStep(step *Step) {
+func (fp *FlowProcess) runStep(step *FlowStep) {
 	step.Start = time.Now().UTC()
 
-	if pcd.conf != nil && len(pcd.conf.PreProcessors) > 0 {
-		for _, processor := range pcd.conf.PreProcessors {
-			if !processor(buildInfo(step)) {
+	if fp.conf != nil && len(fp.conf.PreProcessors) > 0 {
+		for _, processor := range fp.conf.PreProcessors {
+			if !processor(fp.summaryStepInfo(step)) {
 				break
 			}
 		}
 	}
 
 	retry := 1
-	if pcd.conf != nil && pcd.conf.StepRetry > 0 {
-		retry = pcd.conf.StepRetry
+	if fp.conf != nil && fp.conf.StepRetry > 0 {
+		retry = fp.conf.StepRetry
 	}
 	if step.config != nil && step.config.MaxRetry > 0 {
 		retry = step.config.MaxRetry
@@ -241,12 +282,12 @@ func (pcd *Process) runStep(step *Step) {
 			step.End = time.Now().UTC()
 			step.finish <- true
 		}
-		if pcd.conf == nil || len(pcd.conf.PostProcessors) == 0 {
+		if fp.conf == nil || len(fp.conf.PostProcessors) == 0 {
 			step.finish <- true
 			return
 		}
-		for _, processor := range pcd.conf.PostProcessors {
-			if !processor(buildInfo(step)) {
+		for _, processor := range fp.conf.PostProcessors {
+			if !processor(fp.summaryStepInfo(step)) {
 				break
 			}
 		}
@@ -254,39 +295,39 @@ func (pcd *Process) runStep(step *Step) {
 	}()
 
 	for i := 0; i < retry; i++ {
-		result, err := step.run(step.ctx)
+		result, err := step.run(step.Context)
 		step.End = time.Now().UTC()
 		step.Err = err
-		step.ctx.Set(step.name, result)
+		step.Set(step.stepName, result)
 		if err != nil {
 			AppendStatus(&step.status, Error)
 			continue
 		}
-		pcd.context.setStepResult(step.name, result)
+		fp.setStepResult(step.stepName, result)
 		AppendStatus(&step.status, Success)
 		break
 	}
 }
 
-func (pcd *Process) finalize() {
+func (fp *FlowProcess) finalize() {
 	finish := make(chan bool, 1)
 	go func() {
-		pcd.running.Wait()
+		fp.needRun.Wait()
 		info := &ProcessInfo{
-			Id:      pcd.id,
-			FlowId:  pcd.flowId,
-			Name:    pcd.name,
-			StepMap: make(map[string]*StepInfo, len(pcd.stepMap)),
-			Ctx:     pcd.context,
+			Id:      fp.id,
+			FlowId:  fp.flowId,
+			Name:    fp.processName,
+			StepMap: make(map[string]*StepInfo, len(fp.flowSteps)),
+			Ctx:     fp.Context,
 		}
-		for name, step := range pcd.stepMap {
-			info.StepMap[name] = buildInfo(step)
+		for name, step := range fp.flowSteps {
+			info.StepMap[name] = fp.summaryStepInfo(step)
 		}
-		if pcd.conf == nil || len(pcd.conf.CompleteProcessors) == 0 {
+		if fp.conf == nil || len(fp.conf.CompleteProcessors) == 0 {
 			finish <- true
 			return
 		}
-		for _, processor := range pcd.conf.CompleteProcessors {
+		for _, processor := range fp.conf.CompleteProcessors {
 			if !processor(info) {
 				break
 			}
@@ -295,57 +336,73 @@ func (pcd *Process) finalize() {
 	}()
 
 	timeout := 3 * time.Hour
-	if pcd.conf != nil && pcd.conf.ProcessTimeout != 0 {
-		timeout = pcd.conf.ProcessTimeout
+	if fp.conf != nil && fp.conf.ProcessTimeout != 0 {
+		timeout = fp.conf.ProcessTimeout
 	}
 
 	timer := time.NewTimer(timeout)
 	select {
 	case <-timer.C:
-		AppendStatus(&pcd.status, Timeout)
+		AppendStatus(&fp.status, Timeout)
 	case <-finish:
 	}
 
-	for _, step := range pcd.stepMap {
-		AppendStatus(&pcd.status, step.status)
+	for _, step := range fp.flowSteps {
+		AppendStatus(&fp.status, step.status)
 	}
-	if IsStatusNormal(pcd.status) {
-		AppendStatus(&pcd.status, Success)
+	if IsStatusNormal(fp.status) {
+		AppendStatus(&fp.status, Success)
 	}
-	atomic.StoreInt64(&pcd.finish, 1)
+	atomic.StoreInt64(&fp.finish, 1)
 }
 
-func (pcd *Process) scheduleNextSteps(step *Step) {
+func (fp *FlowProcess) summaryStepInfo(step *FlowStep) *StepInfo {
+	info := &StepInfo{
+		Id:        step.id,
+		ProcessId: step.processId,
+		FlowId:    step.flowId,
+		Name:      step.stepName,
+		Status:    step.status,
+		Ctx:       step.Context,
+		Config:    step.config,
+		Start:     step.Start,
+		End:       step.End,
+		Err:       step.Err,
+		Prev:      make(map[string]string, len(step.depends)),
+		Next:      make(map[string]string, len(step.waiters)),
+	}
+	for _, prev := range step.depends {
+		info.Prev[prev.stepName] = fp.flowSteps[prev.stepName].id
+	}
+
+	for _, next := range step.waiters {
+		info.Next[next.stepName] = fp.flowSteps[next.stepName].id
+	}
+
+	return info
+}
+
+func (fp *FlowProcess) scheduleNextSteps(step *FlowStep) {
 	// all step not execute should cancel while process is timeout
-	cancel := !IsStatusNormal(step.status) || !IsStatusNormal(pcd.status)
-	for _, send := range step.send {
-		current := atomic.AddInt64(&send.waiting, -1)
+	cancel := !IsStatusNormal(step.status) || !IsStatusNormal(fp.status)
+	for _, waiter := range step.waiters {
+		next := fp.flowSteps[waiter.stepName]
+		current := atomic.AddInt64(&next.waiting, -1)
 		if cancel {
-			AppendStatus(&send.status, Cancel)
+			AppendStatus(&next.status, Cancel)
 		}
-		if current != 0 {
+		if atomic.LoadInt64(&current) != 0 {
 			continue
 		}
 		if step.status&Success == Success {
-			AppendStatus(&send.status, Running)
+			AppendStatus(&next.status, Running)
 		}
-		go pcd.scheduleStep(send)
+		go fp.scheduleStep(next)
 	}
 
-	pcd.running.Done()
+	fp.needRun.Done()
 }
 
-func (pcd *Process) DrawRelation() (processName string, depends map[string][]string) {
-	processName = pcd.name
-	for name, step := range pcd.stepMap {
-		depends[name] = make([]string, 0, len(step.send))
-		for _, send := range step.send {
-			depends[name] = append(depends[name], send.name)
-		}
-	}
-	return
-}
-
-func (pcd *Process) SkipFinishedStep(name string, result any) {
-	pcd.context.setStepResult(name, result)
+func (fp *FlowProcess) SkipFinishedStep(name string, result any) {
+	fp.setStepResult(name, result)
 }
