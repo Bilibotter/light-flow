@@ -1,7 +1,9 @@
 package light_flow
 
 import (
+	"fmt"
 	"reflect"
+	"regexp"
 	"runtime"
 	"strings"
 )
@@ -32,6 +34,13 @@ func (s *Set) Size() int {
 	return len(s.data)
 }
 
+func GetStructName(obj any) string {
+	if reflect.ValueOf(obj).Kind() == reflect.Ptr {
+		return "*" + reflect.TypeOf(obj).Elem().Name()
+	}
+	return reflect.TypeOf(obj).Name()
+}
+
 // GetFuncName function retrieves the stepName of a provided function.
 // If the provided function is anonymous function, it panics.
 func GetFuncName(f interface{}) string {
@@ -48,7 +57,13 @@ func GetFuncName(f interface{}) string {
 	}
 	if strings.Contains(absoluteName, ".") {
 		splits := strings.Split(absoluteName, ".")
-		return splits[len(splits)-1]
+		absoluteName = splits[len(splits)-1]
+	}
+
+	pattern := `^func\d+`
+	match, _ := regexp.MatchString(pattern, absoluteName)
+	if match {
+		panic(fmt.Sprintf("func name %s is like anonymous function name", absoluteName))
 	}
 	return absoluteName
 }

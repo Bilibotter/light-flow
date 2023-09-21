@@ -7,7 +7,6 @@ import (
 
 type StepMeta struct {
 	stepName    string
-	funcName    string
 	order       int
 	position    int64
 	config      *StepConfig
@@ -53,9 +52,6 @@ type StepConfig struct {
 
 func (meta *StepMeta) AddPriority(priority map[string]any) {
 	for key, stepName := range priority {
-		if meta.stepName == stepName {
-			panic(fmt.Sprintf("step [%s] can't add self to priority", stepName))
-		}
 		meta.ctxPriority[key] = toStepName(stepName)
 	}
 	meta.checkPriority()
@@ -73,11 +69,10 @@ func (meta *StepMeta) checkPriority() {
 }
 
 func (meta *StepMeta) backTrackSearch(searched string) bool {
-	if meta.stepName == searched {
-		return true
-	}
-
 	for _, depend := range meta.depends {
+		if depend.stepName == searched {
+			return true
+		}
 		if depend.backTrackSearch(searched) {
 			return true
 		}

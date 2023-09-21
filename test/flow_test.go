@@ -14,6 +14,14 @@ var (
 	current int64
 )
 
+type InputA struct {
+	Name string
+}
+
+type InputB struct {
+	Name string
+}
+
 func resetCurrent() {
 	atomic.StoreInt64(&current, 0)
 }
@@ -326,6 +334,43 @@ func TestWorkFlowPause(t *testing.T) {
 	}
 }
 
+func TestArgs(t *testing.T) {
+	factory := flow.AddFlowFactory("TestArgs")
+	process := factory.AddProcess("TestArgs", nil)
+	process.AddStepWithAlias("1", func(ctx *flow.Context) (any, error) {
+		a, ok := ctx.Get("InputA")
+		if !ok {
+			panic("InputA not found")
+		}
+		aa, ok := a.(InputA)
+		if !ok {
+			panic("InputA type error")
+		}
+		if aa.Name != "a" {
+			panic("InputA value error")
+		}
+
+		b, ok := ctx.Get("*InputB")
+		if !ok {
+			panic("InputB not found")
+		}
+		bb, ok := b.(*InputB)
+		if !ok {
+			panic("InputB type error")
+		}
+		if bb.Name != "b" {
+			panic("InputB value error")
+		}
+		return nil, nil
+	})
+	features := flow.DoneArgs("TestArgs", InputA{Name: "a"}, &InputB{Name: "b"})
+	for name, feature := range features {
+		if !feature.Success() {
+			t.Errorf("process[%s] fail", name)
+		}
+	}
+}
+
 func TestProcessPause(t *testing.T) {
 	defer resetCurrent()
 	factory := flow.AddFlowFactory("TestProcessPause")
@@ -338,7 +383,7 @@ func TestProcessPause(t *testing.T) {
 	process.AddStepWithAlias("13", GenerateStep(13), "12")
 	workflow := flow.AsyncFlow("TestProcessPause", nil)
 	time.Sleep(10 * time.Millisecond)
-	workflow.PauseProcess("TestProcessPause")
+	workflow.GetProcessController("TestProcessPause").Pause()
 	time.Sleep(200 * time.Millisecond)
 	if atomic.LoadInt64(&current) != 2 {
 		t.Errorf("excute 2 step, but current = %d", current)
@@ -350,7 +395,7 @@ func TestProcessPause(t *testing.T) {
 			t.Errorf("process[%s] pause fail", name)
 		}
 	}
-	workflow.ResumeProcess("TestProcessPause")
+	workflow.GetProcessController("TestProcessPause").Resume()
 	workflow.Done()
 	for name, feature := range workflow.GetFeatures() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")

@@ -15,6 +15,20 @@ var (
 	allProcess sync.Map
 )
 
+type Controller interface {
+	Resume()
+	Pause()
+	Stop()
+}
+
+type WorkFlowCtrl interface {
+	Controller
+	Done() map[string]*Feature
+	GetFeatures() map[string]*Feature
+	ListProcess() []string
+	GetProcessController(name string) Controller
+}
+
 type FlowFactory struct {
 	name      string
 	processes []*ProcessMeta
@@ -60,7 +74,15 @@ func (ff *FlowFactory) register() *FlowFactory {
 	return ff
 }
 
-func AsyncFlow(name string, input map[string]any) *Workflow {
+func AsyncArgs(name string, args ...any) WorkFlowCtrl {
+	input := make(map[string]any, len(args))
+	for _, arg := range args {
+		input[GetStructName(arg)] = arg
+	}
+	return AsyncFlow(name, input)
+}
+
+func AsyncFlow(name string, input map[string]any) WorkFlowCtrl {
 	factory, ok := allFlows.Load(name)
 	if !ok {
 		panic(fmt.Sprintf("flow factory [%s] not found", name))
@@ -68,6 +90,14 @@ func AsyncFlow(name string, input map[string]any) *Workflow {
 	flow := factory.(*FlowFactory).BuildWorkflow(input)
 	flow.Async()
 	return flow
+}
+
+func DoneArgs(name string, args ...any) map[string]*Feature {
+	input := make(map[string]any, len(args))
+	for _, arg := range args {
+		input[GetStructName(arg)] = arg
+	}
+	return DoneFlow(name, input)
 }
 
 func DoneFlow(name string, input map[string]any) map[string]*Feature {
@@ -235,24 +265,36 @@ func (wf *Workflow) GetFeatures() map[string]*Feature {
 	return wf.features
 }
 
+func (wf *Workflow) ListProcess() []string {
+	processes := make([]string, 0, len(wf.processMap))
+	for name := range wf.processMap {
+		processes = append(processes, name)
+	}
+	return processes
+}
+
+func (wf *Workflow) GetProcessController(name string) Controller {
+	process, exist := wf.processMap[name]
+	if !exist {
+		return nil
+	}
+	return process
+}
+
 func (wf *Workflow) Pause() {
 	for _, process := range wf.processMap {
-		process.pauses()
+		process.Pause()
 	}
 }
 
 func (wf *Workflow) Resume() {
 	for _, process := range wf.processMap {
-		process.resume()
+		process.Resume()
 	}
 }
 
-func (wf *Workflow) PauseProcess(name string) {
-	process := wf.processMap[name]
-	process.pauses()
-}
-
-func (wf *Workflow) ResumeProcess(name string) {
-	process := wf.processMap[name]
-	process.resume()
+func (wf *Workflow) Stop() {
+	for _, process := range wf.processMap {
+		process.Stop()
+	}
 }

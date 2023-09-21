@@ -30,6 +30,7 @@ const (
 	Timeout    = int64(0b1 << 17)
 	Panic      = int64(0b1 << 18)
 	Error      = int64(0b1 << 19)
+	Stop       = int64(0b1 << 20)
 	Failed     = int64(0b1 << 31)
 	// abnormal produce status will cause the cancellation of unexecuted steps during execution
 	// abnormal step status will cause the cancellation of unexecuted steps that depend on it
@@ -49,6 +50,7 @@ var (
 		Timeout: "Timeout",
 		Panic:   "Panic",
 		Error:   "Error",
+		Stop:    "Stop",
 		Failed:  "Failed",
 	}
 )

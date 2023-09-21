@@ -4,6 +4,7 @@ import (
 	"gitee.com/MetaphysicCoding/light-flow"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -30,6 +31,42 @@ type Dst struct {
 	UnExist  bool
 }
 
+func TestGetFuncName(t *testing.T) {
+	if light_flow.GetFuncName(TestGetFuncName) != "TestGetFuncName" {
+		t.Errorf("get TestGetFuncName name error")
+	}
+	if light_flow.GetFuncName(light_flow.GetStructName) != "GetStructName" {
+		t.Errorf("get GetStructName name error")
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			t.Logf("test used get func name to anonymous function, panic: %v", r)
+		}
+	}()
+	if strings.HasPrefix(light_flow.GetFuncName(func() {}), "func") {
+		t.Errorf("get anonymous function name error")
+	}
+}
+
+func TestGetStructName(t *testing.T) {
+	d := Dst{}
+	dP := &Dst{}
+	step := light_flow.FlowStep{}
+	stepP := &light_flow.FlowStep{}
+	if light_flow.GetStructName(d) != "Dst" {
+		t.Errorf("get Dst struct name error")
+	}
+	if light_flow.GetStructName(dP) != "*Dst" {
+		t.Errorf("get Dst pointer struct name error")
+	}
+	if light_flow.GetStructName(step) != "FlowStep" {
+		t.Errorf("get FlowStep struct name error")
+	}
+	if light_flow.GetStructName(stepP) != "*FlowStep" {
+		t.Errorf("get FlowStep pointer struct name error")
+	}
+}
+
 func TestSet(t *testing.T) {
 	s := light_flow.NewRoutineUnsafeSet()
 	for i := 0; i < 1000; i++ {
@@ -54,6 +91,7 @@ func TestPopStatus(t *testing.T) {
 	light_flow.AppendStatus(&status, light_flow.Failed)
 	light_flow.AppendStatus(&status, light_flow.Error)
 	light_flow.AppendStatus(&status, light_flow.Timeout)
+	light_flow.AppendStatus(&status, light_flow.Stop)
 
 	if !slices.Contains(light_flow.ExplainStatus(status), "Cancel") {
 		t.Errorf("cancel appended but not exist")
@@ -85,6 +123,14 @@ func TestPopStatus(t *testing.T) {
 	light_flow.PopStatus(&status, light_flow.Timeout)
 	if slices.Contains(light_flow.ExplainStatus(status), "Timeout") {
 		t.Errorf("timeout status pop error")
+	}
+
+	if !slices.Contains(light_flow.ExplainStatus(status), "Stop") {
+		t.Errorf("error appended bu not exist")
+	}
+	light_flow.PopStatus(&status, light_flow.Stop)
+	if slices.Contains(light_flow.ExplainStatus(status), "Stop") {
+		t.Errorf("error status pop error")
 	}
 
 	if !slices.Contains(light_flow.ExplainStatus(status), "Error") {
@@ -132,6 +178,7 @@ func TestExplainStatus2(t *testing.T) {
 	light_flow.AppendStatus(&status, light_flow.Panic)
 	light_flow.AppendStatus(&status, light_flow.Failed)
 	light_flow.AppendStatus(&status, light_flow.Timeout)
+	light_flow.AppendStatus(&status, light_flow.Stop)
 	light_flow.AppendStatus(&status, light_flow.Success)
 	if slices.Contains(light_flow.ExplainStatus(status), "Success") {
 		t.Errorf("explain success while error occur")
@@ -148,6 +195,10 @@ func TestExplainStatus2(t *testing.T) {
 	if !slices.Contains(light_flow.ExplainStatus(status), "Cancel") {
 		t.Errorf("cancel status explain error")
 	}
+	if !slices.Contains(light_flow.ExplainStatus(status), "Stop") {
+		t.Errorf("stop status explain error")
+	}
+
 	status = 0
 	light_flow.AppendStatus(&status, light_flow.Pause)
 	light_flow.AppendStatus(&status, light_flow.Running)

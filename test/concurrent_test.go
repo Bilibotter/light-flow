@@ -29,6 +29,28 @@ func NoDelayContextStep(ctx *flow.Context) (any, error) {
 	return nil, nil
 }
 
+func TestTestMultipleConcurrentDependContext(t *testing.T) {
+	defer resetCtx()
+	factory := flow.AddFlowFactory("TestTestMultipleConcurrentDependContext")
+	process := factory.AddProcess("TestTestMultipleConcurrentDependContext", nil)
+	process.AddStepWithAlias("-1", ChangeCtxStepFunc(&ctx1))
+	for i := 0; i < 10000; i++ {
+		process.AddStepWithAlias(strconv.Itoa(i), NoDelayContextStep, "-1")
+	}
+	features := flow.DoneFlow("TestTestMultipleConcurrentDependContext", map[string]any{addrKey: &current})
+	for name, feature := range features {
+		explain := strings.Join(feature.ExplainStatus(), ", ")
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		if !feature.Success() {
+			t.Errorf("process[%s] run fail", name)
+		}
+	}
+
+	if atomic.LoadInt64(&ctx1) != 10001 {
+		t.Errorf("excute 10001 step, but current = %d", current)
+	}
+}
+
 func TestMultipleConcurrentContext(t *testing.T) {
 	defer resetCurrent()
 	factory := flow.AddFlowFactory("TestMultipleConcurrentContext")
@@ -145,5 +167,30 @@ func TestMultipleConcurrentDependStep(t *testing.T) {
 
 	if atomic.LoadInt64(&current) != 10000 {
 		t.Errorf("excute 1000 step, but current = %d", current)
+	}
+}
+
+func TestConcurrentSameFlow(t *testing.T) {
+	defer resetCurrent()
+	factory := flow.AddFlowFactory("TestConcurrentSameFlow")
+	process := factory.AddProcess("TestConcurrentSameFlow", nil)
+	for i := 0; i < 100; i++ {
+		process.AddStepWithAlias(strconv.Itoa(i), GenerateNoDelayStep(i))
+	}
+	flows := make([]flow.WorkFlowCtrl, 0, 1000)
+	for i := 0; i < 1000; i++ {
+		flows = append(flows, flow.AsyncFlow("TestConcurrentSameFlow", nil))
+	}
+	for _, flowing := range flows {
+		features := flowing.Done()
+		for name, feature := range features {
+			if !feature.Success() {
+				t.Errorf("process[%s] run fail", name)
+			}
+		}
+	}
+
+	if atomic.LoadInt64(&current) != 100*1000 {
+		t.Errorf("excute 100000 step, but current = %d", current)
 	}
 }

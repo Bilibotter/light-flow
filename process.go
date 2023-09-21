@@ -81,10 +81,6 @@ func (pm *ProcessMeta) AddCompleteProcessor(processor func(info *ProcessInfo) (k
 }
 
 func (pm *ProcessMeta) AddStep(run func(ctx *Context) (any, error), depends ...any) *StepMeta {
-	name := GetFuncName(run)
-	if len(name) == 0 {
-		panic("It is not allowed to use AddStep to an anonymous function.")
-	}
 	return pm.AddStepWithAlias(GetFuncName(run), run, depends...)
 }
 
@@ -112,7 +108,6 @@ func (pm *ProcessMeta) AddStepWithAlias(alias string, run func(ctx *Context) (an
 
 	meta := StepMeta{
 		stepName:    alias,
-		funcName:    GetFuncName(run),
 		run:         run,
 		order:       len(pm.steps),
 		ctxPriority: make(map[string]string),
@@ -180,16 +175,20 @@ func (fp *FlowProcess) addStep(meta *StepMeta) *FlowStep {
 	return &step
 }
 
-func (fp *FlowProcess) resume() {
+func (fp *FlowProcess) Resume() {
 	if PopStatus(&fp.status, Pause) {
 		fp.pause.Done()
 	}
 }
 
-func (fp *FlowProcess) pauses() {
+func (fp *FlowProcess) Pause() {
 	if AppendStatus(&fp.status, Pause) {
 		fp.pause.Add(1)
 	}
+}
+
+func (fp *FlowProcess) Stop() {
+	AppendStatus(&fp.status, Stop)
 }
 
 func (fp *FlowProcess) flow() *Feature {
