@@ -119,20 +119,6 @@ func TestPriorityWithSelf(t *testing.T) {
 		}
 	}()
 	step.AddPriority(map[string]any{addrKey: "4"})
-	features := flow.DoneFlow("TestPriorityWithSelf", nil)
-	for name, feature := range features {
-		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", name, explain)
-		if !feature.Success() {
-			t.Errorf("process[%s] fail", name)
-		}
-	}
-	if ctx1 != 2 {
-		t.Errorf("execute 2 step, but ctx1 = %d", ctx1)
-	}
-	if atomic.LoadInt64(&ctx2) != 2 {
-		t.Errorf("execute 2 step, but ctx2 = %d", ctx2)
-	}
 }
 
 func TestPriorityCheck(t *testing.T) {
@@ -150,20 +136,6 @@ func TestPriorityCheck(t *testing.T) {
 		}
 	}()
 	step.AddPriority(map[string]any{addrKey: "0"})
-	features := flow.DoneFlow("TestPriorityCheck", nil)
-	for name, feature := range features {
-		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", name, explain)
-		if !feature.Success() {
-			t.Errorf("process[%s] fail", name)
-		}
-	}
-	if ctx1 != 2 {
-		t.Errorf("execute 2 step, but ctx1 = %d", ctx1)
-	}
-	if atomic.LoadInt64(&ctx2) != 2 {
-		t.Errorf("execute 2 step, but ctx2 = %d", ctx2)
-	}
 }
 
 func TestPriority(t *testing.T) {

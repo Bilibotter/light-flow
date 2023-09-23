@@ -54,6 +54,17 @@ func TestEmptyMerge(t *testing.T) {
 	if atomic.LoadInt64(&current) != 4 {
 		t.Errorf("execute 4 step, but current = %d", current)
 	}
+	features = flow.DoneFlow("TestEmptyMerge1", nil)
+	for name, feature := range features {
+		explain := strings.Join(feature.ExplainStatus(), ", ")
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		if !feature.Success() {
+			t.Errorf("process[%s] fail", name)
+		}
+	}
+	if atomic.LoadInt64(&current) != 8 {
+		t.Errorf("execute 8 step, but current = %d", current)
+	}
 }
 
 func TestMergeAbsolutelyDifferent(t *testing.T) {
@@ -81,6 +92,17 @@ func TestMergeAbsolutelyDifferent(t *testing.T) {
 	}
 	if atomic.LoadInt64(&current) != 8 {
 		t.Errorf("execute 8 step, but current = %d", current)
+	}
+	features = flow.DoneFlow("TestMergeAbsolutelyDifferent1", nil)
+	for name, feature := range features {
+		explain := strings.Join(feature.ExplainStatus(), ", ")
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		if !feature.Success() {
+			t.Errorf("process[%s] fail", name)
+		}
+	}
+	if atomic.LoadInt64(&current) != 12 {
+		t.Errorf("execute 12 step, but current = %d", current)
 	}
 }
 
@@ -110,6 +132,17 @@ func TestMergeLayerSame(t *testing.T) {
 	if atomic.LoadInt64(&current) != 5 {
 		t.Errorf("execute 5 step, but current = %d", current)
 	}
+	features = flow.DoneFlow("TestMergeLayerSame1", nil)
+	for name, feature := range features {
+		explain := strings.Join(feature.ExplainStatus(), ", ")
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		if !feature.Success() {
+			t.Errorf("process[%s] fail", name)
+		}
+	}
+	if atomic.LoadInt64(&current) != 9 {
+		t.Errorf("execute 9 step, but current = %d", current)
+	}
 }
 
 func TestMergeLayerDec(t *testing.T) {
@@ -137,6 +170,17 @@ func TestMergeLayerDec(t *testing.T) {
 	}
 	if atomic.LoadInt64(&current) != 6 {
 		t.Errorf("execute 6 step, but current = %d", current)
+	}
+	features = flow.DoneFlow("TestMergeLayerDec1", nil)
+	for name, feature := range features {
+		explain := strings.Join(feature.ExplainStatus(), ", ")
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		if !feature.Success() {
+			t.Errorf("process[%s] fail", name)
+		}
+	}
+	if atomic.LoadInt64(&current) != 10 {
+		t.Errorf("execute 10 step, but current = %d", current)
 	}
 }
 
@@ -241,7 +285,6 @@ func TestMergeCircle(t *testing.T) {
 		}
 	}()
 	process2.Merge("TestMergeCircle1")
-	return
 }
 
 func TestMergeLongCircleLongCircle(t *testing.T) {
@@ -267,5 +310,4 @@ func TestMergeLongCircleLongCircle(t *testing.T) {
 		}
 	}()
 	process2.Merge("TestMergeLongCircle1")
-	return
 }
