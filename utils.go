@@ -18,6 +18,14 @@ func NewRoutineUnsafeSet() *Set {
 	return s
 }
 
+func CreateFromSliceFunc[T any](src []T, transfer func(T) string) *Set {
+	result := NewRoutineUnsafeSet()
+	for _, ele := range src {
+		result.Add(transfer(ele))
+	}
+	return result
+}
+
 func (s *Set) Add(item string) {
 	s.data[item] = true
 }

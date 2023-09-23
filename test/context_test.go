@@ -128,10 +128,10 @@ func TestPriorityWithSelf(t *testing.T) {
 		}
 	}
 	if ctx1 != 2 {
-		t.Errorf("excute 2 step, but ctx1 = %d", ctx1)
+		t.Errorf("execute 2 step, but ctx1 = %d", ctx1)
 	}
 	if atomic.LoadInt64(&ctx2) != 2 {
-		t.Errorf("excute 2 step, but ctx2 = %d", ctx2)
+		t.Errorf("execute 2 step, but ctx2 = %d", ctx2)
 	}
 }
 
@@ -159,10 +159,10 @@ func TestPriorityCheck(t *testing.T) {
 		}
 	}
 	if ctx1 != 2 {
-		t.Errorf("excute 2 step, but ctx1 = %d", ctx1)
+		t.Errorf("execute 2 step, but ctx1 = %d", ctx1)
 	}
 	if atomic.LoadInt64(&ctx2) != 2 {
-		t.Errorf("excute 2 step, but ctx2 = %d", ctx2)
+		t.Errorf("execute 2 step, but ctx2 = %d", ctx2)
 	}
 }
 
@@ -184,10 +184,10 @@ func TestPriority(t *testing.T) {
 		}
 	}
 	if ctx1 != 2 {
-		t.Errorf("excute 2 step, but ctx1 = %d", ctx1)
+		t.Errorf("execute 2 step, but ctx1 = %d", ctx1)
 	}
 	if atomic.LoadInt64(&ctx2) != 2 {
-		t.Errorf("excute 2 step, but ctx2 = %d", ctx2)
+		t.Errorf("execute 2 step, but ctx2 = %d", ctx2)
 	}
 }
 
@@ -211,10 +211,10 @@ func TestExpose(t *testing.T) {
 		}
 	}
 	if ctx1 != 3 {
-		t.Errorf("excute 3 step, but ctx1 = %d", ctx1)
+		t.Errorf("execute 3 step, but ctx1 = %d", ctx1)
 	}
 	if atomic.LoadInt64(&ctx2) != 3 {
-		t.Errorf("excute 3 step, but ctx2 = %d", ctx2)
+		t.Errorf("execute 3 step, but ctx2 = %d", ctx2)
 	}
 }
 
@@ -238,7 +238,7 @@ func TestPtrReuse(t *testing.T) {
 		}
 	}
 	if ctx1 != 6 {
-		t.Errorf("excute 6 step, but ctx1 = %d", ctx1)
+		t.Errorf("execute 6 step, but ctx1 = %d", ctx1)
 	}
 }
 
@@ -263,7 +263,7 @@ func TestWaitToDoneInMultiple(t *testing.T) {
 		}
 	}
 	if ctx1 != 7 {
-		t.Errorf("excute 7 step, but ctx1 = %d", ctx1)
+		t.Errorf("execute 7 step, but ctx1 = %d", ctx1)
 	}
 }
 
@@ -287,7 +287,7 @@ func TestWorkFlowCtx(t *testing.T) {
 		}
 	}
 	if ctx1 != 6 {
-		t.Errorf("excute 6 step, but ctx1 = %d", ctx1)
+		t.Errorf("execute 6 step, but ctx1 = %d", ctx1)
 	}
 }
 
@@ -313,7 +313,7 @@ func TestProcessAndWorkflowCtx(t *testing.T) {
 		}
 	}
 	if ctx1 != 6 {
-		t.Errorf("excute 6 step, but ctx2 = %d", ctx2)
+		t.Errorf("execute 6 step, but ctx2 = %d", ctx2)
 	}
 }
 
@@ -343,10 +343,10 @@ func TestStepCtx(t *testing.T) {
 		t.Errorf("produce ctx has effective with duplicate key in step")
 	}
 	if atomic.LoadInt64(&ctx3) != 3 {
-		t.Errorf("excute 3 step, but ctx3 = %d", ctx3)
+		t.Errorf("execute 3 step, but ctx3 = %d", ctx3)
 	}
 	if atomic.LoadInt64(&ctx4) != 3 {
-		t.Errorf("excute 3 step, but ctx4 = %d", ctx4)
+		t.Errorf("execute 3 step, but ctx4 = %d", ctx4)
 	}
 }
 
@@ -377,16 +377,16 @@ func TestDependStepCtx(t *testing.T) {
 		t.Errorf("produce ctx has effective with duplicate key in step")
 	}
 	if atomic.LoadInt64(&ctx3) != 1 {
-		t.Errorf("excute 1 step, but ctx3 = %d", ctx3)
+		t.Errorf("execute 1 step, but ctx3 = %d", ctx3)
 	}
 	if atomic.LoadInt64(&ctx4) != 1 {
-		t.Errorf("excute 1 step, but ctx4 = %d", ctx4)
+		t.Errorf("execute 1 step, but ctx4 = %d", ctx4)
 	}
 	if atomic.LoadInt64(&ctx5) != 2 {
-		t.Errorf("excute 2 step, but ctx3 = %d", ctx5)
+		t.Errorf("execute 2 step, but ctx3 = %d", ctx5)
 	}
 	if atomic.LoadInt64(&ctx6) != 2 {
-		t.Errorf("excute 2 step, but ctx4 = %d", ctx6)
+		t.Errorf("execute 2 step, but ctx4 = %d", ctx6)
 	}
 }
 
@@ -417,18 +417,18 @@ func TestFlowMultipleAsyncExecute(t *testing.T) {
 		}
 	}
 	if atomic.LoadInt64(&ctx1) != 6 {
-		t.Errorf("excute 6 step, but ctx1 = %d", ctx1)
+		t.Errorf("execute 6 step, but ctx1 = %d", ctx1)
 	}
 	if atomic.LoadInt64(&ctx2) != 6 {
-		t.Errorf("excute 2 step, but ctx2 = %d", ctx3)
+		t.Errorf("execute 2 step, but ctx2 = %d", ctx3)
 	}
 	if atomic.LoadInt64(&ctx3) != 6 {
-		t.Errorf("excute 2 step, but ctx3 = %d", ctx3)
+		t.Errorf("execute 2 step, but ctx3 = %d", ctx3)
 	}
 	if atomic.LoadInt64(&ctx4) != 6 {
-		t.Errorf("excute 2 step, but ctx4 = %d", ctx4)
+		t.Errorf("execute 2 step, but ctx4 = %d", ctx4)
 	}
 	if atomic.LoadInt64(&ctx5) != 6 {
-		t.Errorf("excute 2 step, but ctx5 = %d", ctx5)
+		t.Errorf("execute 2 step, but ctx5 = %d", ctx5)
 	}
 }

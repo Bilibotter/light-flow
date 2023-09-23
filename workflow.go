@@ -194,7 +194,7 @@ func (wf *Workflow) addProcess(meta *ProcessMeta) *FlowProcess {
 	pcsCtx.scopeCtxs = process.pcsScope
 	pcsCtx.parents = append(pcsCtx.parents, wf.context)
 
-	for _, stepMeta := range meta.orderStepMeta() {
+	for _, stepMeta := range meta.sortedStepMeta() {
 		process.addStep(stepMeta)
 	}
 

@@ -60,7 +60,66 @@ func SetDefaultProcessConfig(config *ProcessConfig) {
 func (pm *ProcessMeta) register() {
 	_, load := allProcess.LoadOrStore(pm.processName, pm)
 	if load {
-		panic(fmt.Sprintf("process named [%s] has exist", pm.processName))
+		panic(fmt.Sprintf("process[%s] has exist", pm.processName))
+	}
+}
+
+func (pm *ProcessMeta) Merge(name string) {
+	wrap, exist := allProcess.Load(name)
+	if !exist {
+		panic(fmt.Sprintf("can't merge not exist process[%s]", name))
+	}
+	mergedProcess := wrap.(*ProcessMeta)
+	for _, merge := range mergedProcess.sortedStepMeta() {
+		if _, exist = pm.steps[merge.stepName]; exist {
+			pm.mergeStep(merge)
+			continue
+		}
+		depends := make([]any, 0, len(merge.depends))
+		for _, depend := range merge.depends {
+			depends = append(depends, depend.stepName)
+		}
+		pm.AddStepWithAlias(merge.stepName, merge.run, depends...)
+	}
+}
+
+func (pm *ProcessMeta) mergeStep(merge *StepMeta) {
+	step := pm.steps[merge.stepName]
+	// create a set contains all depended step name
+	current := CreateFromSliceFunc[*StepMeta](step.depends,
+		func(meta *StepMeta) string { return meta.stepName })
+
+	depends := make([]*StepMeta, len(merge.depends))
+	copy(depends, merge.depends)
+	sort.Slice(depends, func(i, j int) bool {
+		return pm.steps[depends[i].stepName].layer < pm.steps[depends[j].stepName].layer
+	})
+	for _, add := range depends {
+		if current.Contains(add.stepName) {
+			continue
+		}
+		depend := pm.steps[add.stepName]
+		if depend.layer > step.layer {
+			if step.forwardSearh(depend.stepName) {
+				panic(fmt.Sprintf("merge failed, because there is a cycle formed by step[%s] and step[%s].",
+					depend.stepName, step.stepName))
+			}
+		}
+		if depend.layer+1 > step.layer {
+			step.layer = depend.layer + 1
+			pm.updateWaitersLayer(step)
+		}
+		step.depends = append(step.depends, depend)
+		depend.waiters = append(depend.waiters, step)
+	}
+}
+
+func (pm *ProcessMeta) updateWaitersLayer(step *StepMeta) {
+	for _, waiters := range step.waiters {
+		if step.layer+1 > waiters.layer {
+			waiters.layer = step.layer + 1
+			pm.updateWaitersLayer(waiters)
+		}
 	}
 }
 
@@ -109,7 +168,7 @@ func (pm *ProcessMeta) AddStepWithAlias(alias string, run func(ctx *Context) (an
 	meta := StepMeta{
 		stepName:    alias,
 		run:         run,
-		order:       len(pm.steps),
+		layer:       1,
 		ctxPriority: make(map[string]string),
 	}
 
@@ -117,12 +176,15 @@ func (pm *ProcessMeta) AddStepWithAlias(alias string, run func(ctx *Context) (an
 		name := toStepName(wrap)
 		depend, exist := pm.steps[name]
 		if !exist {
-			panic(fmt.Sprintf("can't find step named [%s]", name))
+			panic(fmt.Sprintf("can't find step[%s]", name))
 		}
 		meta.depends = append(meta.depends, depend)
 		depend.waiters = append(depend.waiters, &meta)
 		if depend.position == End {
 			AppendStatus(&depend.position, HasNext)
+		}
+		if depend.layer+1 > meta.layer {
+			meta.layer = depend.layer + 1
 		}
 	}
 
@@ -136,13 +198,13 @@ func (pm *ProcessMeta) AddStepWithAlias(alias string, run func(ctx *Context) (an
 	return &meta
 }
 
-func (pm *ProcessMeta) orderStepMeta() []*StepMeta {
+func (pm *ProcessMeta) sortedStepMeta() []*StepMeta {
 	steps := make([]*StepMeta, 0, len(pm.steps))
 	for _, step := range pm.steps {
 		steps = append(steps, step)
 	}
 	sort.Slice(steps, func(i, j int) bool {
-		return steps[i].order < steps[j].order
+		return steps[i].layer < steps[j].layer
 	})
 	return steps
 }

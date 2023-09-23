@@ -7,7 +7,7 @@ import (
 
 type StepMeta struct {
 	stepName    string
-	order       int
+	layer       int
 	position    int64
 	config      *StepConfig
 	depends     []*StepMeta // prev
@@ -61,19 +61,32 @@ func (meta *StepMeta) AddPriority(priority map[string]any) {
 // If not it will panic.
 func (meta *StepMeta) checkPriority() {
 	for _, stepName := range meta.ctxPriority {
-		if meta.backTrackSearch(stepName) {
+		if meta.backSearch(stepName) {
 			continue
 		}
 		panic(fmt.Sprintf("step [%s] can't be back tracking by the current step", stepName))
 	}
 }
 
-func (meta *StepMeta) backTrackSearch(searched string) bool {
+func (meta *StepMeta) forwardSearh(searched string) bool {
+	for _, waiter := range meta.waiters {
+		if waiter.stepName == searched {
+			return true
+		}
+		if waiter.forwardSearh(searched) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (meta *StepMeta) backSearch(searched string) bool {
 	for _, depend := range meta.depends {
 		if depend.stepName == searched {
 			return true
 		}
-		if depend.backTrackSearch(searched) {
+		if depend.backSearch(searched) {
 			return true
 		}
 	}

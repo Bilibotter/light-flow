@@ -99,7 +99,7 @@ func TestMultipleExceptionStatus(t *testing.T) {
 		}
 	}
 	if atomic.LoadInt64(&current) != 3 {
-		t.Errorf("excute 3 step, but current = %d", current)
+		t.Errorf("execute 3 step, but current = %d", current)
 	}
 }
 
@@ -118,7 +118,7 @@ func TestSinglePanicStep(t *testing.T) {
 		}
 	}
 	if atomic.LoadInt64(&current) != 1 {
-		t.Errorf("excute 1 step, but current = %d", current)
+		t.Errorf("execute 1 step, but current = %d", current)
 	}
 }
 
@@ -142,7 +142,7 @@ func TestGoAheadWithoutDependPanicStep(t *testing.T) {
 		}
 	}
 	if atomic.LoadInt64(&current) != 5 {
-		t.Errorf("excute 5 step, but current = %d", current)
+		t.Errorf("execute 5 step, but current = %d", current)
 	}
 }
 
@@ -160,7 +160,7 @@ func TestSingleErrorStep(t *testing.T) {
 		}
 	}
 	if atomic.LoadInt64(&current) != 1 {
-		t.Errorf("excute 1 step, but current = %d", current)
+		t.Errorf("execute 1 step, but current = %d", current)
 	}
 }
 
@@ -184,7 +184,7 @@ func TestGoAheadWithoutDependErrorStep(t *testing.T) {
 		}
 	}
 	if atomic.LoadInt64(&current) != 5 {
-		t.Errorf("excute 5 step, but current = %d", current)
+		t.Errorf("execute 5 step, but current = %d", current)
 	}
 }
 
@@ -202,7 +202,7 @@ func TestSingleNormalStep(t *testing.T) {
 		}
 	}
 	if atomic.LoadInt64(&current) != 1 {
-		t.Errorf("excute 1 step, but current = %d", current)
+		t.Errorf("execute 1 step, but current = %d", current)
 	}
 }
 func TestTestMultipleNormalStepWithoutAlias(t *testing.T) {
@@ -223,7 +223,7 @@ func TestTestMultipleNormalStepWithoutAlias(t *testing.T) {
 		}
 	}
 	if atomic.LoadInt64(&current) != 5 {
-		t.Errorf("excute 5 step, but current = %d", current)
+		t.Errorf("execute 5 step, but current = %d", current)
 	}
 }
 
@@ -246,7 +246,7 @@ func TestMultipleNormalStepWithMultipleBranches(t *testing.T) {
 		}
 	}
 	if atomic.LoadInt64(&current) != 6 {
-		t.Errorf("excute 6 step, but current = %d", current)
+		t.Errorf("execute 6 step, but current = %d", current)
 	}
 }
 
@@ -269,7 +269,7 @@ func TestMultipleNormalStepsWithWaitBefore(t *testing.T) {
 		}
 	}
 	if atomic.LoadInt64(&current) != 6 {
-		t.Errorf("excute 6 step, but current = %d", current)
+		t.Errorf("execute 6 step, but current = %d", current)
 	}
 }
 
@@ -292,7 +292,7 @@ func TestMultipleNormalSteps(t *testing.T) {
 		}
 	}
 	if atomic.LoadInt64(&current) != 6 {
-		t.Errorf("excute 6 step, but current = %d", current)
+		t.Errorf("execute 6 step, but current = %d", current)
 	}
 }
 
@@ -311,7 +311,7 @@ func TestWorkFlowPause(t *testing.T) {
 	wf.Pause()
 	time.Sleep(200 * time.Millisecond)
 	if atomic.LoadInt64(&current) != 2 {
-		t.Errorf("excute 2 step, but current = %d", current)
+		t.Errorf("execute 2 step, but current = %d", current)
 	}
 	for name, feature := range wf.GetFeatures() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
@@ -330,7 +330,7 @@ func TestWorkFlowPause(t *testing.T) {
 		}
 	}
 	if atomic.LoadInt64(&current) != 6 {
-		t.Errorf("excute 6 step, but current = %d", current)
+		t.Errorf("execute 6 step, but current = %d", current)
 	}
 }
 
@@ -386,7 +386,7 @@ func TestProcessPause(t *testing.T) {
 	workflow.GetProcessController("TestProcessPause").Pause()
 	time.Sleep(200 * time.Millisecond)
 	if atomic.LoadInt64(&current) != 2 {
-		t.Errorf("excute 2 step, but current = %d", current)
+		t.Errorf("execute 2 step, but current = %d", current)
 	}
 	for name, feature := range workflow.GetFeatures() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
@@ -405,6 +405,6 @@ func TestProcessPause(t *testing.T) {
 		}
 	}
 	if atomic.LoadInt64(&current) != 6 {
-		t.Errorf("excute 6 step, but current = %d", current)
+		t.Errorf("execute 6 step, but current = %d", current)
 	}
 }

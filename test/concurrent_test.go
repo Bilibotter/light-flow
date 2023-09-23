@@ -47,7 +47,7 @@ func TestTestMultipleConcurrentDependContext(t *testing.T) {
 	}
 
 	if atomic.LoadInt64(&ctx1) != 10001 {
-		t.Errorf("excute 10001 step, but current = %d", current)
+		t.Errorf("execute 10001 step, but current = %d", current)
 	}
 }
 
@@ -68,7 +68,7 @@ func TestMultipleConcurrentContext(t *testing.T) {
 	}
 
 	if atomic.LoadInt64(&current) != 10000 {
-		t.Errorf("excute 10000 step, but current = %d", current)
+		t.Errorf("execute 10000 step, but current = %d", current)
 	}
 }
 
@@ -92,7 +92,7 @@ func TestMultipleConcurrentProcess(t *testing.T) {
 	}
 
 	if atomic.LoadInt64(&current) != 30000 {
-		t.Errorf("excute 30000 step, but current = %d", current)
+		t.Errorf("execute 30000 step, but current = %d", current)
 	}
 }
 
@@ -115,7 +115,7 @@ func TestMultipleConcurrentStepWithProcessor(t *testing.T) {
 	}
 
 	if atomic.LoadInt64(&current) != 30000 {
-		t.Errorf("excute 30000 step, but current = %d", current)
+		t.Errorf("execute 30000 step, but current = %d", current)
 	}
 }
 
@@ -136,7 +136,7 @@ func TestMultipleConcurrentStep(t *testing.T) {
 	}
 
 	if atomic.LoadInt64(&current) != 10000 {
-		t.Errorf("excute 10000 step, but current = %d", current)
+		t.Errorf("execute 10000 step, but current = %d", current)
 	}
 }
 
@@ -166,7 +166,7 @@ func TestMultipleConcurrentDependStep(t *testing.T) {
 	}
 
 	if atomic.LoadInt64(&current) != 10000 {
-		t.Errorf("excute 1000 step, but current = %d", current)
+		t.Errorf("execute 1000 step, but current = %d", current)
 	}
 }
 
@@ -191,6 +191,6 @@ func TestConcurrentSameFlow(t *testing.T) {
 	}
 
 	if atomic.LoadInt64(&current) != 100*1000 {
-		t.Errorf("excute 100000 step, but current = %d", current)
+		t.Errorf("execute 100000 step, but current = %d", current)
 	}
 }

@@ -113,7 +113,7 @@ func IsStatusNormal(status int64) bool {
 // The function checks the status against predefined abnormal and normal flags,
 // and returns a slice of strings containing the names of the matching flags.
 // Parameter status is the bitmask representing the status.
-// The returned slice contains the names of the matching flags in the order they were found.
+// The returned slice contains the names of the matching flags in the layer they were found.
 // If abnormal flags are found, normal flags will be ignored.
 func ExplainStatus(status int64) []string {
 	contains := make([]string, 0)

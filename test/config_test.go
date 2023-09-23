@@ -153,7 +153,7 @@ func TestProcessorWhenExceptionOccur(t *testing.T) {
 		}
 	}
 	if atomic.LoadInt64(&current) != 10 {
-		t.Errorf("excute 10 step, but current = %d", current)
+		t.Errorf("execute 10 step, but current = %d", current)
 	}
 }
 func TestInfoCorrect(t *testing.T) {
@@ -191,7 +191,7 @@ func TestInfoCorrect(t *testing.T) {
 		}
 	}
 	if atomic.LoadInt64(&current) != 13 {
-		t.Errorf("excute 13 step, but current = %d", current)
+		t.Errorf("execute 13 step, but current = %d", current)
 	}
 }
 
@@ -219,7 +219,7 @@ func TestDefaultProcessConfig(t *testing.T) {
 		}
 	}
 	if atomic.LoadInt64(&current) != 13 {
-		t.Errorf("excute 13 step, but current = %d", current)
+		t.Errorf("execute 13 step, but current = %d", current)
 	}
 }
 
@@ -244,7 +244,7 @@ func TestPreAndPostProcessor(t *testing.T) {
 		}
 	}
 	if atomic.LoadInt64(&current) != 13 {
-		t.Errorf("excute 13 step, but current = %d", current)
+		t.Errorf("execute 13 step, but current = %d", current)
 	}
 }
 
@@ -265,7 +265,7 @@ func TestWithLongProcessTimeout(t *testing.T) {
 		}
 	}
 	if atomic.LoadInt64(&current) != 4 {
-		t.Errorf("excute 4 step, but current = %d", current)
+		t.Errorf("execute 4 step, but current = %d", current)
 	}
 }
 
@@ -287,7 +287,7 @@ func TestWithShortProcessTimeout(t *testing.T) {
 	}
 	time.Sleep(400 * time.Millisecond)
 	if atomic.LoadInt64(&current) != 1 {
-		t.Errorf("excute 1 step, but current = %d", current)
+		t.Errorf("execute 1 step, but current = %d", current)
 	}
 }
 
@@ -310,7 +310,7 @@ func TestParallelWithLongDefaultStepTimeout(t *testing.T) {
 		}
 	}
 	if atomic.LoadInt64(&current) != 4 {
-		t.Errorf("excute 4 step, but current = %d", current)
+		t.Errorf("execute 4 step, but current = %d", current)
 	}
 }
 
@@ -333,7 +333,7 @@ func TestWithLongDefaultStepTimeout(t *testing.T) {
 		}
 	}
 	if atomic.LoadInt64(&current) != 4 {
-		t.Errorf("excute 4 step, but current = %d", current)
+		t.Errorf("execute 4 step, but current = %d", current)
 	}
 }
 
@@ -357,7 +357,7 @@ func TestWithShortDefaultStepTimeout(t *testing.T) {
 	}
 	time.Sleep(400 * time.Millisecond)
 	if atomic.LoadInt64(&current) != 1 {
-		t.Errorf("excute 1 step, but current = %d", current)
+		t.Errorf("execute 1 step, but current = %d", current)
 	}
 }
 
@@ -379,7 +379,7 @@ func TestWithLongStepTimeout(t *testing.T) {
 		}
 	}
 	if atomic.LoadInt64(&current) != 4 {
-		t.Errorf("excute 4 step, but current = %d", current)
+		t.Errorf("execute 4 step, but current = %d", current)
 	}
 }
 
@@ -402,7 +402,7 @@ func TestWithShortStepTimeout(t *testing.T) {
 	}
 	time.Sleep(300 * time.Millisecond)
 	if atomic.LoadInt64(&current) != 1 {
-		t.Errorf("excute 1 step, but current = %d", current)
+		t.Errorf("execute 1 step, but current = %d", current)
 	}
 }
 
@@ -422,7 +422,7 @@ func TestSingleErrorStepWithProcessRetry(t *testing.T) {
 		}
 	}
 	if atomic.LoadInt64(&current) != 3 {
-		t.Errorf("excute 3 step, but current = %d", current)
+		t.Errorf("execute 3 step, but current = %d", current)
 	}
 }
 
@@ -441,7 +441,7 @@ func TestSingleErrorStepWithStepRetry(t *testing.T) {
 		}
 	}
 	if atomic.LoadInt64(&current) != 3 {
-		t.Errorf("excute 3 step, but current = %d", current)
+		t.Errorf("execute 3 step, but current = %d", current)
 	}
 }
 
@@ -462,7 +462,7 @@ func TestSingleErrorStepWithProcessAndStepRetry(t *testing.T) {
 		}
 	}
 	if atomic.LoadInt64(&current) != 2 {
-		t.Errorf("excute 2 step, but current = %d", current)
+		t.Errorf("execute 2 step, but current = %d", current)
 	}
 }
 
@@ -492,7 +492,7 @@ func TestRecoverSerialStep(t *testing.T) {
 		}
 	}
 	if atomic.LoadInt64(&current) != 3 {
-		t.Errorf("excute 3 step, but current = %d", current)
+		t.Errorf("execute 3 step, but current = %d", current)
 	}
 }
 
@@ -530,7 +530,7 @@ func TestRecoverParallelStep(t *testing.T) {
 		}
 	}
 	if atomic.LoadInt64(&current) != 4 {
-		t.Errorf("excute 4 step, but current = %d", current)
+		t.Errorf("execute 4 step, but current = %d", current)
 	}
 }
 
@@ -565,6 +565,6 @@ func TestRecoverAndWaitAll(t *testing.T) {
 		}
 	}
 	if atomic.LoadInt64(&current) != 1 {
-		t.Errorf("excute 1 step, but current = %d", current)
+		t.Errorf("execute 1 step, but current = %d", current)
 	}
 }
