@@ -29,14 +29,14 @@ type WorkFlowCtrl interface {
 	GetProcessController(name string) Controller
 }
 
-type FlowFactory struct {
+type FlowMeta struct {
 	name      string
 	processes []*ProcessMeta
 }
 
-type Workflow struct {
+type RunFlow struct {
 	id         string
-	processMap map[string]*FlowProcess
+	processMap map[string]*RunProcess
 	context    *Context
 	features   map[string]*Feature
 	finish     sync.WaitGroup
@@ -55,13 +55,13 @@ func SetIdGenerator(method func() string) {
 	generateId = method
 }
 
-func AddFlowFactory(name string) *FlowFactory {
-	flow := FlowFactory{name: name}
+func RegisterFlow(name string) *FlowMeta {
+	flow := FlowMeta{name: name}
 	flow.register()
 	return &flow
 }
 
-func (ff *FlowFactory) register() *FlowFactory {
+func (ff *FlowMeta) register() *FlowMeta {
 	if len(ff.name) == 0 {
 		panic("can't register flow factory with empty stepName")
 	}
@@ -87,7 +87,7 @@ func AsyncFlow(name string, input map[string]any) WorkFlowCtrl {
 	if !ok {
 		panic(fmt.Sprintf("flow factory [%s] not found", name))
 	}
-	flow := factory.(*FlowFactory).BuildWorkflow(input)
+	flow := factory.(*FlowMeta).BuildWorkflow(input)
 	flow.Async()
 	return flow
 }
@@ -105,19 +105,19 @@ func DoneFlow(name string, input map[string]any) map[string]*Feature {
 	if !ok {
 		panic(fmt.Sprintf("flow factory [%s] not found", name))
 	}
-	flow := factory.(*FlowFactory).BuildWorkflow(input)
+	flow := factory.(*FlowMeta).BuildWorkflow(input)
 	return flow.Done()
 }
 
-func BuildWorkflow(name string, input map[string]any) *Workflow {
+func BuildWorkflow(name string, input map[string]any) *RunFlow {
 	factory, ok := allFlows.Load(name)
 	if !ok {
 		panic(fmt.Sprintf("flow factory [%s] not found", name))
 	}
-	return factory.(*FlowFactory).BuildWorkflow(input)
+	return factory.(*FlowMeta).BuildWorkflow(input)
 }
 
-func (ff *FlowFactory) BuildWorkflow(input map[string]any) *Workflow {
+func (ff *FlowMeta) BuildWorkflow(input map[string]any) *RunFlow {
 	context := Context{
 		name:      WorkflowCtx,
 		scopes:    []string{WorkflowCtx},
@@ -130,11 +130,11 @@ func (ff *FlowFactory) BuildWorkflow(input map[string]any) *Workflow {
 		context.table.Store(k, v)
 	}
 
-	wf := Workflow{
+	wf := RunFlow{
 		id:         generateId(),
 		lock:       sync.Mutex{},
 		context:    &context,
-		processMap: make(map[string]*FlowProcess),
+		processMap: make(map[string]*RunProcess),
 		finish:     sync.WaitGroup{},
 	}
 
@@ -146,7 +146,7 @@ func (ff *FlowFactory) BuildWorkflow(input map[string]any) *Workflow {
 	return &wf
 }
 
-func (ff *FlowFactory) AddRegisterProcess(name string) {
+func (ff *FlowMeta) AddRegisterProcess(name string) {
 	pm, exist := allProcess.Load(name)
 	if !exist {
 		panic(fmt.Sprintf("process [%s] not registered", name))
@@ -154,7 +154,7 @@ func (ff *FlowFactory) AddRegisterProcess(name string) {
 	ff.processes = append(ff.processes, pm.(*ProcessMeta))
 }
 
-func (ff *FlowFactory) AddProcess(name string, conf *ProcessConfig) *ProcessMeta {
+func (ff *FlowMeta) AddProcess(name string, conf *ProcessConfig) *ProcessMeta {
 	used := &ProcessConfig{}
 	if defaultProcessConfig != nil {
 		used = defaultProcessConfig
@@ -174,19 +174,19 @@ func (ff *FlowFactory) AddProcess(name string, conf *ProcessConfig) *ProcessMeta
 	return &pm
 }
 
-func (wf *Workflow) addProcess(meta *ProcessMeta) *FlowProcess {
+func (wf *RunFlow) addProcess(meta *ProcessMeta) *RunProcess {
 	pcsCtx := Context{
 		name:   meta.processName,
 		scopes: []string{ProcessCtx},
 		table:  sync.Map{},
 	}
 
-	process := FlowProcess{
+	process := RunProcess{
 		ProcessMeta: meta,
 		Context:     &pcsCtx,
 		id:          generateId(),
 		flowId:      wf.id,
-		flowSteps:   make(map[string]*FlowStep),
+		flowSteps:   make(map[string]*RunStep),
 		pcsScope:    map[string]*Context{ProcessCtx: &pcsCtx},
 		pause:       sync.WaitGroup{},
 		needRun:     sync.WaitGroup{},
@@ -204,7 +204,7 @@ func (wf *Workflow) addProcess(meta *ProcessMeta) *FlowProcess {
 }
 
 // Done function will block util all process done.
-func (wf *Workflow) Done() map[string]*Feature {
+func (wf *RunFlow) Done() map[string]*Feature {
 	features := wf.Async()
 	for _, feature := range features {
 		feature.Done()
@@ -213,7 +213,7 @@ func (wf *Workflow) Done() map[string]*Feature {
 }
 
 // Async function asynchronous execute process of workflow and return immediately.
-func (wf *Workflow) Async() map[string]*Feature {
+func (wf *RunFlow) Async() map[string]*Feature {
 	if wf.features != nil {
 		return wf.features
 	}
@@ -231,7 +231,7 @@ func (wf *Workflow) Async() map[string]*Feature {
 	return features
 }
 
-func (wf *Workflow) SkipFinishedStep(name string, result any) error {
+func (wf *RunFlow) SkipFinishedStep(name string, result any) error {
 	count := 0
 	for processName := range wf.processMap {
 		if err := wf.SkipProcessStep(processName, name, result); err == nil {
@@ -248,7 +248,7 @@ func (wf *Workflow) SkipFinishedStep(name string, result any) error {
 	return nil
 }
 
-func (wf *Workflow) SkipProcessStep(processName, stepName string, result any) error {
+func (wf *RunFlow) SkipProcessStep(processName, stepName string, result any) error {
 	process, exist := wf.processMap[processName]
 	if !exist {
 		return fmt.Errorf("prcoess [%s] not found in workflow", processName)
@@ -261,11 +261,11 @@ func (wf *Workflow) SkipProcessStep(processName, stepName string, result any) er
 	return nil
 }
 
-func (wf *Workflow) GetFeatures() map[string]*Feature {
+func (wf *RunFlow) GetFeatures() map[string]*Feature {
 	return wf.features
 }
 
-func (wf *Workflow) ListProcess() []string {
+func (wf *RunFlow) ListProcess() []string {
 	processes := make([]string, 0, len(wf.processMap))
 	for name := range wf.processMap {
 		processes = append(processes, name)
@@ -273,7 +273,7 @@ func (wf *Workflow) ListProcess() []string {
 	return processes
 }
 
-func (wf *Workflow) GetProcessController(name string) Controller {
+func (wf *RunFlow) GetProcessController(name string) Controller {
 	process, exist := wf.processMap[name]
 	if !exist {
 		return nil
@@ -281,19 +281,19 @@ func (wf *Workflow) GetProcessController(name string) Controller {
 	return process
 }
 
-func (wf *Workflow) Pause() {
+func (wf *RunFlow) Pause() {
 	for _, process := range wf.processMap {
 		process.Pause()
 	}
 }
 
-func (wf *Workflow) Resume() {
+func (wf *RunFlow) Resume() {
 	for _, process := range wf.processMap {
 		process.Resume()
 	}
 }
 
-func (wf *Workflow) Stop() {
+func (wf *RunFlow) Stop() {
 	for _, process := range wf.processMap {
 		process.Stop()
 	}

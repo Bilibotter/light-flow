@@ -8,11 +8,84 @@ import (
 	"testing"
 )
 
+func TestDependMergedWithEmptyHead(t *testing.T) {
+	defer resetCurrent()
+	factory1 := flow.RegisterFlow("TestDependMergedWithEmptyHead1")
+	process1 := factory1.AddProcess("TestDependMergedWithEmptyHead1", nil)
+	process1.AddStepWithAlias("1", GenerateStep(1))
+	process1.AddStepWithAlias("2", GenerateStep(2), "1")
+	process1.AddStepWithAlias("3", GenerateStep(3), "2")
+	process1.AddStepWithAlias("4", GenerateStep(4), "3")
+	factory2 := flow.RegisterFlow("TestDependMergedWithEmptyHead2")
+	process2 := factory2.AddProcess("TestDependMergedWithEmptyHead2", nil)
+	process2.Merge("TestDependMergedWithEmptyHead1")
+	process2.AddStepWithAlias("5", GenerateStep(5), "4")
+	features := flow.DoneFlow("TestDependMergedWithEmptyHead2", nil)
+	for name, feature := range features {
+		explain := strings.Join(feature.ExplainStatus(), ", ")
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		if !feature.Success() {
+			t.Errorf("process[%s] fail", name)
+		}
+	}
+	if atomic.LoadInt64(&current) != 5 {
+		t.Errorf("execute 5 step, but current = %d", current)
+	}
+	features = flow.DoneFlow("TestDependMergedWithEmptyHead1", nil)
+	for name, feature := range features {
+		explain := strings.Join(feature.ExplainStatus(), ", ")
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		if !feature.Success() {
+			t.Errorf("process[%s] fail", name)
+		}
+	}
+	if atomic.LoadInt64(&current) != 9 {
+		t.Errorf("execute 9 step, but current = %d", current)
+	}
+}
+
+func TestDependMergedWithNotEmptyHead(t *testing.T) {
+	defer resetCurrent()
+	factory1 := flow.RegisterFlow("TestDependMergedWithNotEmptyHead1")
+	process1 := factory1.AddProcess("TestDependMergedWithNotEmptyHead1", nil)
+	process1.AddStepWithAlias("1", GenerateStep(1))
+	process1.AddStepWithAlias("2", GenerateStep(2), "1")
+	process1.AddStepWithAlias("3", GenerateStep(3), "2")
+	process1.AddStepWithAlias("4", GenerateStep(4), "3")
+	factory2 := flow.RegisterFlow("TestDependMergedWithNotEmptyHead2")
+	process2 := factory2.AddProcess("TestDependMergedWithNotEmptyHead2", nil)
+	process2.AddStepWithAlias("0", GenerateStep(0))
+	process2.Merge("TestDependMergedWithNotEmptyHead1")
+	process2.AddStepWithAlias("5", GenerateStep(5), "4")
+	features := flow.DoneFlow("TestDependMergedWithNotEmptyHead2", nil)
+	for name, feature := range features {
+		explain := strings.Join(feature.ExplainStatus(), ", ")
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		if !feature.Success() {
+			t.Errorf("process[%s] fail", name)
+		}
+	}
+	if atomic.LoadInt64(&current) != 6 {
+		t.Errorf("execute 6 step, but current = %d", current)
+	}
+	features = flow.DoneFlow("TestDependMergedWithNotEmptyHead1", nil)
+	for name, feature := range features {
+		explain := strings.Join(feature.ExplainStatus(), ", ")
+		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		if !feature.Success() {
+			t.Errorf("process[%s] fail", name)
+		}
+	}
+	if atomic.LoadInt64(&current) != 10 {
+		t.Errorf("execute 10 step, but current = %d", current)
+	}
+}
+
 func TestMergeEmpty(t *testing.T) {
 	defer resetCurrent()
-	factory1 := flow.AddFlowFactory("TestMergeEmpty1")
+	factory1 := flow.RegisterFlow("TestMergeEmpty1")
 	factory1.AddProcess("TestMergeEmpty1", nil)
-	factory2 := flow.AddFlowFactory("TestMergeEmpty2")
+	factory2 := flow.RegisterFlow("TestMergeEmpty2")
 	process2 := factory2.AddProcess("TestMergeEmpty2", nil)
 	process2.AddStepWithAlias("1", GenerateStep(1))
 	process2.AddStepWithAlias("2", GenerateStep(2), "1")
@@ -34,13 +107,13 @@ func TestMergeEmpty(t *testing.T) {
 
 func TestEmptyMerge(t *testing.T) {
 	defer resetCurrent()
-	factory1 := flow.AddFlowFactory("TestEmptyMerge1")
+	factory1 := flow.RegisterFlow("TestEmptyMerge1")
 	process1 := factory1.AddProcess("TestEmptyMerge1", nil)
 	process1.AddStepWithAlias("1", GenerateStep(1))
 	process1.AddStepWithAlias("2", GenerateStep(2), "1")
 	process1.AddStepWithAlias("3", GenerateStep(3), "2")
 	process1.AddStepWithAlias("4", GenerateStep(4), "3")
-	factory2 := flow.AddFlowFactory("TestEmptyMerge2")
+	factory2 := flow.RegisterFlow("TestEmptyMerge2")
 	process2 := factory2.AddProcess("TestEmptyMerge2", nil)
 	process2.Merge("TestEmptyMerge1")
 	features := flow.DoneFlow("TestEmptyMerge2", nil)
@@ -69,13 +142,13 @@ func TestEmptyMerge(t *testing.T) {
 
 func TestMergeAbsolutelyDifferent(t *testing.T) {
 	defer resetCurrent()
-	factory1 := flow.AddFlowFactory("TestMergeAbsolutelyDifferent1")
+	factory1 := flow.RegisterFlow("TestMergeAbsolutelyDifferent1")
 	process1 := factory1.AddProcess("TestMergeAbsolutelyDifferent1", nil)
 	process1.AddStepWithAlias("1", GenerateStep(1))
 	process1.AddStepWithAlias("2", GenerateStep(2), "1")
 	process1.AddStepWithAlias("3", GenerateStep(3), "2")
 	process1.AddStepWithAlias("4", GenerateStep(4), "3")
-	factory2 := flow.AddFlowFactory("TestMergeAbsolutelyDifferent2")
+	factory2 := flow.RegisterFlow("TestMergeAbsolutelyDifferent2")
 	process2 := factory2.AddProcess("TestMergeAbsolutelyDifferent2", nil)
 	process2.AddStepWithAlias("11", GenerateStep(11))
 	process2.AddStepWithAlias("12", GenerateStep(12), "11")
@@ -108,13 +181,13 @@ func TestMergeAbsolutelyDifferent(t *testing.T) {
 
 func TestMergeLayerSame(t *testing.T) {
 	defer resetCurrent()
-	factory1 := flow.AddFlowFactory("TestMergeLayerSame1")
+	factory1 := flow.RegisterFlow("TestMergeLayerSame1")
 	process1 := factory1.AddProcess("TestMergeLayerSame1", nil)
 	process1.AddStepWithAlias("1", GenerateStep(1))
 	process1.AddStepWithAlias("2", GenerateStep(2), "1")
 	process1.AddStepWithAlias("3", GenerateStep(3), "1")
 	process1.AddStepWithAlias("4", GenerateStep(4), "3")
-	factory2 := flow.AddFlowFactory("TestMergeLayerSame2")
+	factory2 := flow.RegisterFlow("TestMergeLayerSame2")
 	process2 := factory2.AddProcess("TestMergeLayerSame2", nil)
 	process2.AddStepWithAlias("1", GenerateStep(1))
 	process2.AddStepWithAlias("3", GenerateStep(3), "1")
@@ -147,13 +220,13 @@ func TestMergeLayerSame(t *testing.T) {
 
 func TestMergeLayerDec(t *testing.T) {
 	defer resetCurrent()
-	factory1 := flow.AddFlowFactory("TestMergeLayerDec1")
+	factory1 := flow.RegisterFlow("TestMergeLayerDec1")
 	process1 := factory1.AddProcess("TestMergeLayerDec1", nil)
 	process1.AddStepWithAlias("1", GenerateStep(1))
 	process1.AddStepWithAlias("2", GenerateStep(2), "1")
 	process1.AddStepWithAlias("3", GenerateStep(3), "1")
 	process1.AddStepWithAlias("4", GenerateStep(4), "3")
-	factory2 := flow.AddFlowFactory("TestMergeLayerDec2")
+	factory2 := flow.RegisterFlow("TestMergeLayerDec2")
 	process2 := factory2.AddProcess("TestMergeLayerDec2", nil)
 	process2.AddStepWithAlias("1", GenerateStep(1))
 	process2.AddStepWithAlias("4", GenerateStep(4), "1")
@@ -186,13 +259,13 @@ func TestMergeLayerDec(t *testing.T) {
 
 func TestMergeLayerInc(t *testing.T) {
 	defer resetCurrent()
-	factory1 := flow.AddFlowFactory("TestMergeLayerInc1")
+	factory1 := flow.RegisterFlow("TestMergeLayerInc1")
 	process1 := factory1.AddProcess("TestMergeLayerInc1", nil)
 	process1.AddStepWithAlias("1", GenerateStep(1))
 	process1.AddStepWithAlias("2", GenerateStep(2), "1")
 	process1.AddStepWithAlias("3", GenerateStep(3), "1")
 	process1.AddStepWithAlias("4", GenerateStep(4), "3")
-	factory2 := flow.AddFlowFactory("TestMergeLayerInc2")
+	factory2 := flow.RegisterFlow("TestMergeLayerInc2")
 	process2 := factory2.AddProcess("TestMergeLayerInc2", nil)
 	process2.AddStepWithAlias("1", GenerateStep(1))
 	process2.AddStepWithAlias("3", GenerateStep(3), "1")
@@ -213,13 +286,13 @@ func TestMergeLayerInc(t *testing.T) {
 
 func TestMergeSomeSame(t *testing.T) {
 	defer resetCurrent()
-	factory1 := flow.AddFlowFactory("TestMergeSomeSame1")
+	factory1 := flow.RegisterFlow("TestMergeSomeSame1")
 	process1 := factory1.AddProcess("TestMergeSomeSame1", nil)
 	process1.AddStepWithAlias("1", GenerateStep(1))
 	process1.AddStepWithAlias("2", GenerateStep(2), "1")
 	process1.AddStepWithAlias("3", GenerateStep(3), "1")
 	process1.AddStepWithAlias("4", GenerateStep(4), "3")
-	factory2 := flow.AddFlowFactory("TestMergeSomeSame2")
+	factory2 := flow.RegisterFlow("TestMergeSomeSame2")
 	process2 := factory2.AddProcess("TestMergeSomeSame2", nil)
 	process2.AddStepWithAlias("1", GenerateStep(1))
 	process2.AddStepWithAlias("5", GenerateStep(5), "1")
@@ -241,13 +314,13 @@ func TestMergeSomeSame(t *testing.T) {
 
 func TestMergeSame(t *testing.T) {
 	defer resetCurrent()
-	factory1 := flow.AddFlowFactory("TestMergeSame1")
+	factory1 := flow.RegisterFlow("TestMergeSame1")
 	process1 := factory1.AddProcess("TestMergeSame1", nil)
 	process1.AddStepWithAlias("1", GenerateStep(1))
 	process1.AddStepWithAlias("2", GenerateStep(2), "1")
 	process1.AddStepWithAlias("3", GenerateStep(3), "2")
 	process1.AddStepWithAlias("4", GenerateStep(4), "3")
-	factory2 := flow.AddFlowFactory("TestMergeSame2")
+	factory2 := flow.RegisterFlow("TestMergeSame2")
 	process2 := factory2.AddProcess("TestMergeSame2", nil)
 	process2.AddStepWithAlias("1", GenerateStep(1))
 	process2.AddStepWithAlias("2", GenerateStep(2), "1")
@@ -269,11 +342,11 @@ func TestMergeSame(t *testing.T) {
 
 func TestMergeCircle(t *testing.T) {
 	defer resetCurrent()
-	factory1 := flow.AddFlowFactory("TestMergeCircle1")
+	factory1 := flow.RegisterFlow("TestMergeCircle1")
 	process1 := factory1.AddProcess("TestMergeCircle1", nil)
 	process1.AddStepWithAlias("1", GenerateStep(1))
 	process1.AddStepWithAlias("2", GenerateStep(2), "1")
-	factory2 := flow.AddFlowFactory("TestMergeCircle2")
+	factory2 := flow.RegisterFlow("TestMergeCircle2")
 	process2 := factory2.AddProcess("TestMergeCircle2", nil)
 	process2.AddStepWithAlias("2", GenerateStep(2))
 	process2.AddStepWithAlias("1", GenerateStep(1), "2")
@@ -289,14 +362,14 @@ func TestMergeCircle(t *testing.T) {
 
 func TestMergeLongCircleLongCircle(t *testing.T) {
 	defer resetCurrent()
-	factory1 := flow.AddFlowFactory("TestMergeLongCircle1")
+	factory1 := flow.RegisterFlow("TestMergeLongCircle1")
 	process1 := factory1.AddProcess("TestMergeLongCircle1", nil)
 	process1.AddStepWithAlias("1", GenerateStep(1))
 	process1.AddStepWithAlias("2", GenerateStep(2), "1")
 	process1.AddStepWithAlias("3", GenerateStep(3), "2")
 	process1.AddStepWithAlias("4", GenerateStep(4), "3")
 	process1.AddStepWithAlias("5", GenerateStep(5), "4")
-	factory2 := flow.AddFlowFactory("TestMergeLongCircle2")
+	factory2 := flow.RegisterFlow("TestMergeLongCircle2")
 	process2 := factory2.AddProcess("TestMergeLongCircle2", nil)
 	process2.AddStepWithAlias("2", GenerateStep(2))
 	process2.AddStepWithAlias("5", GenerateStep(5), "2")

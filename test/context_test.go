@@ -88,7 +88,7 @@ func invalidUse(ctx *flow.Context) (any, error) {
 
 func TestSearch(t *testing.T) {
 	defer resetCtx()
-	workflow := flow.AddFlowFactory("TestSearch")
+	workflow := flow.RegisterFlow("TestSearch")
 	process := workflow.AddProcess("TestSearch1", nil)
 	process.AddStepWithAlias("1", invalidUse)
 	process.AddStepWithAlias("2", invalidUse, "1")
@@ -106,7 +106,7 @@ func TestSearch(t *testing.T) {
 
 func TestPriorityWithSelf(t *testing.T) {
 	defer resetCtx()
-	workflow := flow.AddFlowFactory("TestPriorityWithSelf")
+	workflow := flow.RegisterFlow("TestPriorityWithSelf")
 	process := workflow.AddProcess("test1", nil)
 	process.AddStepWithAlias("0", ChangeCtxStepFunc(&ctx1))
 	process.AddStepWithAlias("1", ChangeCtxStepFunc(&ctx1))
@@ -123,7 +123,7 @@ func TestPriorityWithSelf(t *testing.T) {
 
 func TestPriorityCheck(t *testing.T) {
 	defer resetCtx()
-	workflow := flow.AddFlowFactory("TestPriorityCheck")
+	workflow := flow.RegisterFlow("TestPriorityCheck")
 	process := workflow.AddProcess("TestPriorityCheck", nil)
 	process.AddStepWithAlias("0", ChangeCtxStepFunc(&ctx1))
 	process.AddStepWithAlias("1", ChangeCtxStepFunc(&ctx1))
@@ -140,7 +140,7 @@ func TestPriorityCheck(t *testing.T) {
 
 func TestPriority(t *testing.T) {
 	defer resetCtx()
-	workflow := flow.AddFlowFactory("TestPriority")
+	workflow := flow.RegisterFlow("TestPriority")
 	process := workflow.AddProcess("TestPriority", nil)
 	process.AddStepWithAlias("1", ChangeCtxStepFunc(&ctx1))
 	process.AddStepWithAlias("2", GenerateStepIncAddr(1), "1")
@@ -165,7 +165,7 @@ func TestPriority(t *testing.T) {
 
 func TestExpose(t *testing.T) {
 	defer resetCtx()
-	workflow := flow.AddFlowFactory("TestExpose")
+	workflow := flow.RegisterFlow("TestExpose")
 	process := workflow.AddProcess("TestExpose1", nil)
 	process.AddStepWithAlias("1", ExposeAddrFunc(&ctx1))
 	process.AddStepWithAlias("2", GenerateStepIncAddr(2))
@@ -192,7 +192,7 @@ func TestExpose(t *testing.T) {
 
 func TestPtrReuse(t *testing.T) {
 	defer resetCtx()
-	workflow := flow.AddFlowFactory("TestPtrReuse")
+	workflow := flow.RegisterFlow("TestPtrReuse")
 	process1 := workflow.AddProcess("TestPtrReuse1", nil)
 	process1.AddStepWithAlias("1", GenerateStepIncAddr(1))
 	process1.AddStepWithAlias("2", GenerateStepIncAddr(2), "1")
@@ -216,7 +216,7 @@ func TestPtrReuse(t *testing.T) {
 
 func TestWaitToDoneInMultiple(t *testing.T) {
 	defer resetCtx()
-	workflow := flow.AddFlowFactory("TestWaitToDoneInMultiple")
+	workflow := flow.RegisterFlow("TestWaitToDoneInMultiple")
 	process1 := workflow.AddProcess("TestWaitToDoneInMultiple1", nil)
 	process1.AddStepWithAlias("1", GenerateStepIncAddr(1))
 	process1.AddStepWithAlias("2", GenerateStepIncAddr(2), "1")
@@ -241,7 +241,7 @@ func TestWaitToDoneInMultiple(t *testing.T) {
 
 func TestWorkFlowCtx(t *testing.T) {
 	defer resetCtx()
-	workflow := flow.AddFlowFactory("TestWorkFlowCtx")
+	workflow := flow.RegisterFlow("TestWorkFlowCtx")
 	process1 := workflow.AddProcess("TestWorkFlowCtx1", nil)
 	process1.AddStepWithAlias("1", GenerateStepIncAddr(1))
 	process1.AddStepWithAlias("2", GenerateStepIncAddr(2), "1")
@@ -265,7 +265,7 @@ func TestWorkFlowCtx(t *testing.T) {
 
 func TestProcessAndWorkflowCtx(t *testing.T) {
 	defer resetCtx()
-	workflow := flow.AddFlowFactory("TestProcessAndWorkflowCtx")
+	workflow := flow.RegisterFlow("TestProcessAndWorkflowCtx")
 	process := workflow.AddProcess("TestProcessAndWorkflowCtx1", nil)
 	process.AddPostProcessor(ErrorResultPrinter)
 	process.AddStepWithAlias("1", GenerateStepIncAddr(1))
@@ -291,7 +291,7 @@ func TestProcessAndWorkflowCtx(t *testing.T) {
 
 func TestStepCtx(t *testing.T) {
 	defer resetCtx()
-	workflow := flow.AddFlowFactory("TestStepCtx")
+	workflow := flow.RegisterFlow("TestStepCtx")
 	process := workflow.AddProcess("TestStepCtx1", nil)
 	process.AddStepWithAlias("1", ChangeCtxStepFunc(&ctx3))
 	process.AddStepWithAlias("2", GenerateStepIncAddr(2), "1")
@@ -324,7 +324,7 @@ func TestStepCtx(t *testing.T) {
 
 func TestDependStepCtx(t *testing.T) {
 	defer resetCtx()
-	workflow := flow.AddFlowFactory("TestDependStepCtx")
+	workflow := flow.RegisterFlow("TestDependStepCtx")
 	process := workflow.AddProcess("TestDependStepCtx1", nil)
 	process.AddPostProcessor(ErrorResultPrinter)
 	process.AddStepWithAlias("1", ChangeCtxStepFunc(&ctx3))
@@ -364,7 +364,7 @@ func TestDependStepCtx(t *testing.T) {
 
 func TestFlowMultipleAsyncExecute(t *testing.T) {
 	defer resetCtx()
-	workflow := flow.AddFlowFactory("TestFlowMultipleExecute")
+	workflow := flow.RegisterFlow("TestFlowMultipleExecute")
 	process := workflow.AddProcess("TestFlowMultipleExecute1", nil)
 	process.AddPostProcessor(ErrorResultPrinter)
 	process.AddStepWithAlias("1", GenerateStepIncAddr(1))

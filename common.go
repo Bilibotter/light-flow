@@ -14,9 +14,10 @@ const (
 
 // these constants are used to indicate the position of the process
 const (
-	End     = int64(0)
-	Start   = int64(0b1)
-	HasNext = int64(0b1 << 1)
+	End     = int64(0b1)
+	Start   = int64(0b1 << 1)
+	HasNext = int64(0b1 << 2)
+	Merged  = int64(0b1 << 3)
 )
 
 // these constants are used to indicate the status of the process

@@ -21,12 +21,12 @@ type ProcessMeta struct {
 	conf        *ProcessConfig
 }
 
-type FlowProcess struct {
+type RunProcess struct {
 	*ProcessMeta
 	*Context
 	id        string
 	flowId    string
-	flowSteps map[string]*FlowStep
+	flowSteps map[string]*RunStep
 	pcsScope  map[string]*Context
 	pause     sync.WaitGroup
 	needRun   sync.WaitGroup
@@ -79,7 +79,8 @@ func (pm *ProcessMeta) Merge(name string) {
 		for _, depend := range merge.depends {
 			depends = append(depends, depend.stepName)
 		}
-		pm.AddStepWithAlias(merge.stepName, merge.run, depends...)
+		step := pm.AddStepWithAlias(merge.stepName, merge.run, depends...)
+		AppendStatus(&step.position, Merged)
 	}
 }
 
@@ -160,27 +161,40 @@ func (pm *ProcessMeta) AddWaitAll(alias string, run func(ctx *Context) (any, err
 }
 
 func (pm *ProcessMeta) AddStepWithAlias(alias string, run func(ctx *Context) (any, error), depends ...any) *StepMeta {
-	if _, exist := pm.steps[alias]; exist {
-		panic(fmt.Sprintf("step named [%s] already exist, can used %s to avoid stepName duplicate",
-			alias, GetFuncName(pm.AddStepWithAlias)))
+	var meta *StepMeta
+	var oldDepends *Set
+
+	if old, exist := pm.steps[alias]; exist {
+		if !Contains(&pm.steps[alias].position, Merged) {
+			panic(fmt.Sprintf("step named [%s] already exist, can used %s to avoid stepName duplicate",
+				alias, GetFuncName(pm.AddStepWithAlias)))
+		}
+		oldDepends = CreateFromSliceFunc(meta.depends, func(value *StepMeta) string { return value.stepName })
+		meta = old
 	}
 
-	meta := StepMeta{
-		stepName:    alias,
-		run:         run,
-		layer:       1,
-		ctxPriority: make(map[string]string),
+	if meta == nil {
+		meta = &StepMeta{
+			belong:      pm,
+			stepName:    alias,
+			run:         run,
+			layer:       1,
+			ctxPriority: make(map[string]string),
+		}
 	}
 
 	for _, wrap := range depends {
 		name := toStepName(wrap)
+		if oldDepends != nil && oldDepends.Contains(name) {
+			continue
+		}
 		depend, exist := pm.steps[name]
 		if !exist {
 			panic(fmt.Sprintf("can't find step[%s]", name))
 		}
 		meta.depends = append(meta.depends, depend)
-		depend.waiters = append(depend.waiters, &meta)
-		if depend.position == End {
+		depend.waiters = append(depend.waiters, meta)
+		if Contains(&depend.position, End) {
 			AppendStatus(&depend.position, HasNext)
 		}
 		if depend.layer+1 > meta.layer {
@@ -188,14 +202,28 @@ func (pm *ProcessMeta) AddStepWithAlias(alias string, run func(ctx *Context) (an
 		}
 	}
 
+	AppendStatus(&meta.position, End)
 	if len(depends) == 0 {
-		meta.position = Start
+		AppendStatus(&meta.position, Start)
 	}
 
 	pm.tailStep = meta.stepName
-	pm.steps[alias] = &meta
+	pm.steps[alias] = meta
 
-	return &meta
+	return meta
+}
+
+func (pm *ProcessMeta) copyDepends(src, dst string) {
+	srcStep := pm.steps[src]
+	dstStep := pm.steps[dst]
+	s := CreateFromSliceFunc(srcStep.depends, func(meta *StepMeta) string { return meta.stepName })
+	for _, depend := range srcStep.depends {
+		if s.Contains(depend.stepName) {
+			continue
+		}
+		dstStep.depends = append(srcStep.depends, depend)
+		depend.waiters = append(depend.waiters, dstStep)
+	}
 }
 
 func (pm *ProcessMeta) sortedStepMeta() []*StepMeta {
@@ -209,8 +237,8 @@ func (pm *ProcessMeta) sortedStepMeta() []*StepMeta {
 	return steps
 }
 
-func (fp *FlowProcess) addStep(meta *StepMeta) *FlowStep {
-	step := FlowStep{
+func (fp *RunProcess) addStep(meta *StepMeta) *RunStep {
+	step := RunStep{
 		StepMeta:  meta,
 		id:        generateId(),
 		processId: fp.id,
@@ -237,26 +265,26 @@ func (fp *FlowProcess) addStep(meta *StepMeta) *FlowStep {
 	return &step
 }
 
-func (fp *FlowProcess) Resume() {
+func (fp *RunProcess) Resume() {
 	if PopStatus(&fp.status, Pause) {
 		fp.pause.Done()
 	}
 }
 
-func (fp *FlowProcess) Pause() {
+func (fp *RunProcess) Pause() {
 	if AppendStatus(&fp.status, Pause) {
 		fp.pause.Add(1)
 	}
 }
 
-func (fp *FlowProcess) Stop() {
+func (fp *RunProcess) Stop() {
 	AppendStatus(&fp.status, Stop)
 }
 
-func (fp *FlowProcess) flow() *Feature {
+func (fp *RunProcess) flow() *Feature {
 	AppendStatus(&fp.status, Running)
 	for _, step := range fp.flowSteps {
-		if step.position == Start {
+		if step.layer == 1 {
 			go fp.scheduleStep(step)
 		}
 	}
@@ -272,7 +300,7 @@ func (fp *FlowProcess) flow() *Feature {
 	return &feature
 }
 
-func (fp *FlowProcess) scheduleStep(step *FlowStep) {
+func (fp *RunProcess) scheduleStep(step *RunStep) {
 	defer fp.scheduleNextSteps(step)
 
 	if _, finish := step.GetStepResult(step.stepName); finish {
@@ -316,7 +344,7 @@ func (fp *FlowProcess) scheduleStep(step *FlowStep) {
 	}
 }
 
-func (fp *FlowProcess) runStep(step *FlowStep) {
+func (fp *RunProcess) runStep(step *RunStep) {
 	step.Start = time.Now().UTC()
 
 	if fp.conf != nil && len(fp.conf.PreProcessors) > 0 {
@@ -370,7 +398,7 @@ func (fp *FlowProcess) runStep(step *FlowStep) {
 	}
 }
 
-func (fp *FlowProcess) finalize() {
+func (fp *RunProcess) finalize() {
 	finish := make(chan bool, 1)
 	go func() {
 		fp.needRun.Wait()
@@ -417,7 +445,7 @@ func (fp *FlowProcess) finalize() {
 	atomic.StoreInt64(&fp.finish, 1)
 }
 
-func (fp *FlowProcess) summaryStepInfo(step *FlowStep) *StepInfo {
+func (fp *RunProcess) summaryStepInfo(step *RunStep) *StepInfo {
 	info := &StepInfo{
 		Id:        step.id,
 		ProcessId: step.processId,
@@ -443,7 +471,7 @@ func (fp *FlowProcess) summaryStepInfo(step *FlowStep) *StepInfo {
 	return info
 }
 
-func (fp *FlowProcess) scheduleNextSteps(step *FlowStep) {
+func (fp *RunProcess) scheduleNextSteps(step *RunStep) {
 	// all step not execute should cancel while process is timeout
 	cancel := !IsStatusNormal(step.status) || !IsStatusNormal(fp.status)
 	for _, waiter := range step.waiters {
@@ -464,6 +492,6 @@ func (fp *FlowProcess) scheduleNextSteps(step *FlowStep) {
 	fp.needRun.Done()
 }
 
-func (fp *FlowProcess) SkipFinishedStep(name string, result any) {
+func (fp *RunProcess) SkipFinishedStep(name string, result any) {
 	fp.setStepResult(name, result)
 }

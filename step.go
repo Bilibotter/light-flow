@@ -6,6 +6,7 @@ import (
 )
 
 type StepMeta struct {
+	belong      *ProcessMeta
 	stepName    string
 	layer       int
 	position    int64
@@ -16,7 +17,7 @@ type StepMeta struct {
 	run         func(ctx *Context) (any, error)
 }
 
-type FlowStep struct {
+type RunStep struct {
 	*StepMeta
 	*Context
 	id        string
@@ -55,6 +56,13 @@ func (meta *StepMeta) AddPriority(priority map[string]any) {
 		meta.ctxPriority[key] = toStepName(stepName)
 	}
 	meta.checkPriority()
+}
+
+func (meta *StepMeta) CopyDepends(src ...any) {
+	for _, wrap := range src {
+		name := toStepName(wrap)
+		meta.belong.copyDepends(name, meta.stepName)
+	}
 }
 
 // checkPriority checks if the priority key corresponds to an existing step.

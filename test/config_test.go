@@ -130,7 +130,7 @@ func TestProcessorWhenExceptionOccur(t *testing.T) {
 		PostProcessors:     []func(*flow.StepInfo) bool{PostProcessor},
 		CompleteProcessors: []func(*flow.ProcessInfo) bool{CompleteProcessor},
 	}
-	workflow := flow.AddFlowFactory("TestProcessorWhenExceptionOccur")
+	workflow := flow.RegisterFlow("TestProcessorWhenExceptionOccur")
 	process := workflow.AddProcess("TestProcessorWhenExceptionOccur", &config)
 	process.AddStepWithAlias("1", GenerateErrorStep(1))
 	process.AddStepWithAlias("2", GeneratePanicStep(2))
@@ -178,7 +178,7 @@ func TestInfoCorrect(t *testing.T) {
 		CompleteProcessors: []func(*flow.ProcessInfo) bool{ProcessInfoChecker},
 	}
 	flow.SetDefaultProcessConfig(&config)
-	workflow := flow.AddFlowFactory("TestInfoCorrect")
+	workflow := flow.RegisterFlow("TestInfoCorrect")
 	process := workflow.AddProcess("TestInfoCorrect", nil)
 	process.AddStepWithAlias("1", GenerateStep(1))
 	process.AddStepWithAlias("2", GenerateStep(2), "1")
@@ -206,7 +206,7 @@ func TestDefaultProcessConfig(t *testing.T) {
 		CompleteProcessors: []func(*flow.ProcessInfo) bool{CompleteProcessor},
 	}
 	flow.SetDefaultProcessConfig(&config)
-	workflow := flow.AddFlowFactory("TestDefaultProcessConfig")
+	workflow := flow.RegisterFlow("TestDefaultProcessConfig")
 	process := workflow.AddProcess("TestDefaultProcessConfig", nil)
 	process.AddStepWithAlias("1", GenerateStep(1))
 	process.AddStepWithAlias("2", GenerateStep(2), "1")
@@ -225,7 +225,7 @@ func TestDefaultProcessConfig(t *testing.T) {
 
 func TestPreAndPostProcessor(t *testing.T) {
 	defer resetCurrent()
-	workflow := flow.AddFlowFactory("TestPreAndPostProcessor")
+	workflow := flow.RegisterFlow("TestPreAndPostProcessor")
 	config := flow.ProcessConfig{
 		PreProcessors:      []func(*flow.StepInfo) bool{PreProcessor},
 		PostProcessors:     []func(*flow.StepInfo) bool{PostProcessor},
@@ -250,7 +250,7 @@ func TestPreAndPostProcessor(t *testing.T) {
 
 func TestWithLongProcessTimeout(t *testing.T) {
 	defer resetCurrent()
-	workflow := flow.AddFlowFactory("TestWithLongProcessTimeout")
+	workflow := flow.RegisterFlow("TestWithLongProcessTimeout")
 	config := flow.ProcessConfig{ProcessTimeout: 1 * time.Second}
 	process := workflow.AddProcess("TestWithLongProcessTimeout", nil)
 	process.AddConfig(&config)
@@ -271,7 +271,7 @@ func TestWithLongProcessTimeout(t *testing.T) {
 
 func TestWithShortProcessTimeout(t *testing.T) {
 	defer resetCurrent()
-	workflow := flow.AddFlowFactory("TestWithShortProcessTimeout")
+	workflow := flow.RegisterFlow("TestWithShortProcessTimeout")
 	config := flow.ProcessConfig{ProcessTimeout: 1 * time.Millisecond}
 	process := workflow.AddProcess("TestWithShortProcessTimeout", nil)
 	process.AddConfig(&config)
@@ -293,7 +293,7 @@ func TestWithShortProcessTimeout(t *testing.T) {
 
 func TestParallelWithLongDefaultStepTimeout(t *testing.T) {
 	defer resetCurrent()
-	workflow := flow.AddFlowFactory("TestParallelWithLongDefaultStepTimeout")
+	workflow := flow.RegisterFlow("TestParallelWithLongDefaultStepTimeout")
 	config := flow.ProcessConfig{StepRetry: 3, StepTimeout: 300 * time.Millisecond}
 	process := workflow.AddProcess("TestParallelWithLongDefaultStepTimeout", nil)
 	process.AddConfig(&config)
@@ -316,7 +316,7 @@ func TestParallelWithLongDefaultStepTimeout(t *testing.T) {
 
 func TestWithLongDefaultStepTimeout(t *testing.T) {
 	defer resetCurrent()
-	workflow := flow.AddFlowFactory("TestWithLongDefaultStepTimeout")
+	workflow := flow.RegisterFlow("TestWithLongDefaultStepTimeout")
 	config := flow.ProcessConfig{StepRetry: 3, StepTimeout: 1 * time.Second}
 	process := workflow.AddProcess("TestWithLongDefaultStepTimeout", nil)
 	process.AddConfig(&config)
@@ -339,7 +339,7 @@ func TestWithLongDefaultStepTimeout(t *testing.T) {
 
 func TestWithShortDefaultStepTimeout(t *testing.T) {
 	defer resetCurrent()
-	workflow := flow.AddFlowFactory("TestWithShortDefaultStepTimeout")
+	workflow := flow.RegisterFlow("TestWithShortDefaultStepTimeout")
 	config := flow.ProcessConfig{StepRetry: 3, StepTimeout: 1 * time.Millisecond}
 	process := workflow.AddProcess("TestWithShortDefaultStepTimeout", nil)
 	process.AddConfig(&config)
@@ -363,7 +363,7 @@ func TestWithShortDefaultStepTimeout(t *testing.T) {
 
 func TestWithLongStepTimeout(t *testing.T) {
 	defer resetCurrent()
-	workflow := flow.AddFlowFactory("TestWithLongStepTimeout")
+	workflow := flow.RegisterFlow("TestWithLongStepTimeout")
 	process := workflow.AddProcess("TestWithLongStepTimeout", nil)
 	config := flow.StepConfig{MaxRetry: 3, Timeout: 1 * time.Second}
 	process.AddStepWithAlias("1", GenerateStep(1)).AddConfig(&config)
@@ -385,7 +385,7 @@ func TestWithLongStepTimeout(t *testing.T) {
 
 func TestWithShortStepTimeout(t *testing.T) {
 	defer resetCurrent()
-	workflow := flow.AddFlowFactory("TestWithShortStepTimeout")
+	workflow := flow.RegisterFlow("TestWithShortStepTimeout")
 	process := workflow.AddProcess("TestWithShortStepTimeout", nil)
 	config := flow.StepConfig{MaxRetry: 3, Timeout: 1 * time.Millisecond}
 	process.AddStepWithAlias("1", GenerateStep(1)).AddConfig(&config)
@@ -408,7 +408,7 @@ func TestWithShortStepTimeout(t *testing.T) {
 
 func TestSingleErrorStepWithProcessRetry(t *testing.T) {
 	defer resetCurrent()
-	workflow := flow.AddFlowFactory("TestSingleErrorStepWithProcessRetry")
+	workflow := flow.RegisterFlow("TestSingleErrorStepWithProcessRetry")
 	config := flow.ProcessConfig{StepRetry: 3}
 	process := workflow.AddProcess("TestSingleErrorStepWithProcessRetry", nil)
 	process.AddConfig(&config)
@@ -428,7 +428,7 @@ func TestSingleErrorStepWithProcessRetry(t *testing.T) {
 
 func TestSingleErrorStepWithStepRetry(t *testing.T) {
 	defer resetCurrent()
-	workflow := flow.AddFlowFactory("TestSingleErrorStepWithStepRetry")
+	workflow := flow.RegisterFlow("TestSingleErrorStepWithStepRetry")
 	config := flow.StepConfig{MaxRetry: 3}
 	process := workflow.AddProcess("TestSingleErrorStepWithStepRetry", nil)
 	process.AddStepWithAlias("1", GenerateErrorStep(1)).AddConfig(&config)
@@ -447,7 +447,7 @@ func TestSingleErrorStepWithStepRetry(t *testing.T) {
 
 func TestSingleErrorStepWithProcessAndStepRetry(t *testing.T) {
 	defer resetCurrent()
-	workflow := flow.AddFlowFactory("TestSingleErrorStepWithProcessAndStepRetry")
+	workflow := flow.RegisterFlow("TestSingleErrorStepWithProcessAndStepRetry")
 	config := flow.ProcessConfig{StepRetry: 3}
 	stepConfig := flow.StepConfig{MaxRetry: 2}
 	process := workflow.AddProcess("TestSingleErrorStepWithProcessAndStepRetry", nil)
@@ -468,7 +468,7 @@ func TestSingleErrorStepWithProcessAndStepRetry(t *testing.T) {
 
 func TestRecoverSerialStep(t *testing.T) {
 	defer resetCurrent()
-	workflow := flow.AddFlowFactory("TestRecoverSerialStep")
+	workflow := flow.RegisterFlow("TestRecoverSerialStep")
 	process := workflow.AddProcess("TestRecoverSerialStep", nil)
 	config := flow.StepConfig{MaxRetry: 3, Timeout: 1 * time.Second}
 	process.AddStepWithAlias("1", GenerateStep(1)).AddConfig(&config)
@@ -498,7 +498,7 @@ func TestRecoverSerialStep(t *testing.T) {
 
 func TestRecoverParallelStep(t *testing.T) {
 	defer resetCurrent()
-	workflow := flow.AddFlowFactory("TestRecoverParallelStep")
+	workflow := flow.RegisterFlow("TestRecoverParallelStep")
 	process := workflow.AddProcess("TestRecoverParallelStep", nil)
 	process.AddStepWithAlias("1", GenerateStep(1))
 	process.AddStepWithAlias("11", GenerateStep(11), "1")
@@ -536,7 +536,7 @@ func TestRecoverParallelStep(t *testing.T) {
 
 func TestRecoverAndWaitAll(t *testing.T) {
 	defer resetCurrent()
-	workflow := flow.AddFlowFactory("TestRecoverAndWaitAll")
+	workflow := flow.RegisterFlow("TestRecoverAndWaitAll")
 	process := workflow.AddProcess("TestRecoverAndWaitAll", nil)
 	process.AddStepWithAlias("1", GenerateStep(1))
 	process.AddStepWithAlias("2", GenerateStep(2))
