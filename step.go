@@ -76,12 +76,12 @@ func (meta *StepMeta) checkPriority() {
 	}
 }
 
-func (meta *StepMeta) forwardSearh(searched string) bool {
+func (meta *StepMeta) forwardSearch(searched string) bool {
 	for _, waiter := range meta.waiters {
 		if waiter.stepName == searched {
 			return true
 		}
-		if waiter.forwardSearh(searched) {
+		if waiter.forwardSearch(searched) {
 			return true
 		}
 	}

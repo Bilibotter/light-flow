@@ -86,7 +86,15 @@ func (pm *ProcessMeta) Merge(name string) {
 
 func (pm *ProcessMeta) mergeStep(merge *StepMeta) {
 	step := pm.steps[merge.stepName]
-	// create a set contains all depended step name
+
+	for k, v := range merge.ctxPriority {
+		if _, exist := step.ctxPriority[k]; exist {
+			continue
+		}
+		step.ctxPriority[k] = v
+	}
+
+	// create a set contains all depended on step name
 	current := CreateFromSliceFunc[*StepMeta](step.depends,
 		func(meta *StepMeta) string { return meta.stepName })
 
@@ -95,13 +103,14 @@ func (pm *ProcessMeta) mergeStep(merge *StepMeta) {
 	sort.Slice(depends, func(i, j int) bool {
 		return pm.steps[depends[i].stepName].layer < pm.steps[depends[j].stepName].layer
 	})
+
 	for _, add := range depends {
 		if current.Contains(add.stepName) {
 			continue
 		}
 		depend := pm.steps[add.stepName]
 		if depend.layer > step.layer {
-			if step.forwardSearh(depend.stepName) {
+			if step.forwardSearch(depend.stepName) {
 				panic(fmt.Sprintf("merge failed, because there is a cycle formed by step[%s] and step[%s].",
 					depend.stepName, step.stepName))
 			}
