@@ -30,7 +30,9 @@ Install the framework by running the following command:
 
 ### Step 1: Define Step Functions
 
-Define the step functions that will be executed in the workflow. Each step function should have a specific signature and return any results or errors.
+Define the step functions that will be executed in the workflow. 
+
+Each step function should have a specific signature and return result and errors.
 
 ```go
 import (
@@ -40,7 +42,7 @@ import (
 )
 
 func Step1(ctx *flow.Context) (any, error) {
-    // If we have previously set the 'name' in the global context or in the dependent steps, 
+    // If we have previously set the 'name' in input
     // then we can retrieve the 'name'
 	name, exist := ctx.Get("name")
 	if exist {
@@ -51,6 +53,8 @@ func Step1(ctx *flow.Context) (any, error) {
 }
 
 func Step2(ctx *flow.Context) (any, error) {
+    // If we have previously set the 'name'in the dependent steps, 
+    // then we can retrieve the 'name'
 	age, exist := ctx.Get("age")
 	if exist {
 		fmt.Printf("step2 get 'age' from ctx: %d \n", age.(int))
@@ -63,54 +67,67 @@ func Step2(ctx *flow.Context) (any, error) {
 }
 ```
 
-### Step 2: Create Work-Flow And Process
+### Step 2: Register Work-Flow And Process
+
+**After register, you could add current process in another work-flow. **
+
+**And you cloud merge another process into current process, usage see in advance usage**
 
 ```go
-workflow := flow.NewWorkflow[any](input)
-config := flow.ProcessConfig{
-	StepRetry:   3,
-	StepTimeout: 30 * time.Minute,
-}
-// Process of workflow are parallel.
-process := workflow.AddProcess("process1", &config)
-workflow := flow.NewWorkflow[any](input)
-config := flow.ProcessConfig{
-    StepRetry:   3,
-    StepTimeout: 30 * time.Minute,
+func init() {
+	workflow := flow.RegisterFlow("MyFlow")
+	config := flow.ProcessConfig{
+		StepRetry:   3,
+		StepTimeout: 30 * time.Minute,
+	}
+    // Processes of workflow are parallel
+	process := workflow.AddProcess("MyProcess", &config)
+	process.AddStep(Step1)
+    // Identify Step 1 as a dependency of Step 2
+	process.AddStepWithAlias("Step2", Step2, Step1)
 }
 ```
 
 ### Step 3: Add Step And Define Dependencies
 
 ```go
-// Add a step named "Step1" to process.
-// Step 1 will use the function name as key.
-// Although you can try AddStepWithAlias("Step1", Step1).
-process.AddStep(Step1)
-// Add a step named "Step2" to process and specify that Step2 depends on Step1.
-// It is available to specify multiple dependent.
-// AddStep(Step2, "Step1") is ok.
-process.AddStep(Step2, Step1)
+func init() {
+	...
+	process := workflow.AddProcess("MyProcess", &config)
+    // AddStep automatically uses "Step1" as step name
+	process.AddStep(Step1)
+    // AddStepWithAlias use alias "Step2" as the step name
+    // Identify Step 1 as a dependency of Step 2
+	process.AddStepWithAlias("Step2", Step2, Step1)
+}
 ```
 
 ### Step 4: Run Work-Flow
 
 ```go
-// Done will run work-flow and block until all processes are completed.
-// Although you can use workflow.Flow(), it's a asynchronous method.
-features := workflow.Done()
+func main() {
+    // Done flow run work-flow and block until all processes are completed.
+    // If you want to run  asynchronously, you could use AsyncFlow in stead
+    // AsyncFlow can stop and pause the workflow or process.
+	features := flow.DoneFlow("MyFlow", map[string]any{"name": "foo"})
+}
 ```
 
 ### Step 5: Get Execute Result By Features
 
 ```go
-for name, feature := range features {
-    if feature.Success() {
-		// ExplainStatus compresses the status of all steps in the process.
-		fmt.Printf("process[%s] result: %v \n", name, feature.ExplainStatus())
-    } else {
-        fmt.Printf("process[%s] occur error: %v \n", name, feature.ExplainStatus())
-    }
+func main() {
+	features := flow.DoneFlow("MyFlow", map[string]any{"name": "foo"})
+	for processName, feature := range features {
+        // ExplainStatus compresses the status of all steps in the process.
+        // The status includes Success, Failed, Error, Timeout, and Panic.
+        // More status define see in common.go
+		explain := feature.ExplainStatus()
+		fmt.Printf("process[%s] explain=%s\n", processName, explain)
+		if !feature.Success() {
+			fmt.Printf("process[%s] run fail\n", processName)
+		}
+	}
 }
 ```
 
@@ -144,41 +161,43 @@ func Step2(ctx *flow.Context) (any, error) {
 	return nil, nil
 }
 
-func MyWorkFlow(input map[string]any) {
-	workflow := flow.NewWorkflow[any](input)
+func init() {
+	workflow := flow.RegisterFlow("MyFlow")
 	config := flow.ProcessConfig{
 		StepRetry:   3,
 		StepTimeout: 30 * time.Minute,
 	}
-	process := workflow.AddProcess("process1", &config)
+	process := workflow.AddProcess("MyProcess", &config)
 	process.AddStep(Step1)
-	process.AddStep(Step2, Step1)
-	features := workflow.Done()
-	for name, feature := range features {
-		if feature.Success() {
-			fmt.Printf("process[%s] result: %v \n", name, feature.ExplainStatus())
-		} else {
-			fmt.Printf("process[%s] occur error: %v \n", name, feature.ExplainStatus())
-		}
-	}
+	process.AddStepWithAlias("Step2", Step2, Step1)
 }
 
 func main() {
-	MyWorkFlow(map[string]any{"name": "foo"})
+	features := flow.DoneFlow("MyFlow", map[string]any{"name": "foo"})
+	for processName, feature := range features {
+		explain := feature.ExplainStatus()
+		fmt.Printf("process[%s] explain=%s\n", processName, explain)
+		if !feature.Success() {
+			fmt.Printf("process[%s] run fail\n", processName)
+		}
+	}
 }
 ```
 
-## Features Introduction
+## Advance Usage
 
+### Depends
 
+1. Depends indicates that the current step will not be executed until all dependent steps are completed.
+2. flow.Context use adjacency list as data structure. The current step can only access context from dependent steps up to the root step.
 
 ### Context Connect And Isolation
 
 We define dependencies like flow code.
 
 ```go
-workflow := flow.NewWorkflow[any](nil)
-process := workflow.AddProcess("process", nil)
+workflow := flow.RegisterFlow("MyFlow")
+process := workflow.AddProcess("MyProcess", nil)
 process.AddStep(TaskA)
 process.AddStep(TaskB, TaskA)
 process.AddStep(TaskC, TaskA)
@@ -201,4 +220,25 @@ finally matched in global contxt.
 
 You can use AddPriority to break the order 
 ```
+
+### Process Reuse And Merge
+
+You can add a registered process to the work-flow and merge a registered process into the current process.
+
+```go
+workflow := flow.RegisterFlow("MyFlow")
+// Add a registered process called 'RegisterProcess' to the current workflow.
+workflow.AddRegisterProcess("RegisterProcess")
+
+process := workflow.AddProcess("MyProcess", nil)
+// Merge process called 'AnotherProcess' to the current process.
+process.Merge("AnotherProcess")
+// You can merge a process to the current process at any position, 
+// and you can still add your own steps both before and after the merge operation.
+process.AddStep(TaskA)
+```
+
+**Merge will eliminates duplicate steps and merges the dependencies of duplicate steps after deduplication.**
+
+**If merge creates a cycle, then Merge method will panic and it indicates which two steps form the cycle.**
 
