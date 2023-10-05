@@ -102,7 +102,7 @@ func ErrorResultPrinter(info *flow.StepInfo) bool {
 	return true
 }
 
-func CompleteProcessor(info *flow.ProcessInfo) bool {
+func ProcProcessor(info *flow.ProcessInfo) bool {
 	if info.Name == "" {
 		panic("process name is empty")
 	}
@@ -119,19 +119,186 @@ func CompleteProcessor(info *flow.ProcessInfo) bool {
 		panic("process step map is empty")
 	}
 	atomic.AddInt64(&current, 1)
-	fmt.Printf("process[%s] CompleteProcessor execute \n", info.Name)
+	fmt.Printf("process[%s] ProcProcessor execute \n", info.Name)
 	return true
+}
+
+func PanicProcProcessor(info *flow.ProcessInfo) bool {
+	atomic.AddInt64(&current, 1)
+	panic("PanicProcProcessor panic")
+	return true
+}
+
+func PanicStepProcessor(info *flow.StepInfo) bool {
+	atomic.AddInt64(&current, 1)
+	panic("PanicStepProcessor panic")
+	return true
+}
+
+func TestNonEssentialProcProcessorPanic(t *testing.T) {
+	defer resetCurrent()
+	workflow := flow.RegisterFlow("TestNonEssentialProcProcessorPanic1")
+	process := workflow.AddProcess("TestNonEssentialProcProcessorPanic1", nil)
+	process.AddStepWithAlias("1", GenerateStep(1))
+	process.AddBeforeProcess(false, PanicProcProcessor)
+	features := flow.DoneFlow("TestNonEssentialProcProcessorPanic1", nil)
+	for name, feature := range features {
+		explain := feature.ExplainStatus()
+		if !feature.Success() {
+			t.Errorf("process[%s] failed,explian=%v", name, explain)
+		}
+		if slices.Contains(explain, "Panic") {
+			t.Errorf("process[%s] not panic, but explain contain, but explain=%v", name, explain)
+		}
+	}
+	if atomic.LoadInt64(&current) != 2 {
+		t.Errorf("execute 2 step, but current = %d", current)
+	}
+	resetCurrent()
+	workflow = flow.RegisterFlow("TestNonEssentialProcProcessorPanic2")
+	process = workflow.AddProcess("TestNonEssentialProcProcessorPanic2", nil)
+	process.AddStepWithAlias("1", GenerateStep(1))
+	process.AddAfterProcess(false, PanicProcProcessor)
+	features = flow.DoneFlow("TestNonEssentialProcProcessorPanic2", nil)
+	for name, feature := range features {
+		explain := feature.ExplainStatus()
+		if !feature.Success() {
+			t.Errorf("process[%s] failed,explian=%v", name, explain)
+		}
+		if slices.Contains(explain, "Panic") {
+			t.Errorf("process[%s] not panic, but explain not contain, but explain=%v", name, explain)
+		}
+	}
+	if atomic.LoadInt64(&current) != 2 {
+		t.Errorf("execute 2 step, but current = %d", current)
+	}
+}
+
+func TestEssentialProcProcessorPanic(t *testing.T) {
+	defer resetCurrent()
+	workflow := flow.RegisterFlow("TestEssentialProcProcessorPanic1")
+	process := workflow.AddProcess("TestEssentialProcProcessorPanic1", nil)
+	process.AddStepWithAlias("1", GenerateStep(1))
+	process.AddBeforeProcess(true, PanicProcProcessor)
+	features := flow.DoneFlow("TestEssentialProcProcessorPanic1", nil)
+	for name, feature := range features {
+		if feature.Success() {
+			t.Errorf("process[%s] success, but expected failed", name)
+		}
+		explain := feature.ExplainStatus()
+		if !slices.Contains(explain, "Panic") {
+			t.Errorf("process[%s] panic, but explain not cotain, but explain=%v", name, explain)
+		}
+	}
+	if atomic.LoadInt64(&current) != 1 {
+		t.Errorf("execute 1 step, but current = %d", current)
+	}
+	resetCurrent()
+	workflow = flow.RegisterFlow("TestEssentialProcProcessorPanic2")
+	process = workflow.AddProcess("TestEssentialProcProcessorPanic2", nil)
+	process.AddStepWithAlias("1", GenerateStep(1))
+	process.AddAfterProcess(true, PanicProcProcessor)
+	features = flow.DoneFlow("TestEssentialProcProcessorPanic2", nil)
+	for name, feature := range features {
+		if feature.Success() {
+			t.Errorf("process[%s] success, but expected failed", name)
+		}
+		explain := feature.ExplainStatus()
+		if !slices.Contains(explain, "Panic") {
+			t.Errorf("process[%s] panic, but explain not cotain, but explain=%v", name, explain)
+		}
+	}
+	if atomic.LoadInt64(&current) != 2 {
+		t.Errorf("execute 2 step, but current = %d", current)
+	}
+}
+
+func TestNonEssentialStepProcessorPanic(t *testing.T) {
+	defer resetCurrent()
+	workflow := flow.RegisterFlow("TestNonEssentialStepProcessorPanic1")
+	process := workflow.AddProcess("TestNonEssentialStepProcessorPanic1", nil)
+	process.AddStepWithAlias("1", GenerateStep(1))
+	process.AddBeforeStep(false, PanicStepProcessor)
+	features := flow.DoneFlow("TestNonEssentialStepProcessorPanic1", nil)
+	for name, feature := range features {
+		explain := feature.ExplainStatus()
+		if !feature.Success() {
+			t.Errorf("process[%s] failed,explian=%v", name, explain)
+		}
+		if slices.Contains(explain, "Panic") {
+			t.Errorf("process[%s] not panic, but explain contain, but explain=%v", name, explain)
+		}
+	}
+	if atomic.LoadInt64(&current) != 2 {
+		t.Errorf("execute 2 step, but current = %d", current)
+	}
+	resetCurrent()
+	workflow = flow.RegisterFlow("TestNonEssentialStepProcessorPanic2")
+	process = workflow.AddProcess("TestNonEssentialStepProcessorPanic2", nil)
+	process.AddStepWithAlias("1", GenerateStep(1))
+	process.AddAfterStep(false, PanicStepProcessor)
+	features = flow.DoneFlow("TestNonEssentialStepProcessorPanic2", nil)
+	for name, feature := range features {
+		explain := feature.ExplainStatus()
+		if !feature.Success() {
+			t.Errorf("process[%s] failed,explian=%v", name, explain)
+		}
+		if slices.Contains(explain, "Panic") {
+			t.Errorf("process[%s] not panic, but explain not contain, but explain=%v", name, explain)
+		}
+	}
+	if atomic.LoadInt64(&current) != 2 {
+		t.Errorf("execute 2 step, but current = %d", current)
+	}
+}
+
+func TestEssentialStepProcessorPanic(t *testing.T) {
+	defer resetCurrent()
+	workflow := flow.RegisterFlow("TestEssentialStepProcessorPanic1")
+	process := workflow.AddProcess("TestEssentialStepProcessorPanic1", nil)
+	process.AddStepWithAlias("1", GenerateStep(1))
+	process.AddBeforeStep(true, PanicStepProcessor)
+	features := flow.DoneFlow("TestEssentialStepProcessorPanic1", nil)
+	for name, feature := range features {
+		if feature.Success() {
+			t.Errorf("process[%s] success, but expected failed", name)
+		}
+		explain := feature.ExplainStatus()
+		if !slices.Contains(explain, "Panic") {
+			t.Errorf("process[%s] panic, but explain not cotain, but explain=%v", name, explain)
+		}
+	}
+	if atomic.LoadInt64(&current) != 1 {
+		t.Errorf("execute 1 step, but current = %d", current)
+	}
+	resetCurrent()
+	workflow = flow.RegisterFlow("TestEssentialStepProcessorPanic2")
+	process = workflow.AddProcess("TestEssentialStepProcessorPanic2", nil)
+	process.AddStepWithAlias("1", GenerateStep(1))
+	process.AddAfterStep(true, PanicStepProcessor)
+	features = flow.DoneFlow("TestEssentialStepProcessorPanic2", nil)
+	for name, feature := range features {
+		if feature.Success() {
+			t.Errorf("process[%s] success, but expected failed", name)
+		}
+		explain := feature.ExplainStatus()
+		if !slices.Contains(explain, "Panic") {
+			t.Errorf("process[%s] panic, but explain not cotain, but explain=%v", name, explain)
+		}
+	}
+	if atomic.LoadInt64(&current) != 2 {
+		t.Errorf("execute 2 step, but current = %d", current)
+	}
 }
 
 func TestProcessorWhenExceptionOccur(t *testing.T) {
 	defer resetCurrent()
-	config := flow.ProcessConfig{
-		PreProcessors:      []func(*flow.StepInfo) bool{PreProcessor},
-		PostProcessors:     []func(*flow.StepInfo) bool{PostProcessor},
-		CompleteProcessors: []func(*flow.ProcessInfo) bool{CompleteProcessor},
-	}
 	workflow := flow.RegisterFlow("TestProcessorWhenExceptionOccur")
-	process := workflow.AddProcess("TestProcessorWhenExceptionOccur", &config)
+	process := workflow.AddProcess("TestProcessorWhenExceptionOccur", nil)
+	process.AddBeforeStep(true, PreProcessor)
+	process.AddAfterStep(true, PostProcessor)
+	process.AddBeforeProcess(true, ProcProcessor)
+	process.AddAfterProcess(true, ProcProcessor)
 	process.AddStepWithAlias("1", GenerateErrorStep(1))
 	process.AddStepWithAlias("2", GeneratePanicStep(2))
 	step := process.AddStepWithAlias("3", GenerateErrorStep(3))
@@ -152,8 +319,8 @@ func TestProcessorWhenExceptionOccur(t *testing.T) {
 			t.Errorf("process[%s] panic, but explain not cotain, but explain=%v", name, explain)
 		}
 	}
-	if atomic.LoadInt64(&current) != 10 {
-		t.Errorf("execute 10 step, but current = %d", current)
+	if atomic.LoadInt64(&current) != 11 {
+		t.Errorf("execute 11 step, but current = %d", current)
 	}
 }
 func TestInfoCorrect(t *testing.T) {
@@ -161,22 +328,15 @@ func TestInfoCorrect(t *testing.T) {
 	defer func() {
 		flow.SetDefaultProcessConfig(nil)
 	}()
-	config := flow.ProcessConfig{
-		PreProcessors: []func(*flow.StepInfo) bool{
-			StepInfoChecker("1", []string{}, []string{"2", "3"}),
-			StepInfoChecker("2", []string{"1"}, []string{"4"}),
-			StepInfoChecker("3", []string{"1"}, []string{"4"}),
-			StepInfoChecker("4", []string{"2", "3"}, []string{}),
-		},
-
-		PostProcessors: []func(*flow.StepInfo) bool{
-			StepInfoChecker("1", []string{}, []string{"2", "3"}),
-			StepInfoChecker("2", []string{"1"}, []string{"4"}),
-			StepInfoChecker("3", []string{"1"}, []string{"4"}),
-			StepInfoChecker("4", []string{"2", "3"}, []string{}),
-		},
-		CompleteProcessors: []func(*flow.ProcessInfo) bool{ProcessInfoChecker},
-	}
+	config := flow.ProcessConfig{}
+	config.AddBeforeStep(true, StepInfoChecker("1", []string{}, []string{"2", "3"}))
+	config.AddBeforeStep(true, StepInfoChecker("2", []string{"1"}, []string{"4"}))
+	config.AddBeforeStep(true, StepInfoChecker("3", []string{"1"}, []string{"4"}))
+	config.AddBeforeStep(true, StepInfoChecker("4", []string{"2", "3"}, []string{}))
+	config.AddAfterStep(true, StepInfoChecker("1", []string{}, []string{"2", "3"}))
+	config.AddAfterStep(true, StepInfoChecker("2", []string{"1"}, []string{"4"}))
+	config.AddAfterStep(true, StepInfoChecker("3", []string{"1"}, []string{"4"}))
+	config.AddAfterStep(true, StepInfoChecker("4", []string{"2", "3"}, []string{}))
 	flow.SetDefaultProcessConfig(&config)
 	workflow := flow.RegisterFlow("TestInfoCorrect")
 	process := workflow.AddProcess("TestInfoCorrect", nil)
@@ -190,8 +350,8 @@ func TestInfoCorrect(t *testing.T) {
 			t.Errorf("process[%s] fail", name)
 		}
 	}
-	if atomic.LoadInt64(&current) != 13 {
-		t.Errorf("execute 13 step, but current = %d", current)
+	if atomic.LoadInt64(&current) != 12 {
+		t.Errorf("execute 12 step, but current = %d", current)
 	}
 }
 
@@ -200,11 +360,11 @@ func TestDefaultProcessConfig(t *testing.T) {
 	defer func() {
 		flow.SetDefaultProcessConfig(nil)
 	}()
-	config := flow.ProcessConfig{
-		PreProcessors:      []func(*flow.StepInfo) bool{PreProcessor},
-		PostProcessors:     []func(*flow.StepInfo) bool{PostProcessor},
-		CompleteProcessors: []func(*flow.ProcessInfo) bool{CompleteProcessor},
-	}
+	config := flow.ProcessConfig{}
+	config.AddBeforeStep(true, PreProcessor)
+	config.AddAfterStep(true, PostProcessor)
+	config.AddBeforeProcess(true, ProcProcessor)
+	config.AddAfterProcess(true, ProcProcessor)
 	flow.SetDefaultProcessConfig(&config)
 	workflow := flow.RegisterFlow("TestDefaultProcessConfig")
 	process := workflow.AddProcess("TestDefaultProcessConfig", nil)
@@ -218,19 +378,19 @@ func TestDefaultProcessConfig(t *testing.T) {
 			t.Errorf("process[%s] fail", name)
 		}
 	}
-	if atomic.LoadInt64(&current) != 13 {
-		t.Errorf("execute 13 step, but current = %d", current)
+	if atomic.LoadInt64(&current) != 14 {
+		t.Errorf("execute 14 step, but current = %d", current)
 	}
 }
 
 func TestPreAndPostProcessor(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestPreAndPostProcessor")
-	config := flow.ProcessConfig{
-		PreProcessors:      []func(*flow.StepInfo) bool{PreProcessor},
-		PostProcessors:     []func(*flow.StepInfo) bool{PostProcessor},
-		CompleteProcessors: []func(*flow.ProcessInfo) bool{CompleteProcessor},
-	}
+	config := flow.ProcessConfig{}
+	config.AddBeforeStep(true, PreProcessor)
+	config.AddAfterStep(true, PostProcessor)
+	config.AddBeforeProcess(true, ProcProcessor)
+	config.AddAfterProcess(true, ProcProcessor)
 	process := workflow.AddProcess("TestPreAndPostProcessor", nil)
 	process.AddConfig(&config)
 	process.AddStepWithAlias("1", GenerateStep(1))
@@ -243,15 +403,15 @@ func TestPreAndPostProcessor(t *testing.T) {
 			t.Errorf("process[%s] fail", name)
 		}
 	}
-	if atomic.LoadInt64(&current) != 13 {
-		t.Errorf("execute 13 step, but current = %d", current)
+	if atomic.LoadInt64(&current) != 14 {
+		t.Errorf("execute 14 step, but current = %d", current)
 	}
 }
 
 func TestWithLongProcessTimeout(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestWithLongProcessTimeout")
-	config := flow.ProcessConfig{ProcessTimeout: 1 * time.Second}
+	config := flow.ProcessConfig{ProcTimeout: 1 * time.Second}
 	process := workflow.AddProcess("TestWithLongProcessTimeout", nil)
 	process.AddConfig(&config)
 	process.AddStepWithAlias("1", GenerateStep(1))
@@ -272,7 +432,7 @@ func TestWithLongProcessTimeout(t *testing.T) {
 func TestWithShortProcessTimeout(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestWithShortProcessTimeout")
-	config := flow.ProcessConfig{ProcessTimeout: 1 * time.Millisecond}
+	config := flow.ProcessConfig{ProcTimeout: 1 * time.Millisecond}
 	process := workflow.AddProcess("TestWithShortProcessTimeout", nil)
 	process.AddConfig(&config)
 	process.AddStepWithAlias("1", GenerateStep(1))

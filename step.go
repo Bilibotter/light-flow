@@ -2,6 +2,7 @@ package light_flow
 
 import (
 	"fmt"
+	"sync/atomic"
 	"time"
 )
 
@@ -49,6 +50,21 @@ type StepInfo struct {
 type StepConfig struct {
 	Timeout  time.Duration
 	MaxRetry int
+}
+
+func (si *StepInfo) Success() bool {
+	return si.Status&Success == Success && IsStatusNormal(atomic.LoadInt64(&si.Status))
+}
+
+func (si *StepInfo) Exceptions() []string {
+	if si.Success() {
+		return nil
+	}
+	return ExplainStatus(si.Status)
+}
+
+func (si *StepInfo) Error() error {
+	return si.Err
 }
 
 func (meta *StepMeta) AddPriority(priority map[string]any) {
