@@ -129,10 +129,113 @@ func PanicProcProcessor(info *flow.ProcessInfo) bool {
 	return true
 }
 
+func CheckStepCurrent(i int) func(info *flow.StepInfo) bool {
+	return func(info *flow.StepInfo) bool {
+		if atomic.LoadInt64(&current) != int64(i) {
+			panic(fmt.Sprintf("current number not equal check number,check number=%d", i))
+		}
+		atomic.AddInt64(&current, 1)
+		return true
+	}
+}
+
+func CheckProcCurrent(i int) func(info *flow.ProcessInfo) bool {
+	return func(info *flow.ProcessInfo) bool {
+		if atomic.LoadInt64(&current) != int64(i) {
+			panic(fmt.Sprintf("current number not equal check number,check number=%d", i))
+		}
+		atomic.AddInt64(&current, 1)
+		return true
+	}
+}
+
 func PanicStepProcessor(info *flow.StepInfo) bool {
 	atomic.AddInt64(&current, 1)
 	panic("PanicStepProcessor panic")
 	return true
+}
+
+func TestProcessorRandomOrder(t *testing.T) {
+	defer resetCurrent()
+	workflow := flow.RegisterFlow("TestProcessorRandomOrder")
+	process := workflow.AddProcess("TestProcessorRandomOrder", nil)
+	process.AddStepWithAlias("1", GenerateStep(1))
+	process.AddBeforeStep(false, CheckStepCurrent(3))
+	process.AddBeforeStep(true, CheckStepCurrent(0))
+	process.AddBeforeStep(true, CheckStepCurrent(1))
+	process.AddBeforeStep(false, CheckStepCurrent(4))
+	process.AddBeforeStep(false, CheckStepCurrent(5))
+	process.AddBeforeStep(true, CheckStepCurrent(2))
+	process.AddBeforeStep(false, CheckStepCurrent(6))
+	features := flow.DoneFlow("TestProcessorRandomOrder", nil)
+	for name, feature := range features {
+		explain := feature.ExplainStatus()
+		if !feature.Success() {
+			t.Errorf("process[%s] failed,explian=%v", name, explain)
+		}
+		if slices.Contains(explain, "Panic") {
+			t.Errorf("process[%s] not panic, but explain contain, but explain=%v", name, explain)
+		}
+	}
+	if atomic.LoadInt64(&current) != 8 {
+		t.Errorf("execute 8 step, but current = %d", current)
+	}
+}
+
+func TestProcessorOrder2(t *testing.T) {
+	defer resetCurrent()
+	workflow := flow.RegisterFlow("TestProcessorOrder2")
+	process := workflow.AddProcess("TestProcessorOrder2", nil)
+	process.AddStepWithAlias("1", GenerateStep(1))
+	process.AddBeforeProcess(false, CheckProcCurrent(1))
+	process.AddBeforeProcess(true, CheckProcCurrent(0))
+	process.AddBeforeStep(false, CheckStepCurrent(3))
+	process.AddBeforeStep(true, CheckStepCurrent(2))
+	process.AddAfterStep(false, CheckStepCurrent(6))
+	process.AddAfterStep(true, CheckStepCurrent(5))
+	process.AddAfterProcess(false, CheckProcCurrent(8))
+	process.AddAfterProcess(true, CheckProcCurrent(7))
+	features := flow.DoneFlow("TestProcessorOrder2", nil)
+	for name, feature := range features {
+		explain := feature.ExplainStatus()
+		if !feature.Success() {
+			t.Errorf("process[%s] failed,explian=%v", name, explain)
+		}
+		if slices.Contains(explain, "Panic") {
+			t.Errorf("process[%s] not panic, but explain contain, but explain=%v", name, explain)
+		}
+	}
+	if atomic.LoadInt64(&current) != 9 {
+		t.Errorf("execute 9 step, but current = %d", current)
+	}
+}
+
+func TestProcessorOrder1(t *testing.T) {
+	defer resetCurrent()
+	workflow := flow.RegisterFlow("TestProcessorOrder1")
+	process := workflow.AddProcess("TestProcessorOrder1", nil)
+	process.AddStepWithAlias("1", GenerateStep(1))
+	process.AddBeforeProcess(true, CheckProcCurrent(0))
+	process.AddBeforeProcess(false, CheckProcCurrent(1))
+	process.AddBeforeStep(true, CheckStepCurrent(2))
+	process.AddBeforeStep(false, CheckStepCurrent(3))
+	process.AddAfterStep(true, CheckStepCurrent(5))
+	process.AddAfterStep(false, CheckStepCurrent(6))
+	process.AddAfterProcess(true, CheckProcCurrent(7))
+	process.AddAfterProcess(false, CheckProcCurrent(8))
+	features := flow.DoneFlow("TestProcessorOrder1", nil)
+	for name, feature := range features {
+		explain := feature.ExplainStatus()
+		if !feature.Success() {
+			t.Errorf("process[%s] failed,explian=%v", name, explain)
+		}
+		if slices.Contains(explain, "Panic") {
+			t.Errorf("process[%s] not panic, but explain contain, but explain=%v", name, explain)
+		}
+	}
+	if atomic.LoadInt64(&current) != 9 {
+		t.Errorf("execute 9 step, but current = %d", current)
+	}
 }
 
 func TestNonEssentialProcProcessorPanic(t *testing.T) {
