@@ -180,12 +180,12 @@ func (rp *RunProcess) scheduleNextSteps(step *RunStep) {
 }
 
 func (rp *RunProcess) runStep(step *RunStep) {
-	step.Start = time.Now().UTC()
+	defer func() { step.finish <- true }()
 
+	step.Start = time.Now().UTC()
 	rp.beforeStep(step)
 	// if beforeStep panic occur, the step will mark as panic
 	if !IsStatusNormal(step.status) {
-		step.finish <- true
 		return
 	}
 
@@ -203,10 +203,8 @@ func (rp *RunProcess) runStep(step *RunStep) {
 			AppendStatus(&step.status, Panic)
 			step.Err = panicErr
 			step.End = time.Now().UTC()
-			step.finish <- true
 		}
 		rp.afterStep(step)
-		step.finish <- true
 	}()
 
 	for i := 0; i < retry; i++ {

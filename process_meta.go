@@ -33,7 +33,7 @@ type ProcessInfo struct {
 type ProcProcessor struct {
 	// If keepOn is false, the next processors will not be executed
 	Before func(info *ProcessInfo) (keepOn bool)
-	// If execute success, abnormal will be nil
+	// If execute success, info.Exceptions() will be nil
 	After func(info *ProcessInfo) (keepOn bool)
 	// If Must is false, the process will continue to execute
 	// even if the processor fails
@@ -43,7 +43,7 @@ type ProcProcessor struct {
 type StepProcessor struct {
 	// If keepOn is false, the next processors will not be executed
 	Before func(info *StepInfo) (keepOn bool)
-	// If execute success, abnormal will be nil
+	// If execute success, info.Exceptions() will be nil
 	After func(info *StepInfo) (keepOn bool)
 	// If Must is false, the process will continue to execute,
 	// even if the processor fails
@@ -64,10 +64,10 @@ func SetDefaultProcessConfig(config *ProcessConfig) {
 	defaultProcessConfig = config
 }
 
-func (pc *ProcessConfig) AddBeforeStep(must bool, processor func(info *StepInfo) (keepOn bool)) {
+func (pc *ProcessConfig) AddBeforeStep(must bool, callback func(info *StepInfo) (keepOn bool)) {
 	before := &StepProcessor{
 		Must:   must,
-		Before: processor,
+		Before: callback,
 	}
 	pc.stepCallback = append(pc.stepCallback, before)
 	sort.SliceStable(pc.stepCallback, func(i, j int) bool {
@@ -78,11 +78,10 @@ func (pc *ProcessConfig) AddBeforeStep(must bool, processor func(info *StepInfo)
 	})
 }
 
-func (pc *ProcessConfig) AddAfterStep(must bool, processor func(info *StepInfo) (keepOn bool)) {
-
+func (pc *ProcessConfig) AddAfterStep(must bool, callback func(info *StepInfo) (keepOn bool)) {
 	after := &StepProcessor{
 		Must:  must,
-		After: processor,
+		After: callback,
 	}
 	pc.stepCallback = append(pc.stepCallback, after)
 	sort.SliceStable(pc.stepCallback, func(i, j int) bool {
@@ -93,10 +92,10 @@ func (pc *ProcessConfig) AddAfterStep(must bool, processor func(info *StepInfo) 
 	})
 }
 
-func (pc *ProcessConfig) AddBeforeProcess(must bool, processor func(info *ProcessInfo) (keepOn bool)) {
+func (pc *ProcessConfig) AddBeforeProcess(must bool, callback func(info *ProcessInfo) (keepOn bool)) {
 	before := &ProcProcessor{
 		Must:   must,
-		Before: processor,
+		Before: callback,
 	}
 	pc.procCallback = append(pc.procCallback, before)
 	sort.SliceStable(pc.procCallback, func(i, j int) bool {
@@ -107,10 +106,10 @@ func (pc *ProcessConfig) AddBeforeProcess(must bool, processor func(info *Proces
 	})
 }
 
-func (pc *ProcessConfig) AddAfterProcess(must bool, processor func(info *ProcessInfo) (keepOn bool)) {
+func (pc *ProcessConfig) AddAfterProcess(must bool, callback func(info *ProcessInfo) (keepOn bool)) {
 	after := &ProcProcessor{
 		Must:  must,
-		After: processor,
+		After: callback,
 	}
 	pc.procCallback = append(pc.procCallback, after)
 	sort.SliceStable(pc.procCallback, func(i, j int) bool {
@@ -130,6 +129,7 @@ func (pp *ProcProcessor) callback(flag string, info *ProcessInfo) (keepOn bool, 
 		if !pp.Must {
 			return
 		}
+		// this will lead to turn process status to panic
 		err = fmt.Errorf("panic: %v\n\n%s", r, string(debug.Stack()))
 	}()
 
@@ -156,6 +156,7 @@ func (sp *StepProcessor) callback(flag string, info *StepInfo) (keepOn bool, err
 		if !sp.Must {
 			return
 		}
+		// this will lead to turn step status to panic
 		err = fmt.Errorf("panic: %v\n\n%s", r, string(debug.Stack()))
 	}()
 
@@ -264,20 +265,20 @@ func (pm *ProcessMeta) AddConfig(config *ProcessConfig) {
 	pm.conf = config
 }
 
-func (pm *ProcessMeta) AddBeforeStep(must bool, processor func(info *StepInfo) (keepOn bool)) {
-	pm.conf.AddBeforeStep(must, processor)
+func (pm *ProcessMeta) AddBeforeStep(must bool, callback func(info *StepInfo) (keepOn bool)) {
+	pm.conf.AddBeforeStep(must, callback)
 }
 
-func (pm *ProcessMeta) AddAfterStep(must bool, processor func(info *StepInfo) (keepOn bool)) {
-	pm.conf.AddAfterStep(must, processor)
+func (pm *ProcessMeta) AddAfterStep(must bool, callback func(info *StepInfo) (keepOn bool)) {
+	pm.conf.AddAfterStep(must, callback)
 }
 
-func (pm *ProcessMeta) AddBeforeProcess(must bool, processor func(info *ProcessInfo) (keepOn bool)) {
-	pm.conf.AddBeforeProcess(must, processor)
+func (pm *ProcessMeta) AddBeforeProcess(must bool, callback func(info *ProcessInfo) (keepOn bool)) {
+	pm.conf.AddBeforeProcess(must, callback)
 }
 
-func (pm *ProcessMeta) AddAfterProcess(must bool, processor func(info *ProcessInfo) (keepOn bool)) {
-	pm.conf.AddAfterProcess(must, processor)
+func (pm *ProcessMeta) AddAfterProcess(must bool, callback func(info *ProcessInfo) (keepOn bool)) {
+	pm.conf.AddAfterProcess(must, callback)
 }
 
 func (pm *ProcessMeta) AddStep(run func(ctx *Context) (any, error), depends ...any) *StepMeta {
