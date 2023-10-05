@@ -264,14 +264,10 @@ func (rp *RunProcess) procCallback(flag string) {
 	}
 
 	info := &ProcessInfo{
-		Id:      rp.id,
-		FlowId:  rp.flowId,
-		Name:    rp.processName,
-		StepMap: make(map[string]*StepInfo, len(rp.flowSteps)),
-		Ctx:     rp.Context,
-	}
-	for name, step := range rp.flowSteps {
-		info.StepMap[name] = rp.summaryStepInfo(step)
+		Id:     rp.id,
+		FlowId: rp.flowId,
+		Name:   rp.processName,
+		Ctx:    rp.Context,
 	}
 
 	for _, processor := range rp.conf.procCallback {

@@ -31,19 +31,6 @@ func StepInfoChecker(key string, prev, next []string) func(info *flow.StepInfo) 
 	}
 }
 
-func ProcessInfoChecker(info *flow.ProcessInfo) bool {
-	for _, stepInfo := range info.StepMap {
-		for name, id := range stepInfo.Prev {
-			prev := info.StepMap[name]
-			if prev.Id != id {
-				panic(fmt.Sprintf("step[%s] prev[%s] id not match in step map", stepInfo.Name, prev.Name))
-			}
-		}
-	}
-	atomic.AddInt64(&current, 1)
-	return true
-}
-
 func PreProcessor(info *flow.StepInfo) bool {
 	if len(info.Id) == 0 {
 		panic("step id is empty")
@@ -114,9 +101,6 @@ func ProcProcessor(info *flow.ProcessInfo) bool {
 	}
 	if info.Ctx == nil {
 		panic("process context is nil")
-	}
-	if len(info.StepMap) == 0 {
-		panic("process step map is empty")
 	}
 	atomic.AddInt64(&current, 1)
 	fmt.Printf("process[%s] ProcProcessor execute \n", info.Name)

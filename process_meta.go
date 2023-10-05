@@ -22,12 +22,11 @@ type ProcessMeta struct {
 }
 
 type ProcessInfo struct {
-	Id      string
-	FlowId  string
-	Name    string
-	Status  int64
-	StepMap map[string]*StepInfo
-	Ctx     *Context
+	Id     string
+	FlowId string
+	Name   string
+	Status int64
+	Ctx    *Context
 }
 
 type ProcProcessor struct {
