@@ -30,8 +30,9 @@ type WorkFlowCtrl interface {
 }
 
 type FlowMeta struct {
-	name      string
-	processes []*ProcessMeta
+	name         string
+	processes    []*ProcessMeta
+	flowCallback []*Callback[*FlowInfo]
 }
 
 type RunFlow struct {
@@ -41,6 +42,11 @@ type RunFlow struct {
 	features   map[string]*Feature
 	finish     sync.WaitGroup
 	lock       sync.Mutex
+}
+
+type FlowInfo struct {
+	*BasicInfo
+	Ctx *Context
 }
 
 func init() {
@@ -115,6 +121,10 @@ func BuildWorkflow(name string, input map[string]any) *RunFlow {
 		panic(fmt.Sprintf("flow factory [%s] not found", name))
 	}
 	return factory.(*FlowMeta).BuildWorkflow(input)
+}
+
+func (ff *FlowMeta) AddBeforeFlow(must bool, callback func(*FlowInfo) (keepOn bool)) *Callback[*FlowInfo] {
+	return nil
 }
 
 func (ff *FlowMeta) BuildWorkflow(input map[string]any) *RunFlow {

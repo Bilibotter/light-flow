@@ -2,7 +2,6 @@ package light_flow
 
 import (
 	"fmt"
-	"sync/atomic"
 	"time"
 )
 
@@ -33,11 +32,9 @@ type RunStep struct {
 }
 
 type StepInfo struct {
-	Id        string
+	*BasicInfo
 	ProcessId string
 	FlowId    string
-	Name      string
-	Status    int64
 	Prev      map[string]string // prev step stepName to step id
 	Next      map[string]string // next step stepName to step id
 	Ctx       *Context
@@ -50,17 +47,6 @@ type StepInfo struct {
 type StepConfig struct {
 	Timeout  time.Duration
 	MaxRetry int
-}
-
-func (si *StepInfo) Success() bool {
-	return si.Status&Success == Success && IsStatusNormal(atomic.LoadInt64(&si.Status))
-}
-
-func (si *StepInfo) Exceptions() []string {
-	if si.Success() {
-		return nil
-	}
-	return ExplainStatus(si.Status)
 }
 
 func (si *StepInfo) Error() error {

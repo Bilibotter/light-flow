@@ -67,7 +67,7 @@ func (rp *RunProcess) Stop() {
 
 func (rp *RunProcess) flow() *Feature {
 	AppendStatus(&rp.status, Running)
-	rp.beforeProcess()
+	rp.beforeProc()
 	for _, step := range rp.flowSteps {
 		if step.layer == 1 {
 			go rp.scheduleStep(step)
@@ -133,7 +133,7 @@ func (rp *RunProcess) finalize() {
 	finish := make(chan bool, 1)
 	go func() {
 		rp.needRun.Wait()
-		rp.afterProcess()
+		rp.afterProc()
 		finish <- true
 	}()
 
@@ -223,72 +223,58 @@ func (rp *RunProcess) runStep(step *RunStep) {
 }
 
 func (rp *RunProcess) beforeStep(step *RunStep) {
-	rp.stepCallback(step, "before")
+	rp.stepCallback(step, Before)
 }
 
 func (rp *RunProcess) afterStep(step *RunStep) {
-	rp.stepCallback(step, "after")
+	rp.stepCallback(step, After)
 }
 
 func (rp *RunProcess) stepCallback(step *RunStep, flag string) {
-	if rp.conf == nil {
+	if rp.conf == nil || rp.conf.stepChain == nil {
 		return
 	}
-
 	info := rp.summaryStepInfo(step)
-	for _, processor := range rp.conf.stepCallback {
-		keepOn, err := processor.callback(flag, info)
-		// err != nil when processor that must be executed encounters panic
-		if err != nil {
-			AppendStatus(&step.status, Panic)
-			step.Err = err
-			return
-		}
-		if !keepOn {
-			return
-		}
+	if panicStack := rp.conf.stepChain.process(flag, info); len(panicStack) != 0 {
+		step.Err = fmt.Errorf(panicStack)
 	}
 }
 
-func (rp *RunProcess) beforeProcess() {
-	rp.procCallback("before")
+func (rp *RunProcess) beforeProc() {
+	rp.procCallback(Before)
 }
 
-func (rp *RunProcess) afterProcess() {
-	rp.procCallback("after")
+func (rp *RunProcess) afterProc() {
+	rp.procCallback(After)
 }
 
 func (rp *RunProcess) procCallback(flag string) {
-	if rp.conf == nil {
+	if rp.conf == nil || rp.conf.procChain == nil {
 		return
 	}
 
 	info := &ProcessInfo{
-		Id:     rp.id,
+		BasicInfo: &BasicInfo{
+			Id:     rp.id,
+			Name:   rp.processName,
+			status: &rp.status,
+		},
 		FlowId: rp.flowId,
-		Name:   rp.processName,
 		Ctx:    rp.Context,
 	}
 
-	for _, processor := range rp.conf.procCallback {
-		keepOn, err := processor.callback(flag, info)
-		if err != nil {
-			AppendStatus(&rp.status, Panic)
-			return
-		}
-		if !keepOn {
-			return
-		}
-	}
+	rp.conf.procChain.process(flag, info)
 }
 
 func (rp *RunProcess) summaryStepInfo(step *RunStep) *StepInfo {
 	info := &StepInfo{
-		Id:        step.id,
+		BasicInfo: &BasicInfo{
+			Id:     step.id,
+			Name:   step.stepName,
+			status: &step.status,
+		},
 		ProcessId: step.processId,
 		FlowId:    step.flowId,
-		Name:      step.stepName,
-		Status:    step.status,
 		Ctx:       step.Context,
 		Config:    step.config,
 		Start:     step.Start,

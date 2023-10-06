@@ -74,7 +74,7 @@ func PostProcessor(info *flow.StepInfo) bool {
 	if info.Ctx == nil {
 		panic("step context is nil")
 	}
-	if info.Status == flow.Pending {
+	if info.GetStatus() == flow.Pending {
 		panic("step status is pending")
 	}
 	atomic.AddInt64(&current, 1)
@@ -83,8 +83,8 @@ func PostProcessor(info *flow.StepInfo) bool {
 }
 
 func ErrorResultPrinter(info *flow.StepInfo) bool {
-	if !flow.IsStatusNormal(info.Status) {
-		fmt.Printf("step[%s] error, explain=%v, err=%v\n", info.Name, flow.ExplainStatus(info.Status), info.Err)
+	if !flow.IsStatusNormal(info.GetStatus()) {
+		fmt.Printf("step[%s] error, explain=%v, err=%v\n", info.Name, flow.ExplainStatus(info.GetStatus()), info.Err)
 	}
 	return true
 }

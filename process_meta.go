@@ -2,16 +2,19 @@ package light_flow
 
 import (
 	"fmt"
-	"runtime/debug"
 	"sort"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
 var (
 	lock                 = sync.Mutex{}
 	defaultProcessConfig *ProcessConfig
+)
+
+const (
+	Before = "Before"
+	After  = "After"
 )
 
 type ProcessMeta struct {
@@ -22,39 +25,17 @@ type ProcessMeta struct {
 }
 
 type ProcessInfo struct {
-	Id     string
+	*BasicInfo
 	FlowId string
-	Name   string
-	Status int64
 	Ctx    *Context
 }
 
-type ProcProcessor struct {
-	// If keepOn is false, the next processors will not be executed
-	Before func(info *ProcessInfo) (keepOn bool)
-	// If execute success, info.Exceptions() will be nil
-	After func(info *ProcessInfo) (keepOn bool)
-	// If Must is false, the process will continue to execute
-	// even if the processor fails
-	Must bool
-}
-
-type StepProcessor struct {
-	// If keepOn is false, the next processors will not be executed
-	Before func(info *StepInfo) (keepOn bool)
-	// If execute success, info.Exceptions() will be nil
-	After func(info *StepInfo) (keepOn bool)
-	// If Must is false, the process will continue to execute,
-	// even if the processor fails
-	Must bool
-}
-
 type ProcessConfig struct {
-	StepRetry    int
-	StepTimeout  time.Duration
-	ProcTimeout  time.Duration
-	stepCallback []*StepProcessor
-	procCallback []*ProcProcessor
+	StepRetry   int
+	StepTimeout time.Duration
+	ProcTimeout time.Duration
+	stepChain   *CallbackChain[*StepInfo]
+	procChain   *CallbackChain[*ProcessInfo]
 }
 
 func SetDefaultProcessConfig(config *ProcessConfig) {
@@ -63,125 +44,34 @@ func SetDefaultProcessConfig(config *ProcessConfig) {
 	defaultProcessConfig = config
 }
 
-func (pc *ProcessConfig) AddBeforeStep(must bool, callback func(info *StepInfo) (keepOn bool)) {
-	before := &StepProcessor{
-		Must:   must,
-		Before: callback,
-	}
-	pc.stepCallback = append(pc.stepCallback, before)
-	sort.SliceStable(pc.stepCallback, func(i, j int) bool {
-		if pc.stepCallback[i].Must == pc.stepCallback[j].Must {
-			return i < j
-		}
-		return pc.stepCallback[i].Must
-	})
+func (pc *ProcessConfig) AddBeforeStep(must bool, callback func(*StepInfo) (keepOn bool)) *Callback[*StepInfo] {
+	return pc.addStepCallback(Before, must, callback)
 }
 
-func (pc *ProcessConfig) AddAfterStep(must bool, callback func(info *StepInfo) (keepOn bool)) {
-	after := &StepProcessor{
-		Must:  must,
-		After: callback,
-	}
-	pc.stepCallback = append(pc.stepCallback, after)
-	sort.SliceStable(pc.stepCallback, func(i, j int) bool {
-		if pc.stepCallback[i].Must == pc.stepCallback[j].Must {
-			return i < j
-		}
-		return pc.stepCallback[i].Must
-	})
+func (pc *ProcessConfig) AddAfterStep(must bool, callback func(*StepInfo) (keepOn bool)) *Callback[*StepInfo] {
+	return pc.addStepCallback(After, must, callback)
 }
 
-func (pc *ProcessConfig) AddBeforeProcess(must bool, callback func(info *ProcessInfo) (keepOn bool)) {
-	before := &ProcProcessor{
-		Must:   must,
-		Before: callback,
+func (pc *ProcessConfig) addStepCallback(flag string, must bool, callback func(*StepInfo) bool) *Callback[*StepInfo] {
+	if pc.stepChain == nil {
+		pc.stepChain = &CallbackChain[*StepInfo]{}
 	}
-	pc.procCallback = append(pc.procCallback, before)
-	sort.SliceStable(pc.procCallback, func(i, j int) bool {
-		if pc.procCallback[i].Must == pc.procCallback[j].Must {
-			return i < j
-		}
-		return pc.procCallback[i].Must
-	})
+	return pc.stepChain.Add(flag, must, callback)
 }
 
-func (pc *ProcessConfig) AddAfterProcess(must bool, callback func(info *ProcessInfo) (keepOn bool)) {
-	after := &ProcProcessor{
-		Must:  must,
-		After: callback,
-	}
-	pc.procCallback = append(pc.procCallback, after)
-	sort.SliceStable(pc.procCallback, func(i, j int) bool {
-		if pc.procCallback[i].Must == pc.procCallback[j].Must {
-			return i < j
-		}
-		return pc.procCallback[i].Must
-	})
+func (pc *ProcessConfig) AddBeforeProcess(must bool, callback func(*ProcessInfo) (keepOn bool)) *Callback[*ProcessInfo] {
+	return pc.addProcessCallback(Before, must, callback)
 }
 
-func (pp *ProcProcessor) callback(flag string, info *ProcessInfo) (keepOn bool, err error) {
-	defer func() {
-		r := recover()
-		if r == nil {
-			return
-		}
-		if !pp.Must {
-			return
-		}
-		// this will lead to turn process status to panic
-		err = fmt.Errorf("panic: %v\n\n%s", r, string(debug.Stack()))
-	}()
-
-	switch flag {
-	case "before":
-		if pp.Before != nil && !pp.Before(info) {
-			return
-		}
-	case "after":
-		if pp.After != nil && !pp.After(info) {
-			return
-		}
-	}
-
-	return true, nil
+func (pc *ProcessConfig) AddAfterProcess(must bool, callback func(*ProcessInfo) (keepOn bool)) *Callback[*ProcessInfo] {
+	return pc.addProcessCallback(After, must, callback)
 }
 
-func (sp *StepProcessor) callback(flag string, info *StepInfo) (keepOn bool, err error) {
-	defer func() {
-		r := recover()
-		if r == nil {
-			return
-		}
-		if !sp.Must {
-			return
-		}
-		// this will lead to turn step status to panic
-		err = fmt.Errorf("panic: %v\n\n%s", r, string(debug.Stack()))
-	}()
-
-	switch flag {
-	case "before":
-		if sp.Before != nil && !sp.Before(info) {
-			return
-		}
-	case "after":
-		if sp.After != nil && !sp.After(info) {
-			return
-		}
+func (pc *ProcessConfig) addProcessCallback(flag string, must bool, callback func(*ProcessInfo) bool) *Callback[*ProcessInfo] {
+	if pc.procChain == nil {
+		pc.procChain = &CallbackChain[*ProcessInfo]{}
 	}
-
-	return true, nil
-}
-
-func (pi *ProcessInfo) Success() bool {
-	return pi.Status&Success == Success && IsStatusNormal(atomic.LoadInt64(&pi.Status))
-}
-
-func (pi *ProcessInfo) Exceptions() []string {
-	if pi.Success() {
-		return nil
-	}
-	return ExplainStatus(atomic.LoadInt64(&pi.Status))
+	return pc.procChain.Add(flag, must, callback)
 }
 
 func (pm *ProcessMeta) register() {
@@ -292,7 +182,7 @@ func (pm *ProcessMeta) AddWaitBefore(alias string, run func(ctx *Context) (any, 
 func (pm *ProcessMeta) AddWaitAll(alias string, run func(ctx *Context) (any, error)) *StepMeta {
 	depends := make([]any, 0)
 	for name, step := range pm.steps {
-		if !Contains(&step.position, HasNext) {
+		if !contains(&step.position, HasNext) {
 			depends = append(depends, name)
 		}
 	}
@@ -305,7 +195,7 @@ func (pm *ProcessMeta) AddStepWithAlias(alias string, run func(ctx *Context) (an
 	var oldDepends *Set
 
 	if old, exist := pm.steps[alias]; exist {
-		if !Contains(&pm.steps[alias].position, Merged) {
+		if !contains(&pm.steps[alias].position, Merged) {
 			panic(fmt.Sprintf("step named [%s] already exist, can used %s to avoid stepName duplicate",
 				alias, GetFuncName(pm.AddStepWithAlias)))
 		}
@@ -334,7 +224,7 @@ func (pm *ProcessMeta) AddStepWithAlias(alias string, run func(ctx *Context) (an
 		}
 		meta.depends = append(meta.depends, depend)
 		depend.waiters = append(depend.waiters, meta)
-		if Contains(&depend.position, End) {
+		if contains(&depend.position, End) {
 			AppendStatus(&depend.position, HasNext)
 		}
 		if depend.layer+1 > meta.layer {
