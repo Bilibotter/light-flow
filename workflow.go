@@ -58,6 +58,7 @@ type RunFlow struct {
 	features   map[string]*Feature
 	finish     sync.WaitGroup
 	lock       sync.Mutex
+	status     int64
 }
 
 type FlowInfo struct {
@@ -129,6 +130,34 @@ func BuildWorkflow(name string, input map[string]any) *RunFlow {
 		panic(fmt.Sprintf("flow factory [%s] not found", name))
 	}
 	return factory.(*FlowMeta).BuildWorkflow(input)
+}
+
+func (c *Configuration) AddBeforeStep(must bool, callback func(*StepInfo) (keepOn bool)) *Callback[*StepInfo] {
+	if c.ProcessConfig == nil {
+		c.ProcessConfig = &ProcessConfig{}
+	}
+	return c.ProcessConfig.AddBeforeStep(must, callback)
+}
+
+func (c *Configuration) AddAfterStep(must bool, callback func(*StepInfo) (keepOn bool)) *Callback[*StepInfo] {
+	if c.ProcessConfig == nil {
+		c.ProcessConfig = &ProcessConfig{}
+	}
+	return c.ProcessConfig.AddAfterStep(must, callback)
+}
+
+func (c *Configuration) AddBeforeProcess(must bool, callback func(*ProcessInfo) (keepOn bool)) *Callback[*ProcessInfo] {
+	if c.ProcessConfig == nil {
+		c.ProcessConfig = &ProcessConfig{}
+	}
+	return c.ProcessConfig.AddBeforeProcess(must, callback)
+}
+
+func (c *Configuration) AddAfterProcess(must bool, callback func(*ProcessInfo) (keepOn bool)) *Callback[*ProcessInfo] {
+	if c.ProcessConfig == nil {
+		c.ProcessConfig = &ProcessConfig{}
+	}
+	return c.ProcessConfig.AddAfterProcess(must, callback)
 }
 
 func (fc *FlowConfig) merge(merged *FlowConfig) *FlowConfig {
@@ -217,16 +246,15 @@ func (fm *FlowMeta) AddRegisterProcess(name string) {
 }
 
 func (fm *FlowMeta) AddProcess(name string, conf *ProcessConfig) *ProcessMeta {
-	used := &ProcessConfig{}
-	if defaultConfig != nil && defaultConfig.ProcessConfig != nil {
-		used = defaultConfig.ProcessConfig
-	}
 	if conf != nil {
-		used = conf
-		used.notUseDefault = true
+		conf.notUseDefault = true
 	}
+	if conf == nil {
+		conf = &ProcessConfig{}
+	}
+
 	pm := ProcessMeta{
-		ProcessConfig: used,
+		ProcessConfig: conf,
 		processName:   name,
 		init:          sync.Once{},
 		steps:         make(map[string]*StepMeta),
@@ -289,11 +317,30 @@ func (wf *RunFlow) Flow() map[string]*Feature {
 		return wf.features
 	}
 	wf.initialize()
+	info := &FlowInfo{
+		BasicInfo: &BasicInfo{
+			Id:     wf.id,
+			Name:   wf.name,
+			status: &wf.status,
+		},
+		Ctx: wf.context,
+	}
+	if wf.FlowConfig != nil && wf.FlowConfig.flowCallback != nil {
+		wf.FlowConfig.flowCallback.process(Before, info)
+	}
 	features := make(map[string]*Feature, len(wf.processMap))
 	for name, process := range wf.processMap {
 		features[name] = process.flow()
 	}
 	wf.features = features
+	if wf.FlowConfig != nil && wf.FlowConfig.flowCallback != nil {
+		go func() {
+			for _, feature := range features {
+				feature.Done()
+			}
+			wf.flowCallback.process(After, info)
+		}()
+	}
 	return features
 }
 

@@ -68,7 +68,7 @@ func (rp *RunProcess) Stop() {
 func (rp *RunProcess) flow() *Feature {
 	rp.initialize()
 	AppendStatus(&rp.status, Running)
-	rp.beforeProc()
+	rp.procCallback(Before)
 	for _, step := range rp.flowSteps {
 		if step.layer == 1 {
 			go rp.scheduleStep(step)
@@ -134,7 +134,7 @@ func (rp *RunProcess) finalize() {
 	finish := make(chan bool, 1)
 	go func() {
 		rp.needRun.Wait()
-		rp.afterProc()
+		rp.procCallback(After)
 		finish <- true
 	}()
 
@@ -184,7 +184,7 @@ func (rp *RunProcess) runStep(step *RunStep) {
 	defer func() { step.finish <- true }()
 
 	step.Start = time.Now().UTC()
-	rp.beforeStep(step)
+	rp.stepCallback(step, Before)
 	// if beforeStep panic occur, the step will mark as panic
 	if !IsStatusNormal(step.status) {
 		return
@@ -205,7 +205,7 @@ func (rp *RunProcess) runStep(step *RunStep) {
 			step.Err = panicErr
 			step.End = time.Now().UTC()
 		}
-		rp.afterStep(step)
+		rp.stepCallback(step, After)
 	}()
 
 	for i := 0; i < retry; i++ {
@@ -223,14 +223,6 @@ func (rp *RunProcess) runStep(step *RunStep) {
 	}
 }
 
-func (rp *RunProcess) beforeStep(step *RunStep) {
-	rp.stepCallback(step, Before)
-}
-
-func (rp *RunProcess) afterStep(step *RunStep) {
-	rp.stepCallback(step, After)
-}
-
 func (rp *RunProcess) stepCallback(step *RunStep, flag string) {
 	if rp.ProcessConfig == nil || rp.stepChain == nil {
 		return
@@ -239,14 +231,6 @@ func (rp *RunProcess) stepCallback(step *RunStep, flag string) {
 	if panicStack := rp.stepChain.process(flag, info); len(panicStack) != 0 {
 		step.Err = fmt.Errorf(panicStack)
 	}
-}
-
-func (rp *RunProcess) beforeProc() {
-	rp.procCallback(Before)
-}
-
-func (rp *RunProcess) afterProc() {
-	rp.procCallback(After)
 }
 
 func (rp *RunProcess) procCallback(flag string) {

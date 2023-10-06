@@ -119,6 +119,10 @@ func copyProperties(src, dst interface{}, skipNotEmpty bool) {
 		srcField := srcElem.Field(i)
 		srcFieldName := srcType.Field(i).Name
 
+		if len(srcType.Field(i).PkgPath) != 0 {
+			continue
+		}
+
 		if dstField := dstElem.FieldByName(srcFieldName); dstField.IsValid() && dstField.Type() == srcField.Type() {
 			if skipNotEmpty && !dstField.IsZero() {
 				continue
