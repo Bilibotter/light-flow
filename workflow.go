@@ -15,6 +15,10 @@ var (
 	allProcess sync.Map
 )
 
+var (
+	defaultConfig *Configuration
+)
+
 type Controller interface {
 	Resume()
 	Pause()
@@ -29,13 +33,25 @@ type WorkFlowCtrl interface {
 	GetProcessController(name string) Controller
 }
 
+type Configuration struct {
+	*FlowConfig
+	*ProcessConfig
+}
+
 type FlowMeta struct {
+	*FlowConfig
+	init         sync.Once
 	name         string
+	noUseDefault bool
 	processes    []*ProcessMeta
-	flowCallback []*Callback[*FlowInfo]
+}
+
+type FlowConfig struct {
+	flowCallback *CallbackChain[*FlowInfo]
 }
 
 type RunFlow struct {
+	*FlowMeta
 	id         string
 	processMap map[string]*RunProcess
 	context    *Context
@@ -56,28 +72,20 @@ func init() {
 }
 
 func SetIdGenerator(method func() string) {
-	lock.Lock()
-	defer lock.Unlock()
 	generateId = method
 }
 
-func RegisterFlow(name string) *FlowMeta {
-	flow := FlowMeta{name: name}
-	flow.register()
-	return &flow
+func SetDefaultConfig(config *Configuration) {
+	defaultConfig = config
 }
 
-func (ff *FlowMeta) register() *FlowMeta {
-	if len(ff.name) == 0 {
-		panic("can't register flow factory with empty stepName")
+func RegisterFlow(name string) *FlowMeta {
+	flow := FlowMeta{
+		name: name,
+		init: sync.Once{},
 	}
-
-	_, load := allFlows.LoadOrStore(ff.name, ff)
-	if load {
-		panic(fmt.Sprintf("register duplicate flow factory named [%s]", ff.name))
-	}
-
-	return ff
+	flow.register()
+	return &flow
 }
 
 func AsyncArgs(name string, args ...any) WorkFlowCtrl {
@@ -94,7 +102,7 @@ func AsyncFlow(name string, input map[string]any) WorkFlowCtrl {
 		panic(fmt.Sprintf("flow factory [%s] not found", name))
 	}
 	flow := factory.(*FlowMeta).BuildWorkflow(input)
-	flow.Async()
+	flow.Flow()
 	return flow
 }
 
@@ -123,11 +131,54 @@ func BuildWorkflow(name string, input map[string]any) *RunFlow {
 	return factory.(*FlowMeta).BuildWorkflow(input)
 }
 
-func (ff *FlowMeta) AddBeforeFlow(must bool, callback func(*FlowInfo) (keepOn bool)) *Callback[*FlowInfo] {
+func (fc *FlowConfig) merge(merged *FlowConfig) *FlowConfig {
+	CopyPropertiesSkipNotEmpty(merged, fc)
+	if merged.flowCallback != nil {
+		fc.flowCallback.filters = append(merged.flowCallback.CopyChain(), fc.flowCallback.filters...)
+		fc.flowCallback.sort()
+	}
+	return fc
+}
+
+func (fm *FlowMeta) register() *FlowMeta {
+	if len(fm.name) == 0 {
+		panic("can't register flow factory with empty stepName")
+	}
+
+	_, load := allFlows.LoadOrStore(fm.name, fm)
+	if load {
+		panic(fmt.Sprintf("register duplicate flow factory named [%s]", fm.name))
+	}
+
+	return fm
+}
+
+func (fm *FlowMeta) initialize() {
+	fm.init.Do(func() {
+		if fm.noUseDefault {
+			return
+		}
+		if defaultConfig == nil || defaultConfig.FlowConfig == nil {
+			return
+		}
+		if fm.FlowConfig == nil {
+			fm.FlowConfig = defaultConfig.FlowConfig
+			return
+		}
+		fm.FlowConfig.merge(defaultConfig.FlowConfig)
+	})
+}
+
+func (fm *FlowMeta) NotUseDefault() *FlowMeta {
+	fm.noUseDefault = true
+	return fm
+}
+
+func (fm *FlowMeta) AddBeforeFlow(must bool, callback func(*FlowInfo) (keepOn bool)) *Callback[*FlowInfo] {
 	return nil
 }
 
-func (ff *FlowMeta) BuildWorkflow(input map[string]any) *RunFlow {
+func (fm *FlowMeta) BuildWorkflow(input map[string]any) *RunFlow {
 	context := Context{
 		name:      WorkflowCtx,
 		scopes:    []string{WorkflowCtx},
@@ -141,6 +192,7 @@ func (ff *FlowMeta) BuildWorkflow(input map[string]any) *RunFlow {
 	}
 
 	wf := RunFlow{
+		FlowMeta:   fm,
 		id:         generateId(),
 		lock:       sync.Mutex{},
 		context:    &context,
@@ -148,7 +200,7 @@ func (ff *FlowMeta) BuildWorkflow(input map[string]any) *RunFlow {
 		finish:     sync.WaitGroup{},
 	}
 
-	for _, processMeta := range ff.processes {
+	for _, processMeta := range fm.processes {
 		process := wf.addProcess(processMeta)
 		wf.processMap[process.processName] = process
 	}
@@ -156,30 +208,32 @@ func (ff *FlowMeta) BuildWorkflow(input map[string]any) *RunFlow {
 	return &wf
 }
 
-func (ff *FlowMeta) AddRegisterProcess(name string) {
+func (fm *FlowMeta) AddRegisterProcess(name string) {
 	pm, exist := allProcess.Load(name)
 	if !exist {
 		panic(fmt.Sprintf("process [%s] not registered", name))
 	}
-	ff.processes = append(ff.processes, pm.(*ProcessMeta))
+	fm.processes = append(fm.processes, pm.(*ProcessMeta))
 }
 
-func (ff *FlowMeta) AddProcess(name string, conf *ProcessConfig) *ProcessMeta {
+func (fm *FlowMeta) AddProcess(name string, conf *ProcessConfig) *ProcessMeta {
 	used := &ProcessConfig{}
-	if defaultProcessConfig != nil {
-		used = defaultProcessConfig
+	if defaultConfig != nil && defaultConfig.ProcessConfig != nil {
+		used = defaultConfig.ProcessConfig
 	}
 	if conf != nil {
 		used = conf
+		used.notUseDefault = true
 	}
 	pm := ProcessMeta{
-		processName: name,
-		conf:        used,
-		steps:       make(map[string]*StepMeta),
+		ProcessConfig: used,
+		processName:   name,
+		init:          sync.Once{},
+		steps:         make(map[string]*StepMeta),
 	}
 
 	pm.register()
-	ff.processes = append(ff.processes, &pm)
+	fm.processes = append(fm.processes, &pm)
 
 	return &pm
 }
@@ -215,24 +269,26 @@ func (wf *RunFlow) addProcess(meta *ProcessMeta) *RunProcess {
 
 // Done function will block util all process done.
 func (wf *RunFlow) Done() map[string]*Feature {
-	features := wf.Async()
+	features := wf.Flow()
 	for _, feature := range features {
 		feature.Done()
 	}
 	return features
 }
 
-// Async function asynchronous execute process of workflow and return immediately.
-func (wf *RunFlow) Async() map[string]*Feature {
+// Flow function asynchronous execute process of workflow and return immediately.
+func (wf *RunFlow) Flow() map[string]*Feature {
 	if wf.features != nil {
 		return wf.features
 	}
+	// avoid duplicate call
 	wf.lock.Lock()
 	defer wf.lock.Unlock()
 	// DCL
 	if wf.features != nil {
 		return wf.features
 	}
+	wf.initialize()
 	features := make(map[string]*Feature, len(wf.processMap))
 	for name, process := range wf.processMap {
 		features[name] = process.flow()
@@ -244,7 +300,7 @@ func (wf *RunFlow) Async() map[string]*Feature {
 func (wf *RunFlow) SkipFinishedStep(name string, result any) error {
 	count := 0
 	for processName := range wf.processMap {
-		if err := wf.SkipProcessStep(processName, name, result); err == nil {
+		if err := wf.skipProcessStep(processName, name, result); err == nil {
 			count += 1
 		}
 	}
@@ -258,7 +314,7 @@ func (wf *RunFlow) SkipFinishedStep(name string, result any) error {
 	return nil
 }
 
-func (wf *RunFlow) SkipProcessStep(processName, stepName string, result any) error {
+func (wf *RunFlow) skipProcessStep(processName, stepName string, result any) error {
 	process, exist := wf.processMap[processName]
 	if !exist {
 		return fmt.Errorf("prcoess [%s] not found in workflow", processName)

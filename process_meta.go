@@ -7,21 +7,17 @@ import (
 	"time"
 )
 
-var (
-	lock                 = sync.Mutex{}
-	defaultProcessConfig *ProcessConfig
-)
-
 const (
 	Before = "Before"
 	After  = "After"
 )
 
 type ProcessMeta struct {
+	*ProcessConfig
+	init        sync.Once
 	processName string
 	steps       map[string]*StepMeta
 	tailStep    string
-	conf        *ProcessConfig
 }
 
 type ProcessInfo struct {
@@ -31,25 +27,25 @@ type ProcessInfo struct {
 }
 
 type ProcessConfig struct {
-	StepRetry   int
-	StepTimeout time.Duration
-	ProcTimeout time.Duration
-	stepChain   *CallbackChain[*StepInfo]
-	procChain   *CallbackChain[*ProcessInfo]
+	StepRetry     int
+	StepTimeout   time.Duration
+	ProcTimeout   time.Duration
+	notUseDefault bool
+	stepChain     *CallbackChain[*StepInfo]
+	procChain     *CallbackChain[*ProcessInfo]
 }
 
-func SetDefaultProcessConfig(config *ProcessConfig) {
-	lock.Lock()
-	defer lock.Unlock()
-	defaultProcessConfig = config
-}
-
-func (pc *ProcessConfig) AddBeforeStep(must bool, callback func(*StepInfo) (keepOn bool)) *Callback[*StepInfo] {
-	return pc.addStepCallback(Before, must, callback)
-}
-
-func (pc *ProcessConfig) AddAfterStep(must bool, callback func(*StepInfo) (keepOn bool)) *Callback[*StepInfo] {
-	return pc.addStepCallback(After, must, callback)
+func (pc *ProcessConfig) merge(merged *ProcessConfig) *ProcessConfig {
+	CopyPropertiesSkipNotEmpty(merged, pc)
+	if merged.stepChain != nil {
+		pc.stepChain.filters = append(merged.stepChain.CopyChain(), pc.stepChain.filters...)
+		pc.stepChain.sort()
+	}
+	if merged.procChain != nil {
+		pc.procChain.filters = append(merged.procChain.CopyChain(), pc.procChain.filters...)
+		pc.procChain.sort()
+	}
+	return pc
 }
 
 func (pc *ProcessConfig) addStepCallback(flag string, must bool, callback func(*StepInfo) bool) *Callback[*StepInfo] {
@@ -57,14 +53,6 @@ func (pc *ProcessConfig) addStepCallback(flag string, must bool, callback func(*
 		pc.stepChain = &CallbackChain[*StepInfo]{}
 	}
 	return pc.stepChain.Add(flag, must, callback)
-}
-
-func (pc *ProcessConfig) AddBeforeProcess(must bool, callback func(*ProcessInfo) (keepOn bool)) *Callback[*ProcessInfo] {
-	return pc.addProcessCallback(Before, must, callback)
-}
-
-func (pc *ProcessConfig) AddAfterProcess(must bool, callback func(*ProcessInfo) (keepOn bool)) *Callback[*ProcessInfo] {
-	return pc.addProcessCallback(After, must, callback)
 }
 
 func (pc *ProcessConfig) addProcessCallback(flag string, must bool, callback func(*ProcessInfo) bool) *Callback[*ProcessInfo] {
@@ -79,6 +67,22 @@ func (pm *ProcessMeta) register() {
 	if load {
 		panic(fmt.Sprintf("process[%s] has exist", pm.processName))
 	}
+}
+
+func (pm *ProcessMeta) initialize() {
+	pm.init.Do(func() {
+		if pm.notUseDefault {
+			return
+		}
+		if defaultConfig == nil || defaultConfig.ProcessConfig == nil {
+			return
+		}
+		if pm.ProcessConfig == nil {
+			pm.ProcessConfig = defaultConfig.ProcessConfig
+			return
+		}
+		pm.ProcessConfig.merge(defaultConfig.ProcessConfig)
+	})
 }
 
 func (pm *ProcessMeta) Merge(name string) {
@@ -148,26 +152,6 @@ func (pm *ProcessMeta) updateWaitersLayer(step *StepMeta) {
 			pm.updateWaitersLayer(waiters)
 		}
 	}
-}
-
-func (pm *ProcessMeta) AddConfig(config *ProcessConfig) {
-	pm.conf = config
-}
-
-func (pm *ProcessMeta) AddBeforeStep(must bool, callback func(info *StepInfo) (keepOn bool)) {
-	pm.conf.AddBeforeStep(must, callback)
-}
-
-func (pm *ProcessMeta) AddAfterStep(must bool, callback func(info *StepInfo) (keepOn bool)) {
-	pm.conf.AddAfterStep(must, callback)
-}
-
-func (pm *ProcessMeta) AddBeforeProcess(must bool, callback func(info *ProcessInfo) (keepOn bool)) {
-	pm.conf.AddBeforeProcess(must, callback)
-}
-
-func (pm *ProcessMeta) AddAfterProcess(must bool, callback func(info *ProcessInfo) (keepOn bool)) {
-	pm.conf.AddAfterProcess(must, callback)
 }
 
 func (pm *ProcessMeta) AddStep(run func(ctx *Context) (any, error), depends ...any) *StepMeta {
@@ -241,6 +225,26 @@ func (pm *ProcessMeta) AddStepWithAlias(alias string, run func(ctx *Context) (an
 	pm.steps[alias] = meta
 
 	return meta
+}
+
+func (pm *ProcessMeta) NotUseDefault() {
+	pm.notUseDefault = true
+}
+
+func (pm *ProcessMeta) AddBeforeStep(must bool, callback func(*StepInfo) (keepOn bool)) *Callback[*StepInfo] {
+	return pm.addStepCallback(Before, must, callback)
+}
+
+func (pm *ProcessMeta) AddAfterStep(must bool, callback func(*StepInfo) (keepOn bool)) *Callback[*StepInfo] {
+	return pm.addStepCallback(After, must, callback)
+}
+
+func (pm *ProcessMeta) AddBeforeProcess(must bool, callback func(*ProcessInfo) (keepOn bool)) *Callback[*ProcessInfo] {
+	return pm.addProcessCallback(Before, must, callback)
+}
+
+func (pm *ProcessMeta) AddAfterProcess(must bool, callback func(*ProcessInfo) (keepOn bool)) *Callback[*ProcessInfo] {
+	return pm.addProcessCallback(After, must, callback)
 }
 
 func (pm *ProcessMeta) copyDepends(src, dst string) {

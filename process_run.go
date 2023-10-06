@@ -66,6 +66,7 @@ func (rp *RunProcess) Stop() {
 }
 
 func (rp *RunProcess) flow() *Feature {
+	rp.initialize()
 	AppendStatus(&rp.status, Running)
 	rp.beforeProc()
 	for _, step := range rp.flowSteps {
@@ -113,8 +114,8 @@ func (rp *RunProcess) scheduleStep(step *RunStep) {
 	go rp.runStep(step)
 
 	timeout := 3 * time.Hour
-	if rp.conf != nil && rp.conf.StepTimeout != 0 {
-		timeout = rp.conf.StepTimeout
+	if rp.ProcessConfig != nil && rp.StepTimeout != 0 {
+		timeout = rp.StepTimeout
 	}
 	if step.config != nil && step.config.Timeout != 0 {
 		timeout = step.config.Timeout
@@ -138,8 +139,8 @@ func (rp *RunProcess) finalize() {
 	}()
 
 	timeout := 3 * time.Hour
-	if rp.conf != nil && rp.conf.ProcTimeout != 0 {
-		timeout = rp.conf.ProcTimeout
+	if rp.ProcessConfig != nil && rp.ProcTimeout != 0 {
+		timeout = rp.ProcTimeout
 	}
 
 	timer := time.NewTimer(timeout)
@@ -190,8 +191,8 @@ func (rp *RunProcess) runStep(step *RunStep) {
 	}
 
 	retry := 1
-	if rp.conf != nil && rp.conf.StepRetry > 0 {
-		retry = rp.conf.StepRetry
+	if rp.ProcessConfig != nil && rp.StepRetry > 0 {
+		retry = rp.StepRetry
 	}
 	if step.config != nil && step.config.MaxRetry > 0 {
 		retry = step.config.MaxRetry
@@ -231,11 +232,11 @@ func (rp *RunProcess) afterStep(step *RunStep) {
 }
 
 func (rp *RunProcess) stepCallback(step *RunStep, flag string) {
-	if rp.conf == nil || rp.conf.stepChain == nil {
+	if rp.ProcessConfig == nil || rp.stepChain == nil {
 		return
 	}
 	info := rp.summaryStepInfo(step)
-	if panicStack := rp.conf.stepChain.process(flag, info); len(panicStack) != 0 {
+	if panicStack := rp.stepChain.process(flag, info); len(panicStack) != 0 {
 		step.Err = fmt.Errorf(panicStack)
 	}
 }
@@ -249,7 +250,7 @@ func (rp *RunProcess) afterProc() {
 }
 
 func (rp *RunProcess) procCallback(flag string) {
-	if rp.conf == nil || rp.conf.procChain == nil {
+	if rp.ProcessConfig == nil || rp.procChain == nil {
 		return
 	}
 
@@ -263,7 +264,7 @@ func (rp *RunProcess) procCallback(flag string) {
 		Ctx:    rp.Context,
 	}
 
-	rp.conf.procChain.process(flag, info)
+	rp.procChain.process(flag, info)
 }
 
 func (rp *RunProcess) summaryStepInfo(step *RunStep) *StepInfo {

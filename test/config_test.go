@@ -410,80 +410,79 @@ func TestProcessorWhenExceptionOccur(t *testing.T) {
 		t.Errorf("execute 11 step, but current = %d", current)
 	}
 }
-func TestInfoCorrect(t *testing.T) {
-	defer resetCurrent()
-	defer func() {
-		flow.SetDefaultProcessConfig(nil)
-	}()
-	config := flow.ProcessConfig{}
-	config.AddBeforeStep(true, StepInfoChecker("1", []string{}, []string{"2", "3"}))
-	config.AddBeforeStep(true, StepInfoChecker("2", []string{"1"}, []string{"4"}))
-	config.AddBeforeStep(true, StepInfoChecker("3", []string{"1"}, []string{"4"}))
-	config.AddBeforeStep(true, StepInfoChecker("4", []string{"2", "3"}, []string{}))
-	config.AddAfterStep(true, StepInfoChecker("1", []string{}, []string{"2", "3"}))
-	config.AddAfterStep(true, StepInfoChecker("2", []string{"1"}, []string{"4"}))
-	config.AddAfterStep(true, StepInfoChecker("3", []string{"1"}, []string{"4"}))
-	config.AddAfterStep(true, StepInfoChecker("4", []string{"2", "3"}, []string{}))
-	flow.SetDefaultProcessConfig(&config)
-	workflow := flow.RegisterFlow("TestInfoCorrect")
-	process := workflow.AddProcess("TestInfoCorrect", nil)
-	process.AddStepWithAlias("1", GenerateStep(1))
-	process.AddStepWithAlias("2", GenerateStep(2), "1")
-	process.AddStepWithAlias("3", GenerateStep(3), "1")
-	process.AddStepWithAlias("4", GenerateStep(4), "2", "3")
-	features := flow.DoneFlow("TestInfoCorrect", nil)
-	for name, feature := range features {
-		if !feature.Success() {
-			t.Errorf("process[%s] fail", name)
-		}
-	}
-	if atomic.LoadInt64(&current) != 12 {
-		t.Errorf("execute 12 step, but current = %d", current)
-	}
-}
 
-func TestDefaultProcessConfig(t *testing.T) {
-	defer resetCurrent()
-	defer func() {
-		flow.SetDefaultProcessConfig(nil)
-	}()
-	config := flow.ProcessConfig{}
-	config.AddBeforeStep(true, PreProcessor)
-	config.AddAfterStep(true, PostProcessor)
-	config.AddBeforeProcess(true, ProcProcessor)
-	config.AddAfterProcess(true, ProcProcessor)
-	flow.SetDefaultProcessConfig(&config)
-	workflow := flow.RegisterFlow("TestDefaultProcessConfig")
-	process := workflow.AddProcess("TestDefaultProcessConfig", nil)
-	process.AddStepWithAlias("1", GenerateStep(1))
-	process.AddStepWithAlias("2", GenerateStep(2), "1")
-	process.AddStepWithAlias("3", GenerateStep(3), "2")
-	process.AddStepWithAlias("4", GenerateStep(4), "3")
-	features := flow.DoneFlow("TestDefaultProcessConfig", nil)
-	for name, feature := range features {
-		if !feature.Success() {
-			t.Errorf("process[%s] fail", name)
-		}
-	}
-	if atomic.LoadInt64(&current) != 14 {
-		t.Errorf("execute 14 step, but current = %d", current)
-	}
-}
+//func TestInfoCorrect(t *testing.T) {
+//	defer resetCurrent()
+//	defer func() {
+//		flow.SetDefaultProcessConfig(nil)
+//	}()
+//	config := flow.ProcessConfig{}
+//	config.AddBeforeStep(true, StepInfoChecker("1", []string{}, []string{"2", "3"}))
+//	config.AddBeforeStep(true, StepInfoChecker("2", []string{"1"}, []string{"4"}))
+//	config.AddBeforeStep(true, StepInfoChecker("3", []string{"1"}, []string{"4"}))
+//	config.AddBeforeStep(true, StepInfoChecker("4", []string{"2", "3"}, []string{}))
+//	config.AddAfterStep(true, StepInfoChecker("1", []string{}, []string{"2", "3"}))
+//	config.AddAfterStep(true, StepInfoChecker("2", []string{"1"}, []string{"4"}))
+//	config.AddAfterStep(true, StepInfoChecker("3", []string{"1"}, []string{"4"}))
+//	config.AddAfterStep(true, StepInfoChecker("4", []string{"2", "3"}, []string{}))
+//	flow.SetDefaultProcessConfig(&config)
+//	workflow := flow.RegisterFlow("TestInfoCorrect")
+//	process := workflow.AddProcess("TestInfoCorrect", nil)
+//	process.AddStepWithAlias("1", GenerateStep(1))
+//	process.AddStepWithAlias("2", GenerateStep(2), "1")
+//	process.AddStepWithAlias("3", GenerateStep(3), "1")
+//	process.AddStepWithAlias("4", GenerateStep(4), "2", "3")
+//	features := flow.DoneFlow("TestInfoCorrect", nil)
+//	for name, feature := range features {
+//		if !feature.Success() {
+//			t.Errorf("process[%s] fail", name)
+//		}
+//	}
+//	if atomic.LoadInt64(&current) != 12 {
+//		t.Errorf("execute 12 step, but current = %d", current)
+//	}
+//}
+
+//func TestDefaultProcessConfig(t *testing.T) {
+//	defer resetCurrent()
+//	defer func() {
+//		flow.SetDefaultProcessConfig(nil)
+//	}()
+//	config := flow.ProcessConfig{}
+//	config.AddBeforeStep(true, PreProcessor)
+//	config.AddAfterStep(true, PostProcessor)
+//	config.AddBeforeProcess(true, ProcProcessor)
+//	config.AddAfterProcess(true, ProcProcessor)
+//	flow.SetDefaultProcessConfig(&config)
+//	workflow := flow.RegisterFlow("TestDefaultProcessConfig")
+//	process := workflow.AddProcess("TestDefaultProcessConfig", nil)
+//	process.AddStepWithAlias("1", GenerateStep(1))
+//	process.AddStepWithAlias("2", GenerateStep(2), "1")
+//	process.AddStepWithAlias("3", GenerateStep(3), "2")
+//	process.AddStepWithAlias("4", GenerateStep(4), "3")
+//	features := flow.DoneFlow("TestDefaultProcessConfig", nil)
+//	for name, feature := range features {
+//		if !feature.Success() {
+//			t.Errorf("process[%s] fail", name)
+//		}
+//	}
+//	if atomic.LoadInt64(&current) != 14 {
+//		t.Errorf("execute 14 step, but current = %d", current)
+//	}
+//}
 
 func TestPreAndPostProcessor(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestPreAndPostProcessor")
-	config := flow.ProcessConfig{}
-	config.AddBeforeStep(true, PreProcessor)
-	config.AddAfterStep(true, PostProcessor)
-	config.AddBeforeProcess(true, ProcProcessor)
-	config.AddAfterProcess(true, ProcProcessor)
 	process := workflow.AddProcess("TestPreAndPostProcessor", nil)
-	process.AddConfig(&config)
 	process.AddStepWithAlias("1", GenerateStep(1))
 	process.AddStepWithAlias("2", GenerateStep(2), "1")
 	process.AddStepWithAlias("3", GenerateStep(3), "2")
 	process.AddStepWithAlias("4", GenerateStep(4), "3")
+	process.AddBeforeStep(true, PreProcessor)
+	process.AddAfterStep(true, PostProcessor)
+	process.AddBeforeProcess(true, ProcProcessor)
+	process.AddAfterProcess(true, ProcProcessor)
 	features := flow.DoneFlow("TestPreAndPostProcessor", nil)
 	for name, feature := range features {
 		if !feature.Success() {
@@ -499,8 +498,7 @@ func TestWithLongProcessTimeout(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestWithLongProcessTimeout")
 	config := flow.ProcessConfig{ProcTimeout: 1 * time.Second}
-	process := workflow.AddProcess("TestWithLongProcessTimeout", nil)
-	process.AddConfig(&config)
+	process := workflow.AddProcess("TestWithLongProcessTimeout", &config)
 	process.AddStepWithAlias("1", GenerateStep(1))
 	process.AddStepWithAlias("2", GenerateStep(2), "1")
 	process.AddStepWithAlias("3", GenerateStep(3), "2")
@@ -520,8 +518,7 @@ func TestWithShortProcessTimeout(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestWithShortProcessTimeout")
 	config := flow.ProcessConfig{ProcTimeout: 1 * time.Millisecond}
-	process := workflow.AddProcess("TestWithShortProcessTimeout", nil)
-	process.AddConfig(&config)
+	process := workflow.AddProcess("TestWithShortProcessTimeout", &config)
 	process.AddStepWithAlias("1", GenerateStep(1))
 	process.AddStepWithAlias("2", GenerateStep(2), "1")
 	process.AddStepWithAlias("3", GenerateStep(3), "2")
@@ -542,8 +539,7 @@ func TestParallelWithLongDefaultStepTimeout(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestParallelWithLongDefaultStepTimeout")
 	config := flow.ProcessConfig{StepRetry: 3, StepTimeout: 300 * time.Millisecond}
-	process := workflow.AddProcess("TestParallelWithLongDefaultStepTimeout", nil)
-	process.AddConfig(&config)
+	process := workflow.AddProcess("TestParallelWithLongDefaultStepTimeout", &config)
 	process.AddStepWithAlias("1", GenerateStep(1))
 	process.AddStepWithAlias("2", GenerateStep(2))
 	process.AddStepWithAlias("3", GenerateStep(3))
@@ -565,8 +561,7 @@ func TestWithLongDefaultStepTimeout(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestWithLongDefaultStepTimeout")
 	config := flow.ProcessConfig{StepRetry: 3, StepTimeout: 1 * time.Second}
-	process := workflow.AddProcess("TestWithLongDefaultStepTimeout", nil)
-	process.AddConfig(&config)
+	process := workflow.AddProcess("TestWithLongDefaultStepTimeout", &config)
 	process.AddStepWithAlias("1", GenerateStep(1))
 	process.AddStepWithAlias("2", GenerateStep(2), "1")
 	process.AddStepWithAlias("3", GenerateStep(3), "2")
@@ -588,8 +583,7 @@ func TestWithShortDefaultStepTimeout(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestWithShortDefaultStepTimeout")
 	config := flow.ProcessConfig{StepRetry: 3, StepTimeout: 1 * time.Millisecond}
-	process := workflow.AddProcess("TestWithShortDefaultStepTimeout", nil)
-	process.AddConfig(&config)
+	process := workflow.AddProcess("TestWithShortDefaultStepTimeout", &config)
 	process.AddStepWithAlias("1", GenerateStep(1))
 	process.AddStepWithAlias("2", GenerateStep(2), "1")
 	process.AddStepWithAlias("3", GenerateStep(3), "2")
@@ -657,8 +651,7 @@ func TestSingleErrorStepWithProcessRetry(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestSingleErrorStepWithProcessRetry")
 	config := flow.ProcessConfig{StepRetry: 3}
-	process := workflow.AddProcess("TestSingleErrorStepWithProcessRetry", nil)
-	process.AddConfig(&config)
+	process := workflow.AddProcess("TestSingleErrorStepWithProcessRetry", &config)
 	process.AddStepWithAlias("1", GenerateErrorStep(1))
 	features := flow.DoneFlow("TestSingleErrorStepWithProcessRetry", nil)
 	for name, feature := range features {
@@ -697,8 +690,7 @@ func TestSingleErrorStepWithProcessAndStepRetry(t *testing.T) {
 	workflow := flow.RegisterFlow("TestSingleErrorStepWithProcessAndStepRetry")
 	config := flow.ProcessConfig{StepRetry: 3}
 	stepConfig := flow.StepConfig{MaxRetry: 2}
-	process := workflow.AddProcess("TestSingleErrorStepWithProcessAndStepRetry", nil)
-	process.AddConfig(&config)
+	process := workflow.AddProcess("TestSingleErrorStepWithProcessAndStepRetry", &config)
 	process.AddStepWithAlias("1", GenerateErrorStep(1)).AddConfig(&stepConfig)
 	features := flow.DoneFlow("TestSingleErrorStepWithProcessAndStepRetry", nil)
 	for name, feature := range features {

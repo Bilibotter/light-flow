@@ -217,6 +217,14 @@ func (bi *BasicInfo) Exceptions() []string {
 	return ExplainStatus(atomic.LoadInt64(bi.status))
 }
 
+func (cc *CallbackChain[T]) CopyChain() []*Callback[T] {
+	result := make([]*Callback[T], 0, len(cc.filters))
+	for _, filter := range cc.filters {
+		result = append(result, filter)
+	}
+	return result
+}
+
 func (cc *CallbackChain[T]) Add(flag string, must bool, run func(info T) bool) *Callback[T] {
 	callback := &Callback[T]{
 		must: must,
