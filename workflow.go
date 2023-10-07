@@ -199,7 +199,7 @@ func (fc *FlowConfig) merge(merged *FlowConfig) *FlowConfig {
 	CopyPropertiesSkipNotEmpty(merged, fc)
 	if merged.CallbackChain != nil {
 		fc.filters = append(merged.CopyChain(), fc.filters...)
-		fc.sort()
+		fc.maintain()
 	}
 	return fc
 }

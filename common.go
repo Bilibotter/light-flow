@@ -267,11 +267,11 @@ func (cc *CallbackChain[T]) AddCallback(flag string, must bool, run func(info T)
 	}
 
 	cc.filters = append(cc.filters, callback)
-	cc.sort()
+	cc.maintain()
 	return callback
 }
 
-func (cc *CallbackChain[T]) sort() {
+func (cc *CallbackChain[T]) maintain() {
 	sort.SliceStable(cc.filters, func(i, j int) bool {
 		if cc.filters[i].must == cc.filters[j].must {
 			return i < j

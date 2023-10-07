@@ -42,14 +42,14 @@ func (pc *ProcessConfig) merge(merged *ProcessConfig) *ProcessConfig {
 	}
 	if merged.stepChain != nil {
 		pc.stepChain.filters = append(merged.stepChain.CopyChain(), pc.stepChain.filters...)
-		pc.stepChain.sort()
+		pc.stepChain.maintain()
 	}
 	if pc.procChain == nil {
 		pc.procChain = &CallbackChain[*ProcessInfo]{}
 	}
 	if merged.procChain != nil {
 		pc.procChain.filters = append(merged.procChain.CopyChain(), pc.procChain.filters...)
-		pc.procChain.sort()
+		pc.procChain.maintain()
 	}
 	return pc
 }
