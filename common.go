@@ -296,6 +296,20 @@ func (cc *CallbackChain[T]) process(flag string, info T) (panicStack string) {
 	return
 }
 
+func (c *Callback[T]) NotFor(name ...string) *Callback[T] {
+	s := CreateFromSliceFunc(name, func(value string) string { return value })
+	old := c.run
+	f := func(info T) bool {
+		if s.Contains(info.GetName()) {
+			return true
+		}
+		return old(info)
+	}
+
+	c.run = f
+	return c
+}
+
 func (c *Callback[T]) OnlyFor(name ...string) *Callback[T] {
 	s := CreateFromSliceFunc(name, func(value string) string { return value })
 	old := c.run
@@ -319,6 +333,20 @@ func (c *Callback[T]) When(status ...*StatusEnum) *Callback[T] {
 			}
 		}
 		return true
+	}
+	c.run = f
+	return c
+}
+
+func (c *Callback[T]) Exclude(status ...*StatusEnum) *Callback[T] {
+	old := c.run
+	f := func(info T) bool {
+		for _, match := range status {
+			if info.Contain(match) {
+				return true
+			}
+		}
+		return old(info)
 	}
 	c.run = f
 	return c

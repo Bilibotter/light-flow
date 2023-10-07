@@ -167,6 +167,39 @@ func TestCallbackCond(t *testing.T) {
 	}
 }
 
+func TestCallbackCond0(t *testing.T) {
+	defer resetCurrent()
+	defer func() {
+		flow.SetDefaultConfig(nil)
+	}()
+	config := flow.Configuration{}
+	config.AddBeforeFlow(true, BeforeFlowProcessor).NotFor("TestCallbackCond0")
+	config.AddBeforeFlow(true, BeforeFlowProcessor).NotFor("TestCallbackCondNotExist")
+	config.AddAfterFlow(true, AfterFlowProcessor).OnlyFor("TestCallbackCond0").Exclude(flow.Failed)
+	config.AddAfterFlow(true, AfterFlowProcessor).OnlyFor("TestCallbackCond").Exclude(flow.Success)
+	config.AddBeforeProcess(true, ProcProcessor).NotFor("TestCallbackCond0")
+	config.AddBeforeProcess(true, ProcProcessor).NotFor("TestCallbackCondNotExist")
+	config.AddAfterProcess(true, AfterProcProcessor).OnlyFor("TestCallbackCond0").Exclude(flow.Failed)
+	config.AddAfterProcess(true, AfterProcProcessor).OnlyFor("TestCallbackCond0").Exclude(flow.Success)
+	config.AddBeforeStep(true, PreProcessor).NotFor("1")
+	config.AddAfterStep(true, PostProcessor).OnlyFor("1").Exclude(flow.Success)
+	config.AddAfterStep(true, PostProcessor).OnlyFor("1").Exclude(flow.Failed)
+	flow.SetDefaultConfig(&config)
+	workflow := flow.RegisterFlow("TestCallbackCond0")
+	process := workflow.AddProcessWithConf("TestCallbackCond0", nil)
+	process.AddStepWithAlias("1", GenerateStep(1))
+	process.AddStepWithAlias("2", GenerateStep(2), "1")
+	features := flow.DoneFlow("TestCallbackCond0", nil)
+	for name, feature := range features.Features() {
+		if !feature.Success() {
+			t.Errorf("process[%s] fail", name)
+		}
+	}
+	if atomic.LoadInt64(&current) != 8 {
+		t.Errorf("execute 8 step, but current = %d", current)
+	}
+}
+
 func TestUnableDefaultProcessConfig(t *testing.T) {
 	defer resetCurrent()
 	defer func() {
