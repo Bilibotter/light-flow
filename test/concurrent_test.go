@@ -32,7 +32,7 @@ func NoDelayContextStep(ctx *flow.Context) (any, error) {
 func TestTestMultipleConcurrentDependContext(t *testing.T) {
 	defer resetCtx()
 	factory := flow.RegisterFlow("TestTestMultipleConcurrentDependContext")
-	process := factory.AddProcess("TestTestMultipleConcurrentDependContext", nil)
+	process := factory.AddProcessWithConf("TestTestMultipleConcurrentDependContext", nil)
 	process.AddStepWithAlias("-1", ChangeCtxStepFunc(&ctx1))
 	for i := 0; i < 10000; i++ {
 		process.AddStepWithAlias(strconv.Itoa(i), NoDelayContextStep, "-1")
@@ -54,7 +54,7 @@ func TestTestMultipleConcurrentDependContext(t *testing.T) {
 func TestMultipleConcurrentContext(t *testing.T) {
 	defer resetCurrent()
 	factory := flow.RegisterFlow("TestMultipleConcurrentContext")
-	process := factory.AddProcess("TestMultipleConcurrentContext", nil)
+	process := factory.AddProcessWithConf("TestMultipleConcurrentContext", nil)
 	for i := 0; i < 10000; i++ {
 		process.AddStepWithAlias(strconv.Itoa(i), NoDelayContextStep)
 	}
@@ -76,7 +76,7 @@ func TestMultipleConcurrentProcess(t *testing.T) {
 	defer resetCurrent()
 	factory := flow.RegisterFlow("TestMultipleConcurrentProcess")
 	for i := 0; i < 100; i++ {
-		process := factory.AddProcess("TestMultipleConcurrentProcess"+strconv.Itoa(i), nil)
+		process := factory.AddProcessWithConf("TestMultipleConcurrentProcess"+strconv.Itoa(i), nil)
 		process.AddBeforeStep(true, GenerateNoDelayProcessor)
 		process.AddAfterStep(true, GenerateNoDelayProcessor)
 		for j := 0; j < 100; j++ {
@@ -99,7 +99,7 @@ func TestMultipleConcurrentProcess(t *testing.T) {
 func TestMultipleConcurrentStepWithProcessor(t *testing.T) {
 	defer resetCurrent()
 	factory := flow.RegisterFlow("TestMultipleConcurrentStepWithProcessor")
-	process := factory.AddProcess("TestMultipleConcurrentStepWithProcessor", nil)
+	process := factory.AddProcessWithConf("TestMultipleConcurrentStepWithProcessor", nil)
 	process.AddBeforeStep(true, GenerateNoDelayProcessor)
 	process.AddAfterStep(true, GenerateNoDelayProcessor)
 	for i := 0; i < 10000; i++ {
@@ -122,7 +122,7 @@ func TestMultipleConcurrentStepWithProcessor(t *testing.T) {
 func TestMultipleConcurrentStep(t *testing.T) {
 	defer resetCurrent()
 	factory := flow.RegisterFlow("TestMultipleConcurrentStep")
-	process := factory.AddProcess("TestMultipleConcurrentStep", nil)
+	process := factory.AddProcessWithConf("TestMultipleConcurrentStep", nil)
 	for i := 0; i < 10000; i++ {
 		process.AddStepWithAlias(strconv.Itoa(i), GenerateNoDelayStep(i))
 	}
@@ -143,7 +143,7 @@ func TestMultipleConcurrentStep(t *testing.T) {
 func TestMultipleConcurrentDependStep(t *testing.T) {
 	defer resetCurrent()
 	factory := flow.RegisterFlow("TestMultipleConcurrentDependStep")
-	process := factory.AddProcess("TestMultipleConcurrentDependStep", nil)
+	process := factory.AddProcessWithConf("TestMultipleConcurrentDependStep", nil)
 	for i := 0; i < 100; i++ {
 		prev := ""
 		for j := 0; j < 100; j++ {
@@ -173,7 +173,7 @@ func TestMultipleConcurrentDependStep(t *testing.T) {
 func TestConcurrentSameFlow(t *testing.T) {
 	defer resetCurrent()
 	factory := flow.RegisterFlow("TestConcurrentSameFlow")
-	process := factory.AddProcess("TestConcurrentSameFlow", nil)
+	process := factory.AddProcessWithConf("TestConcurrentSameFlow", nil)
 	for i := 0; i < 100; i++ {
 		process.AddStepWithAlias(strconv.Itoa(i), GenerateNoDelayStep(i))
 	}

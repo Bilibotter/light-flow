@@ -277,7 +277,11 @@ func (fm *FlowMeta) AddRegisterProcess(name string) {
 	fm.processes = append(fm.processes, pm.(*ProcessMeta))
 }
 
-func (fm *FlowMeta) AddProcess(name string, conf *ProcessConfig) *ProcessMeta {
+func (fm *FlowMeta) AddProcess(name string) *ProcessMeta {
+	return fm.AddProcessWithConf(name, nil)
+}
+
+func (fm *FlowMeta) AddProcessWithConf(name string, conf *ProcessConfig) *ProcessMeta {
 	if conf != nil {
 		conf.notUseDefault = true
 	}
