@@ -175,6 +175,10 @@ func (s *Status) Explain() []string {
 		return compress
 	}
 
+	if s.Contain(Success) {
+		return []string{Success.Message()}
+	}
+
 	for _, enum := range normal {
 		if s.Contain(enum) {
 			compress = append(compress, enum.Message())
@@ -283,7 +287,6 @@ func (cc *CallbackChain[T]) process(flag string, info T) (panicStack string) {
 		// len(panicStack) != 0 when callback that must be executed encounters panic
 		if len(panicStack) != 0 {
 			info.addr().AppendStatus(Panic)
-			println(panicStack)
 			return
 		}
 		if !keepOn {
@@ -296,11 +299,12 @@ func (cc *CallbackChain[T]) process(flag string, info T) (panicStack string) {
 
 func (c *Callback[T]) OnlyFor(name ...string) *Callback[T] {
 	s := CreateFromSliceFunc(name, func(value string) string { return value })
+	old := c.run
 	f := func(info T) bool {
 		if !s.Contains(info.GetName()) {
 			return true
 		}
-		return c.run(info)
+		return old(info)
 	}
 
 	c.run = f
@@ -308,10 +312,11 @@ func (c *Callback[T]) OnlyFor(name ...string) *Callback[T] {
 }
 
 func (c *Callback[T]) When(status ...*StatusEnum) *Callback[T] {
+	old := c.run
 	f := func(info T) bool {
 		for _, match := range status {
 			if info.Contain(match) {
-				return c.run(info)
+				return old(info)
 			}
 		}
 		return true

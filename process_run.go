@@ -134,7 +134,6 @@ func (rp *RunProcess) finalize() {
 	finish := make(chan bool, 1)
 	go func() {
 		rp.needRun.Wait()
-		rp.procCallback(After)
 		finish <- true
 	}()
 
@@ -157,6 +156,8 @@ func (rp *RunProcess) finalize() {
 	if rp.Normal() {
 		rp.AppendStatus(Success)
 	}
+
+	rp.procCallback(After)
 
 	rp.finish.Done()
 }
@@ -204,7 +205,6 @@ func (rp *RunProcess) runStep(step *RunStep) {
 		if r := recover(); r != nil {
 			panicErr := fmt.Errorf("panic: %v\n\n%s", r, string(debug.Stack()))
 			step.AppendStatus(Panic)
-			println(panicErr.Error())
 			step.Err = panicErr
 			step.End = time.Now().UTC()
 		}

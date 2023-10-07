@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func FlowProcessor(info *flow.FlowInfo) bool {
+func AfterFlowProcessor(info *flow.FlowInfo) bool {
 	if info.Name == "" {
 		panic("flow name is empty")
 	}
@@ -18,7 +18,22 @@ func FlowProcessor(info *flow.FlowInfo) bool {
 		panic("flow context is nil")
 	}
 	atomic.AddInt64(&current, 1)
-	fmt.Printf("..process[%s] FlowProcessor execute \n", info.Name)
+	fmt.Printf("..process[%s] AfterFlowProcessor execute \n", info.Name)
+	return true
+}
+
+func BeforeFlowProcessor(info *flow.FlowInfo) bool {
+	if info.Name == "" {
+		panic("flow name is empty")
+	}
+	if len(info.Id) == 0 {
+		panic("flow id is empty")
+	}
+	if info.Ctx == nil {
+		panic("flow context is nil")
+	}
+	atomic.AddInt64(&current, 1)
+	fmt.Printf("..process[%s] BeforeFlowProcessor execute \n", info.Name)
 	return true
 }
 
@@ -64,8 +79,8 @@ func TestDefaultProcessConfig(t *testing.T) {
 	config.AddAfterStep(true, PostProcessor)
 	config.AddBeforeProcess(true, ProcProcessor)
 	config.AddAfterProcess(true, ProcProcessor)
-	config.AddBeforeFlow(true, FlowProcessor)
-	config.AddAfterFlow(true, FlowProcessor)
+	config.AddBeforeFlow(true, BeforeFlowProcessor)
+	config.AddAfterFlow(true, AfterFlowProcessor)
 	flow.SetDefaultConfig(&config)
 	workflow := flow.RegisterFlow("TestDefaultProcessConfig")
 	process := workflow.AddProcess("TestDefaultProcessConfig", nil)
@@ -94,12 +109,12 @@ func TestMergeDefaultProcessConfig(t *testing.T) {
 	config.AddAfterStep(true, PostProcessor)
 	config.AddBeforeProcess(true, ProcProcessor)
 	config.AddAfterProcess(true, ProcProcessor)
-	config.AddBeforeFlow(true, FlowProcessor)
-	config.AddAfterFlow(true, FlowProcessor)
+	config.AddBeforeFlow(true, BeforeFlowProcessor)
+	config.AddAfterFlow(true, AfterFlowProcessor)
 	flow.SetDefaultConfig(&config)
 	workflow := flow.RegisterFlow("TestMergeDefaultProcessConfig")
-	workflow.AddBeforeFlow(true, FlowProcessor)
-	workflow.AddAfterFlow(true, FlowProcessor)
+	workflow.AddBeforeFlow(true, BeforeFlowProcessor)
+	workflow.AddAfterFlow(true, AfterFlowProcessor)
 	process := workflow.AddProcess("TestMergeDefaultProcessConfig", nil)
 	process.AddStepWithAlias("1", GenerateStep(1))
 	process.AddStepWithAlias("2", GenerateStep(2), "1")
@@ -118,6 +133,40 @@ func TestMergeDefaultProcessConfig(t *testing.T) {
 	}
 }
 
+func TestCallbackCond(t *testing.T) {
+	defer resetCurrent()
+	defer func() {
+		flow.SetDefaultConfig(nil)
+	}()
+	config := flow.Configuration{}
+	config.AddBeforeFlow(true, BeforeFlowProcessor).OnlyFor("TestCallbackCond")
+	config.AddBeforeFlow(true, BeforeFlowProcessor).OnlyFor("TestCallbackCondNotExist")
+	config.AddAfterFlow(true, AfterFlowProcessor).OnlyFor("TestCallbackCond").When(flow.Failed)
+	config.AddAfterFlow(true, AfterFlowProcessor).OnlyFor("TestCallbackCond").When(flow.Success)
+	config.AddBeforeProcess(true, ProcProcessor).OnlyFor("TestCallbackCond")
+	config.AddBeforeProcess(true, ProcProcessor).OnlyFor("TestCallbackCondNotExist")
+	config.AddAfterProcess(true, AfterProcProcessor).OnlyFor("TestCallbackCond").When(flow.Failed)
+	config.AddAfterProcess(true, AfterProcProcessor).OnlyFor("TestCallbackCond").When(flow.Success)
+	config.AddBeforeStep(true, PreProcessor).OnlyFor("1")
+	config.AddBeforeStep(true, PreProcessor).OnlyFor("NotExist")
+	config.AddAfterStep(true, PostProcessor).OnlyFor("1").When(flow.Success)
+	config.AddAfterStep(true, PostProcessor).OnlyFor("1").When(flow.Failed)
+	flow.SetDefaultConfig(&config)
+	workflow := flow.RegisterFlow("TestCallbackCond")
+	process := workflow.AddProcess("TestCallbackCond", nil)
+	process.AddStepWithAlias("1", GenerateStep(1))
+	process.AddStepWithAlias("2", GenerateStep(2), "1")
+	features := flow.DoneFlow("TestCallbackCond", nil)
+	for name, feature := range features.Features() {
+		if !feature.Success() {
+			t.Errorf("process[%s] fail", name)
+		}
+	}
+	if atomic.LoadInt64(&current) != 8 {
+		t.Errorf("execute 8 step, but current = %d", current)
+	}
+}
+
 func TestUnableDefaultProcessConfig(t *testing.T) {
 	defer resetCurrent()
 	defer func() {
@@ -128,8 +177,8 @@ func TestUnableDefaultProcessConfig(t *testing.T) {
 	config.AddAfterStep(true, PostProcessor)
 	config.AddBeforeProcess(true, ProcProcessor)
 	config.AddAfterProcess(true, ProcProcessor)
-	config.AddBeforeFlow(true, FlowProcessor)
-	config.AddAfterFlow(true, FlowProcessor)
+	config.AddBeforeFlow(true, BeforeFlowProcessor)
+	config.AddAfterFlow(true, AfterFlowProcessor)
 	flow.SetDefaultConfig(&config)
 	workflow := flow.RegisterFlow("TestUnableDefaultProcessConfig")
 	workflow.NotUseDefault()

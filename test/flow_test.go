@@ -65,6 +65,24 @@ func GenerateErrorStep(i int) func(ctx *flow.Context) (any, error) {
 	}
 }
 
+func AfterProcProcessor(info *flow.ProcessInfo) bool {
+	if info.Name == "" {
+		panic("process name is empty")
+	}
+	if len(info.Id) == 0 {
+		panic("process id is empty")
+	}
+	if len(info.FlowId) == 0 {
+		panic("process flow id is empty")
+	}
+	if info.Ctx == nil {
+		panic("process context is nil")
+	}
+	atomic.AddInt64(&current, 1)
+	fmt.Printf("..process[%s] AfterProcProcessor execute \n", info.Name)
+	return true
+}
+
 func GeneratePanicStep(i int) func(ctx *flow.Context) (any, error) {
 	return func(ctx *flow.Context) (any, error) {
 		time.Sleep(100 * time.Millisecond)
@@ -429,5 +447,35 @@ func TestCopyDepend(t *testing.T) {
 	}
 	if atomic.LoadInt64(&current) != 6 {
 		t.Errorf("execute 6 step, but current = %d", current)
+	}
+}
+
+func TestNewFlowReturn(t *testing.T) {
+	defer resetCurrent()
+	factory := flow.RegisterFlow("TestNewFlowReturn")
+	process := factory.AddProcess("TestNewFlowReturn", nil)
+	process.AddStepWithAlias("1", GenerateStep(1))
+	result := flow.DoneFlow("TestNewFlowReturn", nil)
+	if !result.Success() {
+		t.Errorf("flow fail")
+	}
+	if len(result.Exceptions()) > 0 {
+		t.Errorf("flow fail, exception=%v", result.Exceptions())
+	}
+	for name, feature := range result.Features() {
+		feature.Explain()
+		if !feature.Normal() {
+			t.Errorf("process[%s] fail, explain=%v", name, feature.Explain())
+		}
+		if len(feature.Exceptions()) > 0 {
+			t.Errorf("process[%s] fail, explain=%v", name, feature.Exceptions())
+		}
+		if !feature.Success() {
+			t.Errorf("process[%s] fail", name)
+		}
+		fmt.Printf("process[%s] explain=%v\n", name, feature.Explain())
+	}
+	if atomic.LoadInt64(&current) != 1 {
+		t.Errorf("execute 1 step, but current = %d", current)
 	}
 }

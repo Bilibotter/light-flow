@@ -379,13 +379,13 @@ func (wf *RunFlow) Flow() map[string]*Feature {
 		for _, feature := range features {
 			feature.Done()
 		}
-		wf.flowCallback.process(After, info)
 		for _, process := range wf.processMap {
 			wf.combine(process.Status)
 		}
 		if wf.Normal() {
 			wf.AppendStatus(Success)
 		}
+		wf.flowCallback.process(After, info)
 		wf.finish.Done()
 	}()
 
