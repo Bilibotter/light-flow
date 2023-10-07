@@ -1,8 +1,7 @@
 package test
 
 import (
-	"gitee.com/MetaphysicCoding/light-flow"
-	"slices"
+	light_flow "gitee.com/MetaphysicCoding/light-flow"
 	"strconv"
 	"strings"
 	"testing"
@@ -85,154 +84,150 @@ func TestSet(t *testing.T) {
 }
 
 func TestPopStatus(t *testing.T) {
-	status := int64(0)
-	light_flow.AppendStatus(&status, light_flow.Cancel)
-	light_flow.AppendStatus(&status, light_flow.Panic)
-	light_flow.AppendStatus(&status, light_flow.Failed)
-	light_flow.AppendStatus(&status, light_flow.Error)
-	light_flow.AppendStatus(&status, light_flow.Timeout)
-	light_flow.AppendStatus(&status, light_flow.Stop)
+	status := light_flow.Status(0)
+	status.AppendStatus(light_flow.Cancel)
+	status.AppendStatus(light_flow.Panic)
+	status.AppendStatus(light_flow.Failed)
+	status.AppendStatus(light_flow.Error)
+	status.AppendStatus(light_flow.Timeout)
+	status.AppendStatus(light_flow.Stop)
 
-	if !slices.Contains(light_flow.ExplainStatus(status), "Cancel") {
+	if !status.Contain(light_flow.Cancel) {
 		t.Errorf("cancel appended but not exist")
 	}
-	light_flow.PopStatus(&status, light_flow.Cancel)
-	if slices.Contains(light_flow.ExplainStatus(status), "Cancel") {
+	status.Pop(light_flow.Cancel)
+	if status.Contain(light_flow.Cancel) {
 		t.Errorf("cancel status pop error")
 	}
 
-	if !slices.Contains(light_flow.ExplainStatus(status), "Panic") {
+	if !status.Contain(light_flow.Panic) {
 		t.Errorf("panic appended but not exist")
 	}
-	light_flow.PopStatus(&status, light_flow.Panic)
-	if slices.Contains(light_flow.ExplainStatus(status), "Panic") {
+	status.Pop(light_flow.Panic)
+	if status.Contain(light_flow.Panic) {
 		t.Errorf("panic status pop error")
 	}
 
-	if !slices.Contains(light_flow.ExplainStatus(status), "Failed") {
+	if !status.Contain(light_flow.Failed) {
 		t.Errorf("failed appended but not exist")
 	}
-	light_flow.PopStatus(&status, light_flow.Failed)
-	if slices.Contains(light_flow.ExplainStatus(status), "Failed") {
+	status.Pop(light_flow.Failed)
+	if status.Contain(light_flow.Failed) {
 		t.Errorf("failed status pop error")
 	}
 
-	if !slices.Contains(light_flow.ExplainStatus(status), "Timeout") {
+	if !status.Contain(light_flow.Timeout) {
 		t.Errorf("timeout appended bu not exist")
 	}
-	light_flow.PopStatus(&status, light_flow.Timeout)
-	if slices.Contains(light_flow.ExplainStatus(status), "Timeout") {
+	status.Pop(light_flow.Timeout)
+	if status.Contain(light_flow.Timeout) {
 		t.Errorf("timeout status pop error")
 	}
 
-	if !slices.Contains(light_flow.ExplainStatus(status), "Stop") {
+	if !status.Contain(light_flow.Stop) {
 		t.Errorf("error appended bu not exist")
 	}
-	light_flow.PopStatus(&status, light_flow.Stop)
-	if slices.Contains(light_flow.ExplainStatus(status), "Stop") {
+	status.Pop(light_flow.Stop)
+	if status.Contain(light_flow.Stop) {
 		t.Errorf("error status pop error")
 	}
 
-	if !slices.Contains(light_flow.ExplainStatus(status), "Error") {
+	if !status.Contain(light_flow.Error) {
 		t.Errorf("error appended bu not exist")
 	}
-	light_flow.PopStatus(&status, light_flow.Error)
-	if slices.Contains(light_flow.ExplainStatus(status), "Error") {
+	status.Pop(light_flow.Error)
+	if status.Contain(light_flow.Error) {
 		t.Errorf("error status pop error")
 	}
 }
 
 func TestExplainStatus1(t *testing.T) {
-	if !slices.Contains(light_flow.ExplainStatus(light_flow.Cancel), "Cancel") {
-		t.Errorf("cancel status explain error")
+	if status := light_flow.Status(0); !status.AppendStatus(light_flow.Cancel) {
+		t.Errorf("cancel status append error")
+	} else if !status.Contain(light_flow.Cancel) {
+		t.Errorf("cancel status not cotain after append")
 	}
-	if !slices.Contains(light_flow.ExplainStatus(light_flow.Pause), "Pause") {
-		t.Errorf("pause status explain error")
+	if status := light_flow.Status(0); !status.AppendStatus(light_flow.Pause) {
+		t.Errorf("panic status append error")
+	} else if !status.Contain(light_flow.Pause) {
+		t.Errorf("pause status not cotain after append")
 	}
-	if !slices.Contains(light_flow.ExplainStatus(light_flow.Running), "Running") {
-		t.Errorf("running status explain error")
+	if status := light_flow.Status(0); !status.AppendStatus(light_flow.Running) {
+		t.Errorf("running status append error")
+	} else if !status.Contain(light_flow.Running) {
+		t.Errorf("running status not cotain after append")
 	}
-	if !slices.Contains(light_flow.ExplainStatus(light_flow.Success), "Success") {
-		t.Errorf("success status explain error")
+	if status := light_flow.Status(0); !status.AppendStatus(light_flow.Success) {
+		t.Errorf("success status append error")
+	} else if !status.Contain(light_flow.Success) {
+		t.Errorf("success status not cotain after append")
 	}
-	if !slices.Contains(light_flow.ExplainStatus(light_flow.Failed), "Failed") {
-		t.Errorf("failed status explain error")
+	if status := light_flow.Status(0); !status.AppendStatus(light_flow.Failed) {
+		t.Errorf("failed status append error")
+	} else if !status.Contain(light_flow.Failed) {
+		t.Errorf("failed status not cotain after append")
 	}
-	if !slices.Contains(light_flow.ExplainStatus(light_flow.Timeout), "Timeout") {
-		t.Errorf("timeout status explain error")
+	if status := light_flow.Status(0); !status.AppendStatus(light_flow.Timeout) {
+		t.Errorf("timeout status append error")
+	} else if !status.Contain(light_flow.Timeout) {
+		t.Errorf("timeout status not cotain after append")
 	}
-	if !slices.Contains(light_flow.ExplainStatus(light_flow.Panic), "Panic") {
-		t.Errorf("panic status explain error")
+	if status := light_flow.Status(0); !status.AppendStatus(light_flow.Panic) {
+		t.Errorf("panic status append error")
+	} else if !status.Contain(light_flow.Panic) {
+		t.Errorf("panic status not cotain after append")
 	}
-	if !slices.Contains(light_flow.ExplainStatus(light_flow.Pending), "Pending") {
-		t.Errorf("pending status explain error")
-	}
-	if !slices.Contains(light_flow.ExplainStatus(light_flow.Error), "Error") {
-		t.Errorf("error status explain error")
+	if status := light_flow.Status(0); !status.AppendStatus(light_flow.Error) {
+		t.Errorf("error status append error")
+	} else if !status.Contain(light_flow.Error) {
+		t.Errorf("error status not cotain after append")
 	}
 }
 
 func TestExplainStatus2(t *testing.T) {
-	status := int64(0)
-	light_flow.AppendStatus(&status, light_flow.Cancel)
-	light_flow.AppendStatus(&status, light_flow.Panic)
-	light_flow.AppendStatus(&status, light_flow.Failed)
-	light_flow.AppendStatus(&status, light_flow.Timeout)
-	light_flow.AppendStatus(&status, light_flow.Stop)
-	light_flow.AppendStatus(&status, light_flow.Success)
-	if slices.Contains(light_flow.ExplainStatus(status), "Success") {
+	status := light_flow.Status(0)
+	status.AppendStatus(light_flow.Cancel)
+	status.AppendStatus(light_flow.Panic)
+	status.AppendStatus(light_flow.Failed)
+	status.AppendStatus(light_flow.Timeout)
+	status.AppendStatus(light_flow.Error)
+	status.AppendStatus(light_flow.Stop)
+	status.AppendStatus(light_flow.Success)
+	if status.Success() {
 		t.Errorf("explain success while error occur")
 	}
-	if !slices.Contains(light_flow.ExplainStatus(status), "Failed") {
+	if !status.Contain(light_flow.Failed) {
 		t.Errorf("failed status explain error")
 	}
-	if !slices.Contains(light_flow.ExplainStatus(status), "Timeout") {
+	if !status.Contain(light_flow.Timeout) {
 		t.Errorf("timeout status explain error")
 	}
-	if !slices.Contains(light_flow.ExplainStatus(status), "Panic") {
+	if !status.Contain(light_flow.Panic) {
 		t.Errorf("panic status explain error")
 	}
-	if !slices.Contains(light_flow.ExplainStatus(status), "Cancel") {
+	if !status.Contain(light_flow.Cancel) {
 		t.Errorf("cancel status explain error")
 	}
-	if !slices.Contains(light_flow.ExplainStatus(status), "Stop") {
+	if !status.Contain(light_flow.Stop) {
 		t.Errorf("stop status explain error")
 	}
 
-	status = 0
-	light_flow.AppendStatus(&status, light_flow.Pause)
-	light_flow.AppendStatus(&status, light_flow.Running)
-	light_flow.AppendStatus(&status, light_flow.Pending)
-	if !light_flow.IsStatusNormal(status) {
+	status = light_flow.Status(0)
+	status.AppendStatus(light_flow.Pause)
+	status.AppendStatus(light_flow.Running)
+	status.AppendStatus(light_flow.Pending)
+	if !status.Normal() {
 		t.Errorf("normal status judge error")
 	}
-	if !slices.Contains(light_flow.ExplainStatus(status), "Pause") {
+	if !status.Contain(light_flow.Pause) {
 		t.Errorf("pause status explain error")
 	}
-	if !slices.Contains(light_flow.ExplainStatus(status), "Running") {
+	if !status.Contain(light_flow.Running) {
 		t.Errorf("running status explain error")
 	}
-	if !slices.Contains(light_flow.ExplainStatus(status), "Pending") {
-		t.Errorf("pending status explain error")
-	}
-	light_flow.AppendStatus(&status, light_flow.Success)
-	if !slices.Contains(light_flow.ExplainStatus(status), "Success") {
+	status.AppendStatus(light_flow.Success)
+	if !status.Contain(light_flow.Success) || !status.Success() {
 		t.Errorf("success status explain error")
-	}
-}
-
-func TestIsStatusNormal(t *testing.T) {
-	normal := []int64{light_flow.Pending, light_flow.Running, light_flow.Pause, light_flow.Success}
-	abnormal := []int64{light_flow.Cancel, light_flow.Timeout, light_flow.Panic, light_flow.Failed}
-	for _, status := range normal {
-		if !light_flow.IsStatusNormal(status) {
-			t.Errorf("normal status %d judge to abnormal", status)
-		}
-	}
-	for _, status := range abnormal {
-		if light_flow.IsStatusNormal(status) {
-			t.Errorf("abnormal status %d judge to normal", status)
-		}
 	}
 }
 

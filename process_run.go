@@ -11,6 +11,7 @@ import (
 type RunProcess struct {
 	*ProcessMeta
 	*Context
+	*Status
 	id        string
 	flowId    string
 	flowSteps map[string]*RunStep
@@ -18,11 +19,11 @@ type RunProcess struct {
 	pause     sync.WaitGroup
 	needRun   sync.WaitGroup
 	finish    sync.WaitGroup
-	status    int64
 }
 
-func (rp *RunProcess) addStep(meta *StepMeta) *RunStep {
+func (rp *RunProcess) buildRunStep(meta *StepMeta) *RunStep {
 	step := RunStep{
+		Status:    emptyStatus(),
 		StepMeta:  meta,
 		id:        generateId(),
 		processId: rp.id,
@@ -50,24 +51,24 @@ func (rp *RunProcess) addStep(meta *StepMeta) *RunStep {
 }
 
 func (rp *RunProcess) Resume() {
-	if PopStatus(&rp.status, Pause) {
+	if rp.Pop(Pause) {
 		rp.pause.Done()
 	}
 }
 
 func (rp *RunProcess) Pause() {
-	if AppendStatus(&rp.status, Pause) {
+	if rp.AppendStatus(Pause) {
 		rp.pause.Add(1)
 	}
 }
 
 func (rp *RunProcess) Stop() {
-	AppendStatus(&rp.status, Stop)
+	rp.AppendStatus(Stop)
 }
 
 func (rp *RunProcess) flow() *Feature {
 	rp.initialize()
-	AppendStatus(&rp.status, Running)
+	rp.AppendStatus(Running)
 	rp.procCallback(Before)
 	for _, step := range rp.flowSteps {
 		if step.layer == 1 {
@@ -79,7 +80,7 @@ func (rp *RunProcess) flow() *Feature {
 
 	rp.finish.Add(1)
 	feature := Feature{
-		status:  &rp.status,
+		Status:  rp.Status,
 		finish:  &rp.finish,
 		running: &rp.needRun,
 	}
@@ -91,25 +92,23 @@ func (rp *RunProcess) scheduleStep(step *RunStep) {
 	defer rp.scheduleNextSteps(step)
 
 	if _, finish := step.GetStepResult(step.stepName); finish {
-		AppendStatus(&step.status, Success)
+		step.AppendStatus(Success)
 		return
 	}
 
-	status := atomic.LoadInt64(&rp.status)
-	if !IsStatusNormal(status) {
-		AppendStatus(&step.status, Cancel)
+	if !rp.Normal() {
+		step.AppendStatus(Cancel)
 		return
 	}
 
 	// If prev step is abnormal, the current step will mark as cancel
 	// But other tasks that do not depend on the failed task will continue to execute
-	if status = atomic.LoadInt64(&step.status); !IsStatusNormal(status) {
+	if !step.Normal() {
 		return
 	}
 
-	for status = atomic.LoadInt64(&rp.status); status&Pause == Pause; {
+	for rp.Contain(Pause) {
 		rp.pause.Wait()
-		status = atomic.LoadInt64(&rp.status)
 	}
 
 	go rp.runStep(step)
@@ -125,7 +124,7 @@ func (rp *RunProcess) scheduleStep(step *RunStep) {
 	timer := time.NewTimer(timeout)
 	select {
 	case <-timer.C:
-		AppendStatus(&step.status, Timeout)
+		step.AppendStatus(Timeout)
 	case <-step.finish:
 		return
 	}
@@ -147,33 +146,35 @@ func (rp *RunProcess) finalize() {
 	timer := time.NewTimer(timeout)
 	select {
 	case <-timer.C:
-		AppendStatus(&rp.status, Timeout)
+		rp.AppendStatus(Timeout)
 	case <-finish:
 	}
 
 	for _, step := range rp.flowSteps {
-		AppendStatus(&rp.status, step.status)
+		rp.combine(step.Status)
 	}
-	if IsStatusNormal(rp.status) {
-		AppendStatus(&rp.status, Success)
+
+	if rp.Normal() {
+		rp.AppendStatus(Success)
 	}
+
 	rp.finish.Done()
 }
 
 func (rp *RunProcess) scheduleNextSteps(step *RunStep) {
 	// all step not execute should cancel while process is timeout
-	cancel := !IsStatusNormal(step.status) || !IsStatusNormal(rp.status)
+	cancel := !step.Normal() || !rp.Normal()
 	for _, waiter := range step.waiters {
 		next := rp.flowSteps[waiter.stepName]
 		current := atomic.AddInt64(&next.waiting, -1)
 		if cancel {
-			AppendStatus(&next.status, Cancel)
+			next.AppendStatus(Cancel)
 		}
 		if atomic.LoadInt64(&current) != 0 {
 			continue
 		}
-		if step.status&Success == Success {
-			AppendStatus(&next.status, Running)
+		if step.Success() {
+			next.AppendStatus(Running)
 		}
 		go rp.scheduleStep(next)
 	}
@@ -187,7 +188,7 @@ func (rp *RunProcess) runStep(step *RunStep) {
 	step.Start = time.Now().UTC()
 	rp.stepCallback(step, Before)
 	// if beforeStep panic occur, the step will mark as panic
-	if !IsStatusNormal(step.status) {
+	if !step.Normal() {
 		return
 	}
 
@@ -202,7 +203,8 @@ func (rp *RunProcess) runStep(step *RunStep) {
 	defer func() {
 		if r := recover(); r != nil {
 			panicErr := fmt.Errorf("panic: %v\n\n%s", r, string(debug.Stack()))
-			AppendStatus(&step.status, Panic)
+			step.AppendStatus(Panic)
+			println(panicErr.Error())
 			step.Err = panicErr
 			step.End = time.Now().UTC()
 		}
@@ -215,11 +217,11 @@ func (rp *RunProcess) runStep(step *RunStep) {
 		step.Err = err
 		step.Set(step.stepName, result)
 		if err != nil {
-			AppendStatus(&step.status, Error)
+			step.AppendStatus(Error)
 			continue
 		}
 		rp.setStepResult(step.stepName, result)
-		AppendStatus(&step.status, Success)
+		step.AppendStatus(Success)
 		break
 	}
 }
@@ -241,9 +243,9 @@ func (rp *RunProcess) procCallback(flag string) {
 
 	info := &ProcessInfo{
 		BasicInfo: &BasicInfo{
+			Status: rp.Status,
 			Id:     rp.id,
 			Name:   rp.processName,
-			status: &rp.status,
 		},
 		FlowId: rp.flowId,
 		Ctx:    rp.Context,
@@ -255,9 +257,9 @@ func (rp *RunProcess) procCallback(flag string) {
 func (rp *RunProcess) summaryStepInfo(step *RunStep) *StepInfo {
 	info := &StepInfo{
 		BasicInfo: &BasicInfo{
+			Status: step.Status,
 			Id:     step.id,
 			Name:   step.stepName,
-			status: &step.status,
 		},
 		ProcessId: step.processId,
 		FlowId:    step.flowId,

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"sync"
-	"sync/atomic"
 )
 
 var (
@@ -27,7 +26,7 @@ type Controller interface {
 }
 
 type Result interface {
-	Status
+	StatusI
 	Features() map[string]*Feature
 }
 
@@ -58,12 +57,12 @@ type FlowConfig struct {
 
 type RunFlow struct {
 	*FlowMeta
+	*Status
 	id         string
 	processMap map[string]*RunProcess
 	context    *Context
 	features   map[string]*Feature
 	lock       sync.Mutex
-	status     int64
 	finish     sync.WaitGroup
 }
 
@@ -253,6 +252,7 @@ func (fm *FlowMeta) BuildRunFlow(input map[string]any) *RunFlow {
 	}
 
 	wf := RunFlow{
+		Status:     emptyStatus(),
 		FlowMeta:   fm,
 		id:         generateId(),
 		lock:       sync.Mutex{},
@@ -306,6 +306,7 @@ func (wf *RunFlow) buildRunProcess(meta *ProcessMeta) *RunProcess {
 	}
 
 	process := RunProcess{
+		Status:      emptyStatus(),
 		ProcessMeta: meta,
 		Context:     &pcsCtx,
 		id:          generateId(),
@@ -320,25 +321,12 @@ func (wf *RunFlow) buildRunProcess(meta *ProcessMeta) *RunProcess {
 	pcsCtx.parents = append(pcsCtx.parents, wf.context)
 
 	for _, stepMeta := range meta.sortedStepMeta() {
-		process.addStep(stepMeta)
+		process.buildRunStep(stepMeta)
 	}
 
 	process.needRun.Add(len(process.flowSteps))
 
 	return &process
-}
-
-func (wf *RunFlow) Exceptions() []string {
-	if wf.Success() {
-		return nil
-	}
-	return ExplainStatus(atomic.LoadInt64(&wf.status))
-}
-
-func (wf *RunFlow) Success() bool {
-	// Maybe some process is success and other is fail
-	// so even if the status include success, but the workflow is not success
-	return wf.status&Success == Success && IsStatusNormal(wf.status)
 }
 
 // Done function will block util all process done.
@@ -368,9 +356,9 @@ func (wf *RunFlow) Flow() map[string]*Feature {
 	wf.initialize()
 	info := &FlowInfo{
 		BasicInfo: &BasicInfo{
+			Status: wf.Status,
 			Id:     wf.id,
 			Name:   wf.name,
-			status: &wf.status,
 		},
 		Ctx: wf.context,
 	}
@@ -382,22 +370,25 @@ func (wf *RunFlow) Flow() map[string]*Feature {
 		features[name] = process.flow()
 	}
 	wf.features = features
-	if wf.FlowConfig != nil && wf.FlowConfig.flowCallback != nil {
-		go func() {
-			for _, feature := range features {
-				feature.Done()
-			}
-			wf.flowCallback.process(After, info)
-			for _, process := range wf.processMap {
-				wf.status |= process.status
-			}
-			if IsStatusNormal(wf.status) {
-				wf.status |= Success
-			}
-			wf.finish.Done()
-		}()
-	}
 	wf.finish.Add(1)
+	if wf.FlowConfig == nil || wf.FlowConfig.flowCallback == nil {
+		return features
+	}
+
+	go func() {
+		for _, feature := range features {
+			feature.Done()
+		}
+		wf.flowCallback.process(After, info)
+		for _, process := range wf.processMap {
+			wf.combine(process.Status)
+		}
+		if wf.Normal() {
+			wf.AppendStatus(Success)
+		}
+		wf.finish.Done()
+	}()
+
 	return features
 }
 

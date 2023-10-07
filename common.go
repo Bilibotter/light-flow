@@ -23,59 +23,52 @@ const (
 	Merged  = int64(0b1 << 3)
 )
 
-// these constants are used to indicate the status of the process
-const (
-	Pending    = int64(0)
-	Running    = int64(0b1)
-	Pause      = int64(0b1 << 1)
-	Success    = int64(0b1 << 15)
-	NormalMask = int64(0b1<<16 - 1)
-	Cancel     = int64(0b1 << 16)
-	Timeout    = int64(0b1 << 17)
-	Panic      = int64(0b1 << 18)
-	Error      = int64(0b1 << 19)
-	Stop       = int64(0b1 << 20)
-	Failed     = int64(0b1 << 31)
-	// abnormal produce status will cause the cancellation of unexecuted steps during execution
-	// abnormal step status will cause the cancellation of unexecuted steps that depend on it
-	AbnormalMask = NormalMask << 16
+// these variable are used to indicate the status of the unit
+var (
+	Pending    = &StatusEnum{0, "Pending"}
+	Running    = &StatusEnum{0b1, "Running"}
+	Pause      = &StatusEnum{0b1 << 1, "Pause"}
+	Success    = &StatusEnum{0b1 << 15, "Success"}
+	NormalMask = &StatusEnum{0b1<<16 - 1, "NormalMask"}
+	Cancel     = &StatusEnum{0b1 << 16, "Cancel"}
+	Timeout    = &StatusEnum{0b1 << 17, "Timeout"}
+	Panic      = &StatusEnum{0b1 << 18, "Panic"}
+	Error      = &StatusEnum{0b1 << 19, "Error"}
+	Stop       = &StatusEnum{0b1 << 20, "Stop"}
+	Failed     = &StatusEnum{0b1 << 31, "Failed"}
+	// AbnormalMask An abnormal step status will cause the cancellation of dependent unexecuted steps.
+	AbnormalMask = &StatusEnum{NormalMask.flag << 16, "AbnormalMask"}
 )
 
 var (
-	normal = map[int64]string{
-		Pending: "Pending",
-		Running: "Running",
-		Pause:   "Pause",
-		Success: "Success",
-	}
-
-	abnormal = map[int64]string{
-		Cancel:  "Cancel",
-		Timeout: "Timeout",
-		Panic:   "Panic",
-		Error:   "Error",
-		Stop:    "Stop",
-		Failed:  "Failed",
-	}
+	normal   = []*StatusEnum{Pending, Running, Pause, Success}
+	abnormal = []*StatusEnum{Cancel, Timeout, Panic, Error, Stop, Failed}
 )
 
-type Status interface {
+type Status int64
+
+type StatusI interface {
+	Contain(enum *StatusEnum) bool
 	Success() bool
 	Exceptions() []string
 }
 
 type Info interface {
-	Status
-	addr() *int64
+	StatusI
+	addr() *Status
 	GetId() string
 	GetName() string
-	GetStatus() int64
+}
+
+type StatusEnum struct {
+	flag Status
+	msg  string
 }
 
 type BasicInfo struct {
-	Id     string
-	Name   string
-	status *int64
+	*Status
+	Id   string
+	Name string
 }
 
 type CallbackChain[T Info] struct {
@@ -102,30 +95,17 @@ type Context struct {
 }
 
 type Feature struct {
+	*Status
 	running *sync.WaitGroup
-	status  *int64
 	finish  *sync.WaitGroup
 }
 
-// PopStatus function pops a status bit from the specified address.
-// The function checks if the specified status bit exists in the current value.
-// If it exists, it removes the status bit, and returns true indicating successful removal of the status bit.
-// Otherwise, it returns false.
-func PopStatus(addr *int64, status int64) (change bool) {
-	for current := atomic.LoadInt64(addr); status&current == status; {
-		if atomic.CompareAndSwapInt64(addr, current, current^status) {
-			return true
-		}
-	}
-	return false
-}
-
-// AppendStatus function appends a status bit to the specified address.
+// appendStatus function appends a status bit to the specified address.
 // The function checks if the specified update bit is already present in the current value.
 // If it is not present, it appends the update bit,
 // and returns true indicating successful appending of the update bit.
 // Otherwise, it returns false.
-func AppendStatus(addr *int64, update int64) (change bool) {
+func appendStatus(addr *int64, update int64) (change bool) {
 	for current := atomic.LoadInt64(addr); current&update != update; {
 		if atomic.CompareAndSwapInt64(addr, current, current|update) {
 			return true
@@ -135,50 +115,13 @@ func AppendStatus(addr *int64, update int64) (change bool) {
 	return false
 }
 
-func Contains(status int64, matched int64) bool {
-	return status&matched == matched
+func emptyStatus() *Status {
+	s := Status(0)
+	return &s
 }
 
 func contains(addr *int64, status int64) bool {
 	return atomic.LoadInt64(addr)&status == status
-}
-
-func IsStatusNormal(status int64) bool {
-	if status&AbnormalMask == 0 {
-		return true
-	}
-	return false
-}
-
-// ExplainStatus function explains the status represented by the provided bitmask.
-// The function checks the status against predefined abnormal and normal flags,
-// and returns a slice of strings containing the names of the matching flags.
-// Parameter status is the bitmask representing the status.
-// The returned slice contains the names of the matching flags in the layer they were found.
-// If abnormal flags are found, normal flags will be ignored.
-func ExplainStatus(status int64) []string {
-	compress := make([]string, 0)
-
-	for flag, name := range abnormal {
-		if flag&status == flag {
-			compress = append(compress, name)
-		}
-	}
-	if len(compress) > 0 {
-		return compress
-	}
-
-	if status&Success == Success {
-		return []string{"Success"}
-	}
-
-	for flag, name := range normal {
-		if flag&status == flag {
-			compress = append(compress, name)
-		}
-	}
-
-	return compress
 }
 
 func toStepName(value any) string {
@@ -194,31 +137,114 @@ func toStepName(value any) string {
 	return result
 }
 
+func (s *Status) Success() bool {
+	return s.Contain(Success) && (*s&AbnormalMask.flag == 0)
+}
+
+func (s *Status) Normal() bool {
+	return s.load()&AbnormalMask.flag == 0
+}
+
+func (s *Status) Contain(enum *StatusEnum) bool {
+	// can't use s.load()&enum.flag != 0, because enum.flag may be 0
+	return s.load()&enum.flag == enum.flag
+}
+
+func (s *Status) Exceptions() []string {
+	if s.Success() {
+		return nil
+	}
+	return s.Explain()
+}
+
+// Explain function explains the status represented by the provided bitmask.
+// The function checks the status against predefined abnormal and normal flags,
+// and returns a slice of strings containing the names of the matching flags.
+// Parameter status is the bitmask representing the status.
+// The returned slice contains the names of the matching flags in the layer they were found.
+// If abnormal flags are found, normal flags will be ignored.
+func (s *Status) Explain() []string {
+	compress := make([]string, 0)
+
+	for _, enum := range abnormal {
+		if s.Contain(enum) {
+			compress = append(compress, enum.Message())
+		}
+	}
+	if len(compress) > 0 {
+		return compress
+	}
+
+	for _, enum := range normal {
+		if s.Contain(enum) {
+			compress = append(compress, enum.Message())
+		}
+	}
+
+	return compress
+}
+
+func (s *Status) combine(status *Status) {
+	for current := s.load(); current|status.load() != current; current = s.load() {
+		if s.cas(current, current|status.load()) {
+			return
+		}
+	}
+}
+
+// Pop function pops a status bit from the specified address.
+// The function checks if the specified status bit exists in the current value.
+// If it exists, it removes the status bit, and returns true indicating successful removal of the status bit.
+// Otherwise, it returns false.
+func (s *Status) Pop(enum *StatusEnum) bool {
+	for current := s.load(); enum.flag&current != 0; {
+		if s.cas(current, current^enum.flag) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Status) AppendStatus(enum *StatusEnum) bool {
+	for current := s.load(); !current.Contain(enum); current = s.load() {
+		if s.cas(current, current|enum.flag) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Status) load() Status {
+	return Status(atomic.LoadInt64((*int64)(s)))
+}
+
+func (s *Status) cas(old, new Status) bool {
+	return atomic.CompareAndSwapInt64((*int64)(s), int64(old), int64(new))
+}
+
+func (s *StatusEnum) Contained(explain []string) bool {
+	for _, value := range explain {
+		if value == s.msg {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *StatusEnum) Message() string {
+	return s.msg
+}
+
 func (bi *BasicInfo) GetName() string {
 	return bi.Name
 }
 
-func (bi *BasicInfo) GetStatus() int64 {
-	return atomic.LoadInt64(bi.status)
-}
-
-func (bi *BasicInfo) addr() *int64 {
-	return bi.status
+func (bi *BasicInfo) addr() *Status {
+	return bi.Status
 }
 
 func (bi *BasicInfo) GetId() string {
 	return bi.Id
-}
-
-func (bi *BasicInfo) Success() bool {
-	return atomic.LoadInt64(bi.status)&Success == Success && IsStatusNormal(atomic.LoadInt64(bi.status))
-}
-
-func (bi *BasicInfo) Exceptions() []string {
-	if bi.Success() {
-		return nil
-	}
-	return ExplainStatus(atomic.LoadInt64(bi.status))
 }
 
 func (cc *CallbackChain[T]) CopyChain() []*Callback[T] {
@@ -256,7 +282,8 @@ func (cc *CallbackChain[T]) process(flag string, info T) (panicStack string) {
 		keepOn, panicStack = filter.invoke(flag, info)
 		// len(panicStack) != 0 when callback that must be executed encounters panic
 		if len(panicStack) != 0 {
-			AppendStatus(info.addr(), Panic)
+			info.addr().AppendStatus(Panic)
+			println(panicStack)
 			return
 		}
 		if !keepOn {
@@ -280,10 +307,10 @@ func (c *Callback[T]) OnlyFor(name ...string) *Callback[T] {
 	return c
 }
 
-func (c *Callback[T]) When(status ...int64) *Callback[T] {
+func (c *Callback[T]) When(status ...*StatusEnum) *Callback[T] {
 	f := func(info T) bool {
 		for _, match := range status {
-			if Contains(info.GetStatus(), match) {
+			if info.Contain(match) {
 				return c.run(info)
 			}
 		}
@@ -383,13 +410,4 @@ func (ctx *Context) getByPriority(key string) (any, bool) {
 func (f *Feature) Done() {
 	f.running.Wait()
 	f.finish.Wait()
-}
-
-func (f *Feature) Success() bool {
-	return *f.status&Success == Success && IsStatusNormal(atomic.LoadInt64(f.status))
-}
-
-// See common.ExplainStatus for details.
-func (f *Feature) ExplainStatus() []string {
-	return ExplainStatus(atomic.LoadInt64(f.status))
 }

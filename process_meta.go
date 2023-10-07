@@ -123,7 +123,7 @@ func (pm *ProcessMeta) Merge(name string) {
 			depends = append(depends, depend.stepName)
 		}
 		step := pm.AddStepWithAlias(merge.stepName, merge.run, depends...)
-		AppendStatus(&step.position, Merged)
+		appendStatus(&step.position, Merged)
 	}
 }
 
@@ -231,16 +231,16 @@ func (pm *ProcessMeta) AddStepWithAlias(alias string, run func(ctx *Context) (an
 		meta.depends = append(meta.depends, depend)
 		depend.waiters = append(depend.waiters, meta)
 		if contains(&depend.position, End) {
-			AppendStatus(&depend.position, HasNext)
+			appendStatus(&depend.position, HasNext)
 		}
 		if depend.layer+1 > meta.layer {
 			meta.layer = depend.layer + 1
 		}
 	}
 
-	AppendStatus(&meta.position, End)
+	appendStatus(&meta.position, End)
 	if len(depends) == 0 {
-		AppendStatus(&meta.position, Start)
+		appendStatus(&meta.position, Start)
 	}
 
 	pm.tailStep = meta.stepName

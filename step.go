@@ -20,11 +20,11 @@ type StepMeta struct {
 type RunStep struct {
 	*StepMeta
 	*Context
+	*Status
 	id        string
 	flowId    string
 	processId string
 	waiting   int64 // the num of wait for dependent step to complete
-	status    int64
 	finish    chan bool
 	Start     time.Time
 	End       time.Time
