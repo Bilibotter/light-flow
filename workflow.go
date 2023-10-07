@@ -56,9 +56,9 @@ type RunFlow struct {
 	processMap map[string]*RunProcess
 	context    *Context
 	features   map[string]*Feature
-	finish     sync.WaitGroup
 	lock       sync.Mutex
 	status     int64
+	finish     sync.WaitGroup
 }
 
 type FlowInfo struct {
@@ -82,8 +82,9 @@ func SetDefaultConfig(config *Configuration) {
 
 func RegisterFlow(name string) *FlowMeta {
 	flow := FlowMeta{
-		name: name,
-		init: sync.Once{},
+		FlowConfig: &FlowConfig{flowCallback: &CallbackChain[*FlowInfo]{}},
+		name:       name,
+		init:       sync.Once{},
 	}
 	flow.register()
 	return &flow
@@ -102,7 +103,7 @@ func AsyncFlow(name string, input map[string]any) WorkFlowCtrl {
 	if !ok {
 		panic(fmt.Sprintf("flow factory [%s] not found", name))
 	}
-	flow := factory.(*FlowMeta).BuildWorkflow(input)
+	flow := factory.(*FlowMeta).BuildRunFlow(input)
 	flow.Flow()
 	return flow
 }
@@ -120,16 +121,16 @@ func DoneFlow(name string, input map[string]any) map[string]*Feature {
 	if !ok {
 		panic(fmt.Sprintf("flow factory [%s] not found", name))
 	}
-	flow := factory.(*FlowMeta).BuildWorkflow(input)
+	flow := factory.(*FlowMeta).BuildRunFlow(input)
 	return flow.Done()
 }
 
-func BuildWorkflow(name string, input map[string]any) *RunFlow {
+func BuildRunFlow(name string, input map[string]any) *RunFlow {
 	factory, ok := allFlows.Load(name)
 	if !ok {
 		panic(fmt.Sprintf("flow factory [%s] not found", name))
 	}
-	return factory.(*FlowMeta).BuildWorkflow(input)
+	return factory.(*FlowMeta).BuildRunFlow(input)
 }
 
 func (c *Configuration) AddBeforeStep(must bool, callback func(*StepInfo) (keepOn bool)) *Callback[*StepInfo] {
@@ -158,6 +159,34 @@ func (c *Configuration) AddAfterProcess(must bool, callback func(*ProcessInfo) (
 		c.ProcessConfig = &ProcessConfig{}
 	}
 	return c.ProcessConfig.AddAfterProcess(must, callback)
+}
+
+func (c *Configuration) AddBeforeFlow(must bool, callback func(*FlowInfo) (keepOn bool)) *Callback[*FlowInfo] {
+	if c.FlowConfig == nil {
+		c.FlowConfig = &FlowConfig{}
+	}
+	return c.FlowConfig.AddBeforeFlow(must, callback)
+}
+
+func (c *Configuration) AddAfterFlow(must bool, callback func(*FlowInfo) (keepOn bool)) *Callback[*FlowInfo] {
+	if c.FlowConfig == nil {
+		c.FlowConfig = &FlowConfig{}
+	}
+	return c.FlowConfig.AddAfterFlow(must, callback)
+}
+
+func (fc *FlowConfig) AddBeforeFlow(must bool, callback func(*FlowInfo) (keepOn bool)) *Callback[*FlowInfo] {
+	if fc.flowCallback == nil {
+		fc.flowCallback = &CallbackChain[*FlowInfo]{}
+	}
+	return fc.flowCallback.Add(Before, must, callback)
+}
+
+func (fc *FlowConfig) AddAfterFlow(must bool, callback func(*FlowInfo) (keepOn bool)) *Callback[*FlowInfo] {
+	if fc.flowCallback == nil {
+		fc.flowCallback = &CallbackChain[*FlowInfo]{}
+	}
+	return fc.flowCallback.Add(After, must, callback)
 }
 
 func (fc *FlowConfig) merge(merged *FlowConfig) *FlowConfig {
@@ -203,11 +232,7 @@ func (fm *FlowMeta) NotUseDefault() *FlowMeta {
 	return fm
 }
 
-func (fm *FlowMeta) AddBeforeFlow(must bool, callback func(*FlowInfo) (keepOn bool)) *Callback[*FlowInfo] {
-	return nil
-}
-
-func (fm *FlowMeta) BuildWorkflow(input map[string]any) *RunFlow {
+func (fm *FlowMeta) BuildRunFlow(input map[string]any) *RunFlow {
 	context := Context{
 		name:      WorkflowCtx,
 		scopes:    []string{WorkflowCtx},
@@ -230,7 +255,7 @@ func (fm *FlowMeta) BuildWorkflow(input map[string]any) *RunFlow {
 	}
 
 	for _, processMeta := range fm.processes {
-		process := wf.addProcess(processMeta)
+		process := wf.buildRunProcess(processMeta)
 		wf.processMap[process.processName] = process
 	}
 
@@ -266,7 +291,7 @@ func (fm *FlowMeta) AddProcess(name string, conf *ProcessConfig) *ProcessMeta {
 	return &pm
 }
 
-func (wf *RunFlow) addProcess(meta *ProcessMeta) *RunProcess {
+func (wf *RunFlow) buildRunProcess(meta *ProcessMeta) *RunProcess {
 	pcsCtx := Context{
 		name:   meta.processName,
 		scopes: []string{ProcessCtx},
@@ -282,6 +307,7 @@ func (wf *RunFlow) addProcess(meta *ProcessMeta) *RunProcess {
 		pcsScope:    map[string]*Context{ProcessCtx: &pcsCtx},
 		pause:       sync.WaitGroup{},
 		needRun:     sync.WaitGroup{},
+		finish:      sync.WaitGroup{},
 	}
 	pcsCtx.scopeCtxs = process.pcsScope
 	pcsCtx.parents = append(pcsCtx.parents, wf.context)
@@ -299,8 +325,11 @@ func (wf *RunFlow) addProcess(meta *ProcessMeta) *RunProcess {
 func (wf *RunFlow) Done() map[string]*Feature {
 	features := wf.Flow()
 	for _, feature := range features {
+		// process finish running and callback
 		feature.Done()
 	}
+	// workflow finish running and callback
+	wf.finish.Wait()
 	return features
 }
 
@@ -339,8 +368,10 @@ func (wf *RunFlow) Flow() map[string]*Feature {
 				feature.Done()
 			}
 			wf.flowCallback.process(After, info)
+			wf.finish.Done()
 		}()
 	}
+	wf.finish.Add(1)
 	return features
 }
 

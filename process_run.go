@@ -17,7 +17,7 @@ type RunProcess struct {
 	pcsScope  map[string]*Context
 	pause     sync.WaitGroup
 	needRun   sync.WaitGroup
-	finish    int64
+	finish    sync.WaitGroup
 	status    int64
 }
 
@@ -77,6 +77,7 @@ func (rp *RunProcess) flow() *Feature {
 
 	go rp.finalize()
 
+	rp.finish.Add(1)
 	feature := Feature{
 		status:  &rp.status,
 		finish:  &rp.finish,
@@ -156,7 +157,7 @@ func (rp *RunProcess) finalize() {
 	if IsStatusNormal(rp.status) {
 		AppendStatus(&rp.status, Success)
 	}
-	atomic.StoreInt64(&rp.finish, 1)
+	rp.finish.Done()
 }
 
 func (rp *RunProcess) scheduleNextSteps(step *RunStep) {

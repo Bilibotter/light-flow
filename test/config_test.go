@@ -48,7 +48,7 @@ func PreProcessor(info *flow.StepInfo) bool {
 		panic("step context is nil")
 	}
 	atomic.AddInt64(&current, 1)
-	fmt.Printf("step[%s] PreProcessor exeucte\n", info.Name)
+	fmt.Printf("..step[%s] PreProcessor exeucte\n", info.Name)
 	return true
 }
 
@@ -78,7 +78,7 @@ func PostProcessor(info *flow.StepInfo) bool {
 		panic("step status is pending")
 	}
 	atomic.AddInt64(&current, 1)
-	fmt.Printf("step[%s] PostProcessor execute\n", info.Name)
+	fmt.Printf("..step[%s] PostProcessor execute\n", info.Name)
 	return true
 }
 
@@ -103,7 +103,7 @@ func ProcProcessor(info *flow.ProcessInfo) bool {
 		panic("process context is nil")
 	}
 	atomic.AddInt64(&current, 1)
-	fmt.Printf("process[%s] ProcProcessor execute \n", info.Name)
+	fmt.Printf("..process[%s] ProcProcessor execute \n", info.Name)
 	return true
 }
 
@@ -655,7 +655,7 @@ func TestRecoverSerialStep(t *testing.T) {
 	process.AddStepWithAlias("3", GenerateStep(3), "2")
 	process.AddStepWithAlias("4", GenerateStep(4), "3")
 	process.AddStepWithAlias("5", GenerateStep(5), "4")
-	wf := flow.BuildWorkflow("TestRecoverSerialStep", nil)
+	wf := flow.BuildRunFlow("TestRecoverSerialStep", nil)
 	if err := wf.SkipFinishedStep("1", nil); err != nil {
 		panic(err.Error())
 	}
@@ -687,7 +687,7 @@ func TestRecoverParallelStep(t *testing.T) {
 	process.AddStepWithAlias("13", GenerateStep(13), "3")
 	process.AddStepWithAlias("4", GenerateStep(4))
 	process.AddStepWithAlias("14", GenerateStep(14), "4")
-	wf := flow.BuildWorkflow("TestRecoverParallelStep", nil)
+	wf := flow.BuildRunFlow("TestRecoverParallelStep", nil)
 	if err := wf.SkipFinishedStep("1", nil); err != nil {
 		panic(err.Error())
 	}
@@ -722,7 +722,7 @@ func TestRecoverAndWaitAll(t *testing.T) {
 	process.AddStepWithAlias("3", GenerateStep(3))
 	process.AddStepWithAlias("4", GenerateStep(4))
 	process.AddWaitAll("5", GenerateStep(5))
-	wf := flow.BuildWorkflow("TestRecoverAndWaitAll", nil)
+	wf := flow.BuildRunFlow("TestRecoverAndWaitAll", nil)
 	if err := wf.SkipFinishedStep("1", nil); err != nil {
 		panic(err.Error())
 	}

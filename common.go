@@ -100,7 +100,7 @@ type Context struct {
 type Feature struct {
 	running *sync.WaitGroup
 	status  *int64
-	finish  *int64
+	finish  *sync.WaitGroup
 }
 
 // PopStatus function pops a status bit from the specified address.
@@ -378,9 +378,7 @@ func (ctx *Context) getByPriority(key string) (any, bool) {
 // Done method waits for the corresponding process to complete.
 func (f *Feature) Done() {
 	f.running.Wait()
-	// wait goroutine to change status
-	for finish := atomic.LoadInt64(f.finish); finish == 0; finish = atomic.LoadInt64(f.finish) {
-	}
+	f.finish.Wait()
 }
 
 func (f *Feature) Success() bool {
