@@ -52,7 +52,7 @@ type FlowMeta struct {
 }
 
 type FlowConfig struct {
-	flowCallback *CallbackChain[*FlowInfo]
+	*CallbackChain[*FlowInfo]
 }
 
 type RunFlow struct {
@@ -87,7 +87,7 @@ func SetDefaultConfig(config *Configuration) {
 
 func RegisterFlow(name string) *FlowMeta {
 	flow := FlowMeta{
-		FlowConfig: &FlowConfig{flowCallback: &CallbackChain[*FlowInfo]{}},
+		FlowConfig: &FlowConfig{&CallbackChain[*FlowInfo]{}},
 		name:       name,
 		init:       sync.Once{},
 	}
@@ -182,24 +182,24 @@ func (c *Configuration) AddAfterFlow(must bool, callback func(*FlowInfo) (keepOn
 }
 
 func (fc *FlowConfig) AddBeforeFlow(must bool, callback func(*FlowInfo) (keepOn bool)) *Callback[*FlowInfo] {
-	if fc.flowCallback == nil {
-		fc.flowCallback = &CallbackChain[*FlowInfo]{}
+	if fc.CallbackChain == nil {
+		fc.CallbackChain = &CallbackChain[*FlowInfo]{}
 	}
-	return fc.flowCallback.Add(Before, must, callback)
+	return fc.AddCallback(Before, must, callback)
 }
 
 func (fc *FlowConfig) AddAfterFlow(must bool, callback func(*FlowInfo) (keepOn bool)) *Callback[*FlowInfo] {
-	if fc.flowCallback == nil {
-		fc.flowCallback = &CallbackChain[*FlowInfo]{}
+	if fc.CallbackChain == nil {
+		fc.CallbackChain = &CallbackChain[*FlowInfo]{}
 	}
-	return fc.flowCallback.Add(After, must, callback)
+	return fc.AddCallback(After, must, callback)
 }
 
 func (fc *FlowConfig) merge(merged *FlowConfig) *FlowConfig {
 	CopyPropertiesSkipNotEmpty(merged, fc)
-	if merged.flowCallback != nil {
-		fc.flowCallback.filters = append(merged.flowCallback.CopyChain(), fc.flowCallback.filters...)
-		fc.flowCallback.sort()
+	if merged.CallbackChain != nil {
+		fc.filters = append(merged.CopyChain(), fc.filters...)
+		fc.sort()
 	}
 	return fc
 }
@@ -362,8 +362,8 @@ func (wf *RunFlow) Flow() map[string]*Feature {
 		},
 		Ctx: wf.context,
 	}
-	if wf.FlowConfig != nil && wf.FlowConfig.flowCallback != nil {
-		wf.FlowConfig.flowCallback.process(Before, info)
+	if wf.FlowConfig != nil && wf.FlowConfig.CallbackChain != nil {
+		wf.process(Before, info)
 	}
 	features := make(map[string]*Feature, len(wf.processMap))
 	for name, process := range wf.processMap {
@@ -371,7 +371,7 @@ func (wf *RunFlow) Flow() map[string]*Feature {
 	}
 	wf.features = features
 	wf.finish.Add(1)
-	if wf.FlowConfig == nil || wf.FlowConfig.flowCallback == nil {
+	if wf.FlowConfig == nil || wf.FlowConfig.CallbackChain == nil {
 		return features
 	}
 
@@ -385,7 +385,7 @@ func (wf *RunFlow) Flow() map[string]*Feature {
 		if wf.Normal() {
 			wf.AppendStatus(Success)
 		}
-		wf.flowCallback.process(After, info)
+		wf.process(After, info)
 		wf.finish.Done()
 	}()
 

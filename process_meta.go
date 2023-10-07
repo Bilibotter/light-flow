@@ -66,7 +66,7 @@ func (pc *ProcessConfig) addStepCallback(flag string, must bool, callback func(*
 	if pc.stepChain == nil {
 		pc.stepChain = &CallbackChain[*StepInfo]{}
 	}
-	return pc.stepChain.Add(flag, must, callback)
+	return pc.stepChain.AddCallback(flag, must, callback)
 }
 
 func (pc *ProcessConfig) AddBeforeProcess(must bool, callback func(*ProcessInfo) (keepOn bool)) *Callback[*ProcessInfo] {
@@ -81,7 +81,7 @@ func (pc *ProcessConfig) addProcessCallback(flag string, must bool, callback fun
 	if pc.procChain == nil {
 		pc.procChain = &CallbackChain[*ProcessInfo]{}
 	}
-	return pc.procChain.Add(flag, must, callback)
+	return pc.procChain.AddCallback(flag, must, callback)
 }
 
 func (pm *ProcessMeta) register() {
@@ -152,11 +152,9 @@ func (pm *ProcessMeta) mergeStep(merge *StepMeta) {
 			continue
 		}
 		depend := pm.steps[add.stepName]
-		if depend.layer > step.layer {
-			if step.forwardSearch(depend.stepName) {
-				panic(fmt.Sprintf("merge failed, because there is a cycle formed by step[%s] and step[%s].",
-					depend.stepName, step.stepName))
-			}
+		if depend.layer > step.layer && step.forwardSearch(depend.stepName) {
+			panic(fmt.Sprintf("merge failed, a circle is formed between step[%s] and step[%s].",
+				depend.stepName, step.stepName))
 		}
 		if depend.layer+1 > step.layer {
 			step.layer = depend.layer + 1

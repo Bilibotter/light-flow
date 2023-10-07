@@ -167,11 +167,11 @@ func (rp *RunProcess) scheduleNextSteps(step *RunStep) {
 	cancel := !step.Normal() || !rp.Normal()
 	for _, waiter := range step.waiters {
 		next := rp.flowSteps[waiter.stepName]
-		current := atomic.AddInt64(&next.waiting, -1)
+		waiting := atomic.AddInt64(&next.waiting, -1)
 		if cancel {
 			next.AppendStatus(Cancel)
 		}
-		if atomic.LoadInt64(&current) != 0 {
+		if atomic.LoadInt64(&waiting) != 0 {
 			continue
 		}
 		if step.Success() {

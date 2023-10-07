@@ -151,7 +151,7 @@ func (s *Status) Contain(enum *StatusEnum) bool {
 }
 
 func (s *Status) Exceptions() []string {
-	if s.Success() {
+	if s.Normal() {
 		return nil
 	}
 	return s.Explain()
@@ -259,7 +259,7 @@ func (cc *CallbackChain[T]) CopyChain() []*Callback[T] {
 	return result
 }
 
-func (cc *CallbackChain[T]) Add(flag string, must bool, run func(info T) bool) *Callback[T] {
+func (cc *CallbackChain[T]) AddCallback(flag string, must bool, run func(info T) bool) *Callback[T] {
 	callback := &Callback[T]{
 		must: must,
 		flag: flag,
@@ -283,7 +283,7 @@ func (cc *CallbackChain[T]) sort() {
 func (cc *CallbackChain[T]) process(flag string, info T) (panicStack string) {
 	var keepOn bool
 	for _, filter := range cc.filters {
-		keepOn, panicStack = filter.invoke(flag, info)
+		keepOn, panicStack = filter.call(flag, info)
 		// len(panicStack) != 0 when callback that must be executed encounters panic
 		if len(panicStack) != 0 {
 			info.addr().AppendStatus(Panic)
@@ -325,7 +325,7 @@ func (c *Callback[T]) When(status ...*StatusEnum) *Callback[T] {
 	return c
 }
 
-func (c *Callback[T]) invoke(flag string, info T) (keepOn bool, panicStack string) {
+func (c *Callback[T]) call(flag string, info T) (keepOn bool, panicStack string) {
 	if c.flag != flag {
 		return true, ""
 	}
