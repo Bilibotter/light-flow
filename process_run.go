@@ -17,7 +17,7 @@ type RunProcess struct {
 	flowSteps map[string]*RunStep
 	pcsScope  map[string]*Context
 	pause     sync.WaitGroup
-	needRun   sync.WaitGroup
+	running   sync.WaitGroup
 	finish    sync.WaitGroup
 }
 
@@ -80,9 +80,8 @@ func (rp *RunProcess) flow() *Feature {
 
 	rp.finish.Add(1)
 	feature := Feature{
-		Status:  rp.Status,
-		finish:  &rp.finish,
-		running: &rp.needRun,
+		Status: rp.Status,
+		finish: &rp.finish,
 	}
 
 	return &feature
@@ -133,7 +132,7 @@ func (rp *RunProcess) scheduleStep(step *RunStep) {
 func (rp *RunProcess) finalize() {
 	finish := make(chan bool, 1)
 	go func() {
-		rp.needRun.Wait()
+		rp.running.Wait()
 		finish <- true
 	}()
 
@@ -180,7 +179,7 @@ func (rp *RunProcess) scheduleNextSteps(step *RunStep) {
 		go rp.scheduleStep(next)
 	}
 
-	rp.needRun.Done()
+	rp.running.Done()
 }
 
 func (rp *RunProcess) runStep(step *RunStep) {

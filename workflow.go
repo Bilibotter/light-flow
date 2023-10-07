@@ -251,7 +251,7 @@ func (fm *FlowMeta) BuildRunFlow(input map[string]any) *RunFlow {
 		context.table.Store(k, v)
 	}
 
-	wf := RunFlow{
+	rf := RunFlow{
 		Status:     emptyStatus(),
 		FlowMeta:   fm,
 		id:         generateId(),
@@ -262,11 +262,11 @@ func (fm *FlowMeta) BuildRunFlow(input map[string]any) *RunFlow {
 	}
 
 	for _, processMeta := range fm.processes {
-		process := wf.buildRunProcess(processMeta)
-		wf.processMap[process.processName] = process
+		process := rf.buildRunProcess(processMeta)
+		rf.processMap[process.processName] = process
 	}
 
-	return &wf
+	return &rf
 }
 
 func (fm *FlowMeta) AddRegisterProcess(name string) {
@@ -298,7 +298,7 @@ func (fm *FlowMeta) AddProcess(name string, conf *ProcessConfig) *ProcessMeta {
 	return &pm
 }
 
-func (wf *RunFlow) buildRunProcess(meta *ProcessMeta) *RunProcess {
+func (rf *RunFlow) buildRunProcess(meta *ProcessMeta) *RunProcess {
 	pcsCtx := Context{
 		name:   meta.processName,
 		scopes: []string{ProcessCtx},
@@ -310,68 +310,68 @@ func (wf *RunFlow) buildRunProcess(meta *ProcessMeta) *RunProcess {
 		ProcessMeta: meta,
 		Context:     &pcsCtx,
 		id:          generateId(),
-		flowId:      wf.id,
+		flowId:      rf.id,
 		flowSteps:   make(map[string]*RunStep),
 		pcsScope:    map[string]*Context{ProcessCtx: &pcsCtx},
 		pause:       sync.WaitGroup{},
-		needRun:     sync.WaitGroup{},
+		running:     sync.WaitGroup{},
 		finish:      sync.WaitGroup{},
 	}
 	pcsCtx.scopeCtxs = process.pcsScope
-	pcsCtx.parents = append(pcsCtx.parents, wf.context)
+	pcsCtx.parents = append(pcsCtx.parents, rf.context)
 
 	for _, stepMeta := range meta.sortedStepMeta() {
 		process.buildRunStep(stepMeta)
 	}
 
-	process.needRun.Add(len(process.flowSteps))
+	process.running.Add(len(process.flowSteps))
 
 	return &process
 }
 
 // Done function will block util all process done.
-func (wf *RunFlow) Done() map[string]*Feature {
-	features := wf.Flow()
+func (rf *RunFlow) Done() map[string]*Feature {
+	features := rf.Flow()
 	for _, feature := range features {
 		// process finish running and callback
 		feature.Done()
 	}
 	// workflow finish running and callback
-	wf.finish.Wait()
+	rf.finish.Wait()
 	return features
 }
 
 // Flow function asynchronous execute process of workflow and return immediately.
-func (wf *RunFlow) Flow() map[string]*Feature {
-	if wf.features != nil {
-		return wf.features
+func (rf *RunFlow) Flow() map[string]*Feature {
+	if rf.features != nil {
+		return rf.features
 	}
 	// avoid duplicate call
-	wf.lock.Lock()
-	defer wf.lock.Unlock()
+	rf.lock.Lock()
+	defer rf.lock.Unlock()
 	// DCL
-	if wf.features != nil {
-		return wf.features
+	if rf.features != nil {
+		return rf.features
 	}
-	wf.initialize()
+	rf.initialize()
 	info := &FlowInfo{
 		BasicInfo: &BasicInfo{
-			Status: wf.Status,
-			Id:     wf.id,
-			Name:   wf.name,
+			Status: rf.Status,
+			Id:     rf.id,
+			Name:   rf.name,
 		},
-		Ctx: wf.context,
+		Ctx: rf.context,
 	}
-	if wf.FlowConfig != nil && wf.FlowConfig.CallbackChain != nil {
-		wf.process(Before, info)
+	if rf.FlowConfig != nil && rf.FlowConfig.CallbackChain != nil {
+		rf.process(Before, info)
 	}
-	features := make(map[string]*Feature, len(wf.processMap))
-	for name, process := range wf.processMap {
+	features := make(map[string]*Feature, len(rf.processMap))
+	for name, process := range rf.processMap {
 		features[name] = process.flow()
 	}
-	wf.features = features
-	wf.finish.Add(1)
-	if wf.FlowConfig == nil || wf.FlowConfig.CallbackChain == nil {
+	rf.features = features
+	rf.finish.Add(1)
+	if rf.FlowConfig == nil || rf.FlowConfig.CallbackChain == nil {
 		return features
 	}
 
@@ -379,23 +379,23 @@ func (wf *RunFlow) Flow() map[string]*Feature {
 		for _, feature := range features {
 			feature.Done()
 		}
-		for _, process := range wf.processMap {
-			wf.combine(process.Status)
+		for _, process := range rf.processMap {
+			rf.combine(process.Status)
 		}
-		if wf.Normal() {
-			wf.AppendStatus(Success)
+		if rf.Normal() {
+			rf.AppendStatus(Success)
 		}
-		wf.process(After, info)
-		wf.finish.Done()
+		rf.process(After, info)
+		rf.finish.Done()
 	}()
 
 	return features
 }
 
-func (wf *RunFlow) SkipFinishedStep(name string, result any) error {
+func (rf *RunFlow) SkipFinishedStep(name string, result any) error {
 	count := 0
-	for processName := range wf.processMap {
-		if err := wf.skipProcessStep(processName, name, result); err == nil {
+	for processName := range rf.processMap {
+		if err := rf.skipProcessStep(processName, name, result); err == nil {
 			count += 1
 		}
 	}
@@ -409,8 +409,8 @@ func (wf *RunFlow) SkipFinishedStep(name string, result any) error {
 	return nil
 }
 
-func (wf *RunFlow) skipProcessStep(processName, stepName string, result any) error {
-	process, exist := wf.processMap[processName]
+func (rf *RunFlow) skipProcessStep(processName, stepName string, result any) error {
+	process, exist := rf.processMap[processName]
 	if !exist {
 		return fmt.Errorf("prcoess [%s] not found in workflow", processName)
 	}
@@ -422,40 +422,40 @@ func (wf *RunFlow) skipProcessStep(processName, stepName string, result any) err
 	return nil
 }
 
-func (wf *RunFlow) Features() map[string]*Feature {
-	return wf.features
+func (rf *RunFlow) Features() map[string]*Feature {
+	return rf.features
 }
 
-func (wf *RunFlow) ListProcess() []string {
-	processes := make([]string, 0, len(wf.processMap))
-	for name := range wf.processMap {
+func (rf *RunFlow) ListProcess() []string {
+	processes := make([]string, 0, len(rf.processMap))
+	for name := range rf.processMap {
 		processes = append(processes, name)
 	}
 	return processes
 }
 
-func (wf *RunFlow) ProcessController(name string) Controller {
-	process, exist := wf.processMap[name]
+func (rf *RunFlow) ProcessController(name string) Controller {
+	process, exist := rf.processMap[name]
 	if !exist {
 		return nil
 	}
 	return process
 }
 
-func (wf *RunFlow) Pause() {
-	for _, process := range wf.processMap {
+func (rf *RunFlow) Pause() {
+	for _, process := range rf.processMap {
 		process.Pause()
 	}
 }
 
-func (wf *RunFlow) Resume() {
-	for _, process := range wf.processMap {
+func (rf *RunFlow) Resume() {
+	for _, process := range rf.processMap {
 		process.Resume()
 	}
 }
 
-func (wf *RunFlow) Stop() {
-	for _, process := range wf.processMap {
+func (rf *RunFlow) Stop() {
+	for _, process := range rf.processMap {
 		process.Stop()
 	}
 }

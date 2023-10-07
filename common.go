@@ -96,8 +96,7 @@ type Context struct {
 
 type Feature struct {
 	*Status
-	running *sync.WaitGroup
-	finish  *sync.WaitGroup
+	finish *sync.WaitGroup
 }
 
 // appendStatus function appends a status bit to the specified address.
@@ -413,6 +412,5 @@ func (ctx *Context) getByPriority(key string) (any, bool) {
 
 // Done method waits for the corresponding process to complete.
 func (f *Feature) Done() {
-	f.running.Wait()
 	f.finish.Wait()
 }
