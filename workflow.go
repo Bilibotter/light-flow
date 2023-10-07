@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"sync"
+	"sync/atomic"
 )
 
 var (
@@ -25,12 +26,17 @@ type Controller interface {
 	Stop()
 }
 
+type Result interface {
+	Status
+	Features() map[string]*Feature
+}
+
 type WorkFlowCtrl interface {
 	Controller
+	Result
 	Done() map[string]*Feature
-	GetFeatures() map[string]*Feature
 	ListProcess() []string
-	GetProcessController(name string) Controller
+	ProcessController(name string) Controller
 }
 
 type Configuration struct {
@@ -108,7 +114,7 @@ func AsyncFlow(name string, input map[string]any) WorkFlowCtrl {
 	return flow
 }
 
-func DoneArgs(name string, args ...any) map[string]*Feature {
+func DoneArgs(name string, args ...any) Result {
 	input := make(map[string]any, len(args))
 	for _, arg := range args {
 		input[GetStructName(arg)] = arg
@@ -116,13 +122,14 @@ func DoneArgs(name string, args ...any) map[string]*Feature {
 	return DoneFlow(name, input)
 }
 
-func DoneFlow(name string, input map[string]any) map[string]*Feature {
+func DoneFlow(name string, input map[string]any) Result {
 	factory, ok := allFlows.Load(name)
 	if !ok {
 		panic(fmt.Sprintf("flow factory [%s] not found", name))
 	}
 	flow := factory.(*FlowMeta).BuildRunFlow(input)
-	return flow.Done()
+	flow.Done()
+	return flow
 }
 
 func BuildRunFlow(name string, input map[string]any) *RunFlow {
@@ -321,6 +328,19 @@ func (wf *RunFlow) buildRunProcess(meta *ProcessMeta) *RunProcess {
 	return &process
 }
 
+func (wf *RunFlow) Exceptions() []string {
+	if wf.Success() {
+		return nil
+	}
+	return ExplainStatus(atomic.LoadInt64(&wf.status))
+}
+
+func (wf *RunFlow) Success() bool {
+	// Maybe some process is success and other is fail
+	// so even if the status include success, but the workflow is not success
+	return wf.status&Success == Success && IsStatusNormal(wf.status)
+}
+
 // Done function will block util all process done.
 func (wf *RunFlow) Done() map[string]*Feature {
 	features := wf.Flow()
@@ -368,6 +388,12 @@ func (wf *RunFlow) Flow() map[string]*Feature {
 				feature.Done()
 			}
 			wf.flowCallback.process(After, info)
+			for _, process := range wf.processMap {
+				wf.status |= process.status
+			}
+			if IsStatusNormal(wf.status) {
+				wf.status |= Success
+			}
 			wf.finish.Done()
 		}()
 	}
@@ -405,7 +431,7 @@ func (wf *RunFlow) skipProcessStep(processName, stepName string, result any) err
 	return nil
 }
 
-func (wf *RunFlow) GetFeatures() map[string]*Feature {
+func (wf *RunFlow) Features() map[string]*Feature {
 	return wf.features
 }
 
@@ -417,7 +443,7 @@ func (wf *RunFlow) ListProcess() []string {
 	return processes
 }
 
-func (wf *RunFlow) GetProcessController(name string) Controller {
+func (wf *RunFlow) ProcessController(name string) Controller {
 	process, exist := wf.processMap[name]
 	if !exist {
 		return nil

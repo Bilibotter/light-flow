@@ -152,7 +152,7 @@ func TestProcessorRandomOrder(t *testing.T) {
 	process.AddBeforeStep(true, CheckStepCurrent(2))
 	process.AddBeforeStep(false, CheckStepCurrent(6))
 	features := flow.DoneFlow("TestProcessorRandomOrder", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		explain := feature.ExplainStatus()
 		if !feature.Success() {
 			t.Errorf("process[%s] failed,explian=%v", name, explain)
@@ -180,7 +180,7 @@ func TestProcessorOrder2(t *testing.T) {
 	process.AddAfterProcess(false, CheckProcCurrent(8))
 	process.AddAfterProcess(true, CheckProcCurrent(7))
 	features := flow.DoneFlow("TestProcessorOrder2", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		explain := feature.ExplainStatus()
 		if !feature.Success() {
 			t.Errorf("process[%s] failed,explian=%v", name, explain)
@@ -208,7 +208,7 @@ func TestProcessorOrder1(t *testing.T) {
 	process.AddAfterProcess(true, CheckProcCurrent(7))
 	process.AddAfterProcess(false, CheckProcCurrent(8))
 	features := flow.DoneFlow("TestProcessorOrder1", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		explain := feature.ExplainStatus()
 		if !feature.Success() {
 			t.Errorf("process[%s] failed,explian=%v", name, explain)
@@ -229,7 +229,7 @@ func TestNonEssentialProcProcessorPanic(t *testing.T) {
 	process.AddStepWithAlias("1", GenerateStep(1))
 	process.AddBeforeProcess(false, PanicProcProcessor)
 	features := flow.DoneFlow("TestNonEssentialProcProcessorPanic1", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		explain := feature.ExplainStatus()
 		if !feature.Success() {
 			t.Errorf("process[%s] failed,explian=%v", name, explain)
@@ -247,7 +247,7 @@ func TestNonEssentialProcProcessorPanic(t *testing.T) {
 	process.AddStepWithAlias("1", GenerateStep(1))
 	process.AddAfterProcess(false, PanicProcProcessor)
 	features = flow.DoneFlow("TestNonEssentialProcProcessorPanic2", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		explain := feature.ExplainStatus()
 		if !feature.Success() {
 			t.Errorf("process[%s] failed,explian=%v", name, explain)
@@ -268,7 +268,7 @@ func TestEssentialProcProcessorPanic(t *testing.T) {
 	process.AddStepWithAlias("1", GenerateStep(1))
 	process.AddBeforeProcess(true, PanicProcProcessor)
 	features := flow.DoneFlow("TestEssentialProcProcessorPanic1", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		if feature.Success() {
 			t.Errorf("process[%s] success, but expected failed", name)
 		}
@@ -286,7 +286,7 @@ func TestEssentialProcProcessorPanic(t *testing.T) {
 	process.AddStepWithAlias("1", GenerateStep(1))
 	process.AddAfterProcess(true, PanicProcProcessor)
 	features = flow.DoneFlow("TestEssentialProcProcessorPanic2", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		if feature.Success() {
 			t.Errorf("process[%s] success, but expected failed", name)
 		}
@@ -307,7 +307,7 @@ func TestNonEssentialStepProcessorPanic(t *testing.T) {
 	process.AddStepWithAlias("1", GenerateStep(1))
 	process.AddBeforeStep(false, PanicStepProcessor)
 	features := flow.DoneFlow("TestNonEssentialStepProcessorPanic1", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		explain := feature.ExplainStatus()
 		if !feature.Success() {
 			t.Errorf("process[%s] failed,explian=%v", name, explain)
@@ -325,7 +325,7 @@ func TestNonEssentialStepProcessorPanic(t *testing.T) {
 	process.AddStepWithAlias("1", GenerateStep(1))
 	process.AddAfterStep(false, PanicStepProcessor)
 	features = flow.DoneFlow("TestNonEssentialStepProcessorPanic2", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		explain := feature.ExplainStatus()
 		if !feature.Success() {
 			t.Errorf("process[%s] failed,explian=%v", name, explain)
@@ -346,7 +346,7 @@ func TestEssentialStepProcessorPanic(t *testing.T) {
 	process.AddStepWithAlias("1", GenerateStep(1))
 	process.AddBeforeStep(true, PanicStepProcessor)
 	features := flow.DoneFlow("TestEssentialStepProcessorPanic1", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		if feature.Success() {
 			t.Errorf("process[%s] success, but expected failed", name)
 		}
@@ -364,7 +364,7 @@ func TestEssentialStepProcessorPanic(t *testing.T) {
 	process.AddStepWithAlias("1", GenerateStep(1))
 	process.AddAfterStep(true, PanicStepProcessor)
 	features = flow.DoneFlow("TestEssentialStepProcessorPanic2", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		if feature.Success() {
 			t.Errorf("process[%s] success, but expected failed", name)
 		}
@@ -391,7 +391,7 @@ func TestProcessorWhenExceptionOccur(t *testing.T) {
 	step := process.AddStepWithAlias("3", GenerateErrorStep(3))
 	step.AddConfig(&flow.StepConfig{Timeout: time.Millisecond})
 	features := flow.DoneFlow("TestProcessorWhenExceptionOccur", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		if feature.Success() {
 			t.Errorf("process[%s] success, but expected failed", name)
 		}
@@ -424,7 +424,7 @@ func TestPreAndPostProcessor(t *testing.T) {
 	process.AddBeforeProcess(true, ProcProcessor)
 	process.AddAfterProcess(true, ProcProcessor)
 	features := flow.DoneFlow("TestPreAndPostProcessor", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
 		}
@@ -444,7 +444,7 @@ func TestWithLongProcessTimeout(t *testing.T) {
 	process.AddStepWithAlias("3", GenerateStep(3), "2")
 	process.AddStepWithAlias("4", GenerateStep(4), "3")
 	features := flow.DoneFlow("TestWithLongProcessTimeout", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
 		}
@@ -464,7 +464,7 @@ func TestWithShortProcessTimeout(t *testing.T) {
 	process.AddStepWithAlias("3", GenerateStep(3), "2")
 	process.AddStepWithAlias("4", GenerateStep(4), "3")
 	features := flow.DoneFlow("TestWithShortProcessTimeout", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		if feature.Success() {
 			t.Errorf("process[%s] success with timeout", name)
 		}
@@ -485,7 +485,7 @@ func TestParallelWithLongDefaultStepTimeout(t *testing.T) {
 	process.AddStepWithAlias("3", GenerateStep(3))
 	process.AddStepWithAlias("4", GenerateStep(4))
 	features := flow.DoneFlow("TestParallelWithLongDefaultStepTimeout", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
@@ -507,7 +507,7 @@ func TestWithLongDefaultStepTimeout(t *testing.T) {
 	process.AddStepWithAlias("3", GenerateStep(3), "2")
 	process.AddStepWithAlias("4", GenerateStep(4), "3")
 	features := flow.DoneFlow("TestWithLongDefaultStepTimeout", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
@@ -529,7 +529,7 @@ func TestWithShortDefaultStepTimeout(t *testing.T) {
 	process.AddStepWithAlias("3", GenerateStep(3), "2")
 	process.AddStepWithAlias("4", GenerateStep(4), "3")
 	features := flow.DoneFlow("TestWithShortDefaultStepTimeout", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if feature.Success() {
@@ -552,7 +552,7 @@ func TestWithLongStepTimeout(t *testing.T) {
 	process.AddStepWithAlias("3", GenerateStep(3), "2")
 	process.AddStepWithAlias("4", GenerateStep(4), "3")
 	features := flow.DoneFlow("TestWithLongStepTimeout", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
@@ -574,7 +574,7 @@ func TestWithShortStepTimeout(t *testing.T) {
 	process.AddStepWithAlias("3", GenerateStep(3), "2")
 	process.AddStepWithAlias("4", GenerateStep(4), "3")
 	features := flow.DoneFlow("TestWithShortStepTimeout", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if feature.Success() {
@@ -594,7 +594,7 @@ func TestSingleErrorStepWithProcessRetry(t *testing.T) {
 	process := workflow.AddProcess("TestSingleErrorStepWithProcessRetry", &config)
 	process.AddStepWithAlias("1", GenerateErrorStep(1))
 	features := flow.DoneFlow("TestSingleErrorStepWithProcessRetry", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if feature.Success() {
@@ -613,7 +613,7 @@ func TestSingleErrorStepWithStepRetry(t *testing.T) {
 	process := workflow.AddProcess("TestSingleErrorStepWithStepRetry", nil)
 	process.AddStepWithAlias("1", GenerateErrorStep(1)).AddConfig(&config)
 	features := flow.DoneFlow("TestSingleErrorStepWithStepRetry", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if feature.Success() {
@@ -633,7 +633,7 @@ func TestSingleErrorStepWithProcessAndStepRetry(t *testing.T) {
 	process := workflow.AddProcess("TestSingleErrorStepWithProcessAndStepRetry", &config)
 	process.AddStepWithAlias("1", GenerateErrorStep(1)).AddConfig(&stepConfig)
 	features := flow.DoneFlow("TestSingleErrorStepWithProcessAndStepRetry", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if feature.Success() {

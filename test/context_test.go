@@ -95,7 +95,7 @@ func TestSearch(t *testing.T) {
 	process.AddStepWithAlias("3", invalidUse, "1")
 	process.AddStepWithAlias("4", getUnExist, "2", "3")
 	features := flow.DoneFlow("TestSearch", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
@@ -148,7 +148,7 @@ func TestPriority(t *testing.T) {
 	step := process.AddStepWithAlias("4", GenerateStepIncAddr(1), "2", "3")
 	step.AddPriority(map[string]any{addrKey: "3"})
 	features := flow.DoneFlow("TestPriority", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
@@ -175,7 +175,7 @@ func TestExpose(t *testing.T) {
 	process.AddStepWithAlias("12", GenerateStepIncAddr(12))
 	process.AddStepWithAlias("13", GenerateStepIncAddr(13))
 	features := flow.DoneFlow("TestExpose", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
@@ -202,7 +202,7 @@ func TestPtrReuse(t *testing.T) {
 	process1.AddStepWithAlias("12", GenerateStepIncAddr(12), "11")
 	process1.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
 	features := flow.DoneFlow("TestPtrReuse", map[string]any{addrKey: &ctx1})
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
@@ -227,7 +227,7 @@ func TestWaitToDoneInMultiple(t *testing.T) {
 	process2.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
 	process2.AddStepWithAlias("14", GenerateSleep(1*time.Second), "13")
 	features := flow.DoneFlow("TestWaitToDoneInMultiple", map[string]any{addrKey: &ctx1})
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
@@ -251,7 +251,7 @@ func TestWorkFlowCtx(t *testing.T) {
 	process2.AddStepWithAlias("12", GenerateStepIncAddr(12), "11")
 	process2.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
 	features := flow.DoneFlow("TestWorkFlowCtx", map[string]any{addrKey: &ctx1})
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
@@ -277,7 +277,7 @@ func TestProcessAndWorkflowCtx(t *testing.T) {
 	process.AddStepWithAlias("12", GenerateStepIncAddr(12), "11")
 	process.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
 	features := flow.DoneFlow("TestProcessAndWorkflowCtx", map[string]any{addrKey: &ctx1})
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
@@ -301,7 +301,7 @@ func TestStepCtx(t *testing.T) {
 	process.AddStepWithAlias("12", GenerateStepIncAddr(12), "11")
 	process.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
 	features := flow.DoneFlow("TestStepCtx", map[string]any{addrKey: &ctx1})
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
@@ -335,7 +335,7 @@ func TestDependStepCtx(t *testing.T) {
 	process.AddStepWithAlias("12", ChangeCtxStepFunc(&ctx6), "11")
 	process.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
 	features := flow.DoneFlow("TestDependStepCtx", map[string]any{addrKey: &ctx1})
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {

@@ -59,13 +59,17 @@ var (
 	}
 )
 
+type Status interface {
+	Success() bool
+	Exceptions() []string
+}
+
 type Info interface {
+	Status
 	addr() *int64
 	GetId() string
 	GetName() string
 	GetStatus() int64
-	Success() bool
-	Exceptions() []string
 }
 
 type BasicInfo struct {

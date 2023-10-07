@@ -44,7 +44,7 @@ func TestInfoCorrect(t *testing.T) {
 	process.AddStepWithAlias("3", GenerateStep(3), "1")
 	process.AddStepWithAlias("4", GenerateStep(4), "2", "3")
 	features := flow.DoneFlow("TestInfoCorrect", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
 		}
@@ -74,7 +74,7 @@ func TestDefaultProcessConfig(t *testing.T) {
 	process.AddStepWithAlias("3", GenerateStep(3), "2")
 	process.AddStepWithAlias("4", GenerateStep(4), "3")
 	features := flow.DoneFlow("TestDefaultProcessConfig", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
 		}
@@ -108,7 +108,7 @@ func TestMergeDefaultProcessConfig(t *testing.T) {
 	process.AddBeforeProcess(true, ProcProcessor)
 	process.AddAfterProcess(true, ProcProcessor)
 	features := flow.DoneFlow("TestMergeDefaultProcessConfig", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
 		}
@@ -140,7 +140,7 @@ func TestUnableDefaultProcessConfig(t *testing.T) {
 	process.AddStepWithAlias("4", GenerateStep(4), "3")
 	process.NotUseDefault()
 	features := flow.DoneFlow("TestUnableDefaultProcessConfig", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
 		}

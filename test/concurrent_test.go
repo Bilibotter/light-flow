@@ -38,7 +38,7 @@ func TestTestMultipleConcurrentDependContext(t *testing.T) {
 		process.AddStepWithAlias(strconv.Itoa(i), NoDelayContextStep, "-1")
 	}
 	features := flow.DoneFlow("TestTestMultipleConcurrentDependContext", map[string]any{addrKey: &current})
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
@@ -59,7 +59,7 @@ func TestMultipleConcurrentContext(t *testing.T) {
 		process.AddStepWithAlias(strconv.Itoa(i), NoDelayContextStep)
 	}
 	features := flow.DoneFlow("TestMultipleConcurrentContext", map[string]any{addrKey: &current})
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
@@ -85,7 +85,7 @@ func TestMultipleConcurrentProcess(t *testing.T) {
 		}
 	}
 	features := flow.DoneFlow("TestMultipleConcurrentProcess", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		if !feature.Success() {
 			t.Errorf("process[%s] run fail", name)
 		}
@@ -106,7 +106,7 @@ func TestMultipleConcurrentStepWithProcessor(t *testing.T) {
 		process.AddStepWithAlias(strconv.Itoa(i), GenerateNoDelayStep(i))
 	}
 	features := flow.DoneFlow("TestMultipleConcurrentStepWithProcessor", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
@@ -127,7 +127,7 @@ func TestMultipleConcurrentStep(t *testing.T) {
 		process.AddStepWithAlias(strconv.Itoa(i), GenerateNoDelayStep(i))
 	}
 	features := flow.DoneFlow("TestMultipleConcurrentStep", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
@@ -157,7 +157,7 @@ func TestMultipleConcurrentDependStep(t *testing.T) {
 		}
 	}
 	features := flow.DoneFlow("TestMultipleConcurrentDependStep", nil)
-	for name, feature := range features {
+	for name, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
