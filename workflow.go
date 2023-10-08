@@ -26,7 +26,7 @@ type Controller interface {
 }
 
 type Result interface {
-	StatusI
+	InfoI
 	Features() map[string]*Feature
 }
 
@@ -57,8 +57,7 @@ type FlowConfig struct {
 
 type RunFlow struct {
 	*FlowMeta
-	*Status
-	id         string
+	*BasicInfo
 	processMap map[string]*RunProcess
 	context    *Context
 	features   map[string]*Feature
@@ -240,7 +239,7 @@ func (fm *FlowMeta) NotUseDefault() *FlowMeta {
 
 func (fm *FlowMeta) BuildRunFlow(input map[string]any) *RunFlow {
 	context := Context{
-		name:      WorkflowCtx,
+		name:      WorkflowCtx + fm.name,
 		scopes:    []string{WorkflowCtx},
 		scopeCtxs: make(map[string]*Context),
 		table:     sync.Map{},
@@ -252,9 +251,12 @@ func (fm *FlowMeta) BuildRunFlow(input map[string]any) *RunFlow {
 	}
 
 	rf := RunFlow{
-		Status:     emptyStatus(),
+		BasicInfo: &BasicInfo{
+			Status: emptyStatus(),
+			Name:   fm.name,
+			Id:     generateId(),
+		},
 		FlowMeta:   fm,
-		id:         generateId(),
 		lock:       sync.Mutex{},
 		context:    &context,
 		processMap: make(map[string]*RunProcess),
@@ -304,7 +306,7 @@ func (fm *FlowMeta) AddProcessWithConf(name string, conf *ProcessConfig) *Proces
 
 func (rf *RunFlow) buildRunProcess(meta *ProcessMeta) *RunProcess {
 	pcsCtx := Context{
-		name:   meta.processName,
+		name:   ProcessCtx + meta.processName,
 		scopes: []string{ProcessCtx},
 		table:  sync.Map{},
 	}
@@ -314,7 +316,7 @@ func (rf *RunFlow) buildRunProcess(meta *ProcessMeta) *RunProcess {
 		ProcessMeta: meta,
 		Context:     &pcsCtx,
 		id:          generateId(),
-		flowId:      rf.id,
+		flowId:      rf.Id,
 		flowSteps:   make(map[string]*RunStep),
 		pcsScope:    map[string]*Context{ProcessCtx: &pcsCtx},
 		pause:       sync.WaitGroup{},
@@ -361,7 +363,7 @@ func (rf *RunFlow) Flow() map[string]*Feature {
 	info := &FlowInfo{
 		BasicInfo: &BasicInfo{
 			Status: rf.Status,
-			Id:     rf.id,
+			Id:     rf.Id,
 			Name:   rf.name,
 		},
 		Ctx: rf.context,

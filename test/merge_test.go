@@ -22,7 +22,7 @@ func TestDependMergedWithEmptyHead(t *testing.T) {
 	process2.AddStepWithAlias("5", GenerateStep(5), "4")
 	features := flow.DoneFlow("TestDependMergedWithEmptyHead2", nil)
 	for name, feature := range features.Features() {
-		explain := strings.Join(feature.Explain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
@@ -33,7 +33,7 @@ func TestDependMergedWithEmptyHead(t *testing.T) {
 	}
 	features = flow.DoneFlow("TestDependMergedWithEmptyHead1", nil)
 	for name, feature := range features.Features() {
-		explain := strings.Join(feature.Explain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
@@ -59,7 +59,7 @@ func TestDependMergedWithNotEmptyHead(t *testing.T) {
 	process2.AddStepWithAlias("5", GenerateStep(5), "4")
 	features := flow.DoneFlow("TestDependMergedWithNotEmptyHead2", nil)
 	for name, feature := range features.Features() {
-		explain := strings.Join(feature.Explain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
@@ -70,7 +70,7 @@ func TestDependMergedWithNotEmptyHead(t *testing.T) {
 	}
 	features = flow.DoneFlow("TestDependMergedWithNotEmptyHead1", nil)
 	for name, feature := range features.Features() {
-		explain := strings.Join(feature.Explain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
@@ -94,7 +94,7 @@ func TestMergeEmpty(t *testing.T) {
 	process2.Merge("TestMergeEmpty1")
 	features := flow.DoneFlow("TestMergeEmpty2", nil)
 	for name, feature := range features.Features() {
-		explain := strings.Join(feature.Explain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
@@ -118,7 +118,7 @@ func TestEmptyMerge(t *testing.T) {
 	process2.Merge("TestEmptyMerge1")
 	features := flow.DoneFlow("TestEmptyMerge2", nil)
 	for name, feature := range features.Features() {
-		explain := strings.Join(feature.Explain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
@@ -129,7 +129,7 @@ func TestEmptyMerge(t *testing.T) {
 	}
 	features = flow.DoneFlow("TestEmptyMerge1", nil)
 	for name, feature := range features.Features() {
-		explain := strings.Join(feature.Explain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
@@ -157,7 +157,7 @@ func TestMergeAbsolutelyDifferent(t *testing.T) {
 	process2.Merge("TestMergeAbsolutelyDifferent1")
 	features := flow.DoneFlow("TestMergeAbsolutelyDifferent2", nil)
 	for name, feature := range features.Features() {
-		explain := strings.Join(feature.Explain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
@@ -168,7 +168,7 @@ func TestMergeAbsolutelyDifferent(t *testing.T) {
 	}
 	features = flow.DoneFlow("TestMergeAbsolutelyDifferent1", nil)
 	for name, feature := range features.Features() {
-		explain := strings.Join(feature.Explain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
@@ -196,7 +196,7 @@ func TestMergeLayerSame(t *testing.T) {
 	process2.Merge("TestMergeLayerSame1")
 	features := flow.DoneFlow("TestMergeLayerSame2", nil)
 	for name, feature := range features.Features() {
-		explain := strings.Join(feature.Explain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
@@ -207,7 +207,7 @@ func TestMergeLayerSame(t *testing.T) {
 	}
 	features = flow.DoneFlow("TestMergeLayerSame1", nil)
 	for name, feature := range features.Features() {
-		explain := strings.Join(feature.Explain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
@@ -235,7 +235,7 @@ func TestMergeLayerDec(t *testing.T) {
 	process2.Merge("TestMergeLayerDec1")
 	features := flow.DoneFlow("TestMergeLayerDec2", nil)
 	for name, feature := range features.Features() {
-		explain := strings.Join(feature.Explain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
@@ -246,7 +246,7 @@ func TestMergeLayerDec(t *testing.T) {
 	}
 	features = flow.DoneFlow("TestMergeLayerDec1", nil)
 	for name, feature := range features.Features() {
-		explain := strings.Join(feature.Explain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
@@ -273,7 +273,7 @@ func TestMergeLayerInc(t *testing.T) {
 	process2.Merge("TestMergeLayerInc1")
 	features := flow.DoneFlow("TestMergeLayerInc2", nil)
 	for name, feature := range features.Features() {
-		explain := strings.Join(feature.Explain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
@@ -301,7 +301,7 @@ func TestMergeSomeSame(t *testing.T) {
 	process2.Merge("TestMergeSomeSame1")
 	features := flow.DoneFlow("TestMergeSomeSame2", nil)
 	for name, feature := range features.Features() {
-		explain := strings.Join(feature.Explain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
@@ -329,7 +329,7 @@ func TestMergeSame(t *testing.T) {
 	process2.Merge("TestMergeSame1")
 	features := flow.DoneFlow("TestMergeSame2", nil)
 	for name, feature := range features.Features() {
-		explain := strings.Join(feature.Explain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)

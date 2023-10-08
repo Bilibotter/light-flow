@@ -32,7 +32,7 @@ func GenerateSleep(duration time.Duration, args ...any) func(ctx *flow.Context) 
 	return func(ctx *flow.Context) (any, error) {
 		addrWrap, ok := ctx.Get(addrKey)
 		if !ok {
-			panic("not found addr")
+			panic(fmt.Sprintf("%s not found addr", ctx.Name()))
 		}
 		atomic.AddInt64(addrWrap.(*int64), 1)
 		return nil, nil
@@ -48,7 +48,7 @@ func ChangeCtxStepFunc(addr *int64, args ...any) func(ctx *flow.Context) (any, e
 		println("change ctx")
 		addrWrap, ok := ctx.Get(addrKey)
 		if !ok {
-			panic("not found addr")
+			panic(fmt.Sprintf("%s not found addr", ctx.Name()))
 		}
 		atomic.AddInt64(addrWrap.(*int64), 1)
 		return nil, nil
@@ -63,7 +63,7 @@ func GenerateStepIncAddr(i int, args ...any) func(ctx *flow.Context) (any, error
 		fmt.Printf("%d.step finish\n", i)
 		addrWrap, ok := ctx.Get(addrKey)
 		if !ok {
-			panic("not found addr")
+			panic(fmt.Sprintf("%s not found addr", ctx.Name()))
 		}
 		atomic.AddInt64(addrWrap.(*int64), 1)
 		return i, nil
@@ -89,6 +89,26 @@ func invalidUse(ctx *flow.Context) (any, error) {
 	return nil, nil
 }
 
+func getAllAndSet(value string, history ...string) func(ctx *flow.Context) (any, error) {
+	return func(ctx *flow.Context) (any, error) {
+		ctx.Set("all", value)
+		ks := flow.NewRoutineUnsafeSet()
+		vs := flow.NewRoutineUnsafeSet()
+		m := ctx.GetAll("all")
+		for k, v := range m {
+			ks.Add(k)
+			vs.Add(v.(string))
+		}
+		for _, v := range history {
+			if !vs.Contains(v) {
+				panic(fmt.Sprintf("ctx[%s] not contain %s", ctx.Name(), v))
+			}
+		}
+		fmt.Printf("ctx[%s] get all keys=%s\n", ctx.Name(), strings.Join(ks.Slice(), ", "))
+		return nil, nil
+	}
+}
+
 func TestSearch(t *testing.T) {
 	defer resetCtx()
 	workflow := flow.RegisterFlow("TestSearch")
@@ -99,7 +119,7 @@ func TestSearch(t *testing.T) {
 	process.AddStepWithAlias("4", getUnExist, "2", "3")
 	features := flow.DoneFlow("TestSearch", nil)
 	for name, feature := range features.Features() {
-		explain := strings.Join(feature.Explain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
@@ -152,7 +172,7 @@ func TestPriority(t *testing.T) {
 	step.AddPriority(map[string]any{addrKey: "3"})
 	features := flow.DoneFlow("TestPriority", nil)
 	for name, feature := range features.Features() {
-		explain := strings.Join(feature.Explain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
@@ -170,16 +190,17 @@ func TestExpose(t *testing.T) {
 	defer resetCtx()
 	workflow := flow.RegisterFlow("TestExpose")
 	process := workflow.AddProcessWithConf("TestExpose1", nil)
+	process.AddAfterStep(true, ErrorResultPrinter)
 	process.AddStepWithAlias("1", ExposeAddrFunc(&ctx1))
-	process.AddStepWithAlias("2", GenerateStepIncAddr(2))
-	process.AddStepWithAlias("3", GenerateStepIncAddr(3))
+	process.AddStepWithAlias("2", GenerateStepIncAddr(2, "ms"))
+	process.AddStepWithAlias("3", GenerateStepIncAddr(3, "ms"))
 	process = workflow.AddProcessWithConf("TestExpose2", nil)
 	process.AddStepWithAlias("11", ExposeAddrFunc(&ctx2))
-	process.AddStepWithAlias("12", GenerateStepIncAddr(12))
-	process.AddStepWithAlias("13", GenerateStepIncAddr(13))
+	process.AddStepWithAlias("12", GenerateStepIncAddr(12, "ms"))
+	process.AddStepWithAlias("13", GenerateStepIncAddr(13, "ms"))
 	features := flow.DoneFlow("TestExpose", nil)
 	for name, feature := range features.Features() {
-		explain := strings.Join(feature.Explain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
@@ -206,7 +227,7 @@ func TestPtrReuse(t *testing.T) {
 	process1.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
 	features := flow.DoneFlow("TestPtrReuse", map[string]any{addrKey: &ctx1})
 	for name, feature := range features.Features() {
-		explain := strings.Join(feature.Explain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
@@ -231,7 +252,7 @@ func TestWaitToDoneInMultiple(t *testing.T) {
 	process2.AddStepWithAlias("14", GenerateSleep(100*time.Millisecond), "13")
 	features := flow.DoneFlow("TestWaitToDoneInMultiple", map[string]any{addrKey: &ctx1})
 	for name, feature := range features.Features() {
-		explain := strings.Join(feature.Explain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
@@ -255,7 +276,7 @@ func TestWorkFlowCtx(t *testing.T) {
 	process2.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
 	features := flow.DoneFlow("TestWorkFlowCtx", map[string]any{addrKey: &ctx1})
 	for name, feature := range features.Features() {
-		explain := strings.Join(feature.Explain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
@@ -281,7 +302,7 @@ func TestProcessAndWorkflowCtx(t *testing.T) {
 	process.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
 	features := flow.DoneFlow("TestProcessAndWorkflowCtx", map[string]any{addrKey: &ctx1})
 	for name, feature := range features.Features() {
-		explain := strings.Join(feature.Explain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
@@ -305,7 +326,7 @@ func TestStepCtx(t *testing.T) {
 	process.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
 	features := flow.DoneFlow("TestStepCtx", map[string]any{addrKey: &ctx1})
 	for name, feature := range features.Features() {
-		explain := strings.Join(feature.Explain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
@@ -339,7 +360,7 @@ func TestDependStepCtx(t *testing.T) {
 	process.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
 	features := flow.DoneFlow("TestDependStepCtx", map[string]any{addrKey: &ctx1})
 	for name, feature := range features.Features() {
-		explain := strings.Join(feature.Explain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", name)
@@ -384,7 +405,7 @@ func TestFlowMultipleAsyncExecute(t *testing.T) {
 	flow5 := flow.AsyncFlow("TestFlowMultipleExecute", map[string]any{addrKey: &ctx5})
 	for _, flowing := range []flow.WorkFlowCtrl{flow1, flow2, flow3, flow4, flow5} {
 		for name, feature := range flowing.Done() {
-			explain := strings.Join(feature.Explain(), ", ")
+			explain := strings.Join(feature.ExplainStatus(), ", ")
 			fmt.Printf("process[%s] explain=%s\n", name, explain)
 			if !feature.Success() {
 				t.Errorf("process[%s] fail", name)
@@ -405,5 +426,24 @@ func TestFlowMultipleAsyncExecute(t *testing.T) {
 	}
 	if atomic.LoadInt64(&ctx5) != 6 {
 		t.Errorf("execute 2 step, but ctx5 = %d", ctx5)
+	}
+}
+
+func TestGetAll(t *testing.T) {
+	workflow := flow.RegisterFlow("TestGetAll")
+	process := workflow.AddProcess("TestGetAll")
+	process.AddAfterStep(true, ErrorResultPrinter)
+	process.AddStepWithAlias("1", getAllAndSet("1", "0"))
+	process.AddStepWithAlias("2", getAllAndSet("2", "0", "1"), "1")
+	process.AddStepWithAlias("3", getAllAndSet("3", "0", "1", "2"), "2")
+	result := flow.DoneFlow("TestGetAll", map[string]any{"all": "0"})
+	if !result.Success() {
+		t.Errorf("flow[%s] failed, explain=%v", result.GetName(), result.Exceptions())
+	}
+	for name, feature := range result.Features() {
+		t.Logf("process[%s] explain=%v", name, feature.ExplainStatus())
+		if !feature.Success() {
+			t.Errorf("process[%s] failed, exceptions=%v", name, feature.Exceptions())
+		}
 	}
 }

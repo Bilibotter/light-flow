@@ -26,6 +26,14 @@ func CreateFromSliceFunc[T any](src []T, transfer func(T) string) *Set {
 	return result
 }
 
+func (s *Set) Slice() []string {
+	result := make([]string, 0, len(s.data))
+	for key := range s.data {
+		result = append(result, key)
+	}
+	return result
+}
+
 func (s *Set) Add(item string) {
 	s.data[item] = true
 }

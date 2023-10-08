@@ -91,7 +91,7 @@ func TestDefaultProcessConfig(t *testing.T) {
 	features := flow.DoneFlow("TestDefaultProcessConfig", nil)
 	for name, feature := range features.Features() {
 		if !feature.Success() {
-			t.Errorf("process[%s] fail, exception=%v", name, feature.Explain())
+			t.Errorf("process[%s] fail, exception=%v", name, feature.ExplainStatus())
 		}
 	}
 	if atomic.LoadInt64(&current) != 16 {

@@ -39,7 +39,7 @@ func TestTestMultipleConcurrentDependContext(t *testing.T) {
 	}
 	features := flow.DoneFlow("TestTestMultipleConcurrentDependContext", map[string]any{addrKey: &current})
 	for name, feature := range features.Features() {
-		explain := strings.Join(feature.Explain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] run fail", name)
@@ -60,7 +60,7 @@ func TestMultipleConcurrentContext(t *testing.T) {
 	}
 	features := flow.DoneFlow("TestMultipleConcurrentContext", map[string]any{addrKey: &current})
 	for name, feature := range features.Features() {
-		explain := strings.Join(feature.Explain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] run fail", name)
@@ -107,7 +107,7 @@ func TestMultipleConcurrentStepWithProcessor(t *testing.T) {
 	}
 	features := flow.DoneFlow("TestMultipleConcurrentStepWithProcessor", nil)
 	for name, feature := range features.Features() {
-		explain := strings.Join(feature.Explain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] run fail", name)
@@ -128,7 +128,7 @@ func TestMultipleConcurrentStep(t *testing.T) {
 	}
 	features := flow.DoneFlow("TestMultipleConcurrentStep", nil)
 	for name, feature := range features.Features() {
-		explain := strings.Join(feature.Explain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] run fail", name)
@@ -158,7 +158,7 @@ func TestMultipleConcurrentDependStep(t *testing.T) {
 	}
 	features := flow.DoneFlow("TestMultipleConcurrentDependStep", nil)
 	for name, feature := range features.Features() {
-		explain := strings.Join(feature.Explain(), ", ")
+		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
 		if !feature.Success() {
 			t.Errorf("process[%s] run fail", name)
