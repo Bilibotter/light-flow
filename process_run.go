@@ -80,6 +80,11 @@ func (rp *RunProcess) flow() *Feature {
 
 	rp.finish.Add(1)
 	feature := Feature{
+		BasicInfo: &BasicInfo{
+			Id:     rp.id,
+			Name:   rp.processName,
+			Status: rp.Status,
+		},
 		Status: rp.Status,
 		finish: &rp.finish,
 	}

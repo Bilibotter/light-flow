@@ -3,7 +3,6 @@ package test
 import (
 	"fmt"
 	flow "gitee.com/MetaphysicCoding/light-flow"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -103,20 +102,28 @@ func TestMultipleExceptionStatus(t *testing.T) {
 	process.AddStepWithAlias("2", GeneratePanicStep(2, "ms"))
 	step := process.AddStepWithAlias("3", GenerateErrorStep(3, "ms"))
 	step.AddConfig(&flow.StepConfig{Timeout: time.Millisecond})
-	features := flow.DoneFlow("TestMultipleExceptionStatus", nil)
-	for name, feature := range features.Features() {
+	result := flow.DoneFlow("TestMultipleExceptionStatus", nil)
+	if result.Success() {
+		t.Errorf("process[%s] success, but expected failed", result.GetName())
+	} else {
+		features := result.FailFeatures()
+		feature, exist := features["TestMultipleExceptionStatus"]
+		if !exist {
+			t.Errorf("process[%s] not found in failed feature", result.GetName())
+			return
+		}
 		if feature.Success() {
-			t.Errorf("process[%s] success, but expected failed", name)
+			t.Errorf("process[%s] success, but expected failed", feature.GetName())
 		}
 		explain := feature.ExplainStatus()
-		if !slices.Contains(explain, "Timeout") {
-			t.Errorf("process[%s] timeout, but explain not cotain, explain=%v", name, explain)
+		if !feature.Contain(flow.Timeout) {
+			t.Errorf("process[%s] timeout, but explain not cotain, explain=%v", feature.GetName(), explain)
 		}
-		if !slices.Contains(explain, "Error") {
-			t.Errorf("process[%s] error, but explain not cotain, but explain=%v", name, explain)
+		if !feature.Contain(flow.Error) {
+			t.Errorf("process[%s] error, but explain not cotain, but explain=%v", feature.GetName(), explain)
 		}
-		if !slices.Contains(explain, "Panic") {
-			t.Errorf("process[%s] panic, but explain not cotain, but explain=%v", name, explain)
+		if !feature.Contain(flow.Panic) {
+			t.Errorf("process[%s] panic, but explain not cotain, but explain=%v", feature.GetName(), explain)
 		}
 	}
 	if atomic.LoadInt64(&current) != 3 {
@@ -337,7 +344,7 @@ func TestWorkFlowPause(t *testing.T) {
 	for name, feature := range wf.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
-		if !slices.Contains(feature.ExplainStatus(), "Pause") {
+		if !feature.Contain(flow.Pause) {
 			t.Errorf("process[%s] pause fail", name)
 		}
 	}
@@ -412,7 +419,7 @@ func TestProcessPause(t *testing.T) {
 	for name, feature := range workflow.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", name, explain)
-		if !slices.Contains(feature.ExplainStatus(), "Pause") {
+		if !feature.Contain(flow.Pause) {
 			t.Errorf("process[%s] pause fail", name)
 		}
 	}

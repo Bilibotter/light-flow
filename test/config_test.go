@@ -3,7 +3,6 @@ package test
 import (
 	"fmt"
 	flow "gitee.com/MetaphysicCoding/light-flow"
-	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -18,12 +17,14 @@ func StepInfoChecker(key string, prev, next []string) func(info *flow.StepInfo) 
 		println("matched", key)
 		atomic.AddInt64(&current, 1)
 		for name := range info.Prev {
-			if !slices.Contains(prev, name) {
+			s := flow.CreateFromSliceFunc(prev, func(s string) string { return s })
+			if !s.Contains(name) {
 				panic(fmt.Sprintf("step[%s] prev not contains %s", key, name))
 			}
 		}
 		for name := range info.Next {
-			if !slices.Contains(next, name) {
+			s := flow.CreateFromSliceFunc(next, func(s string) string { return s })
+			if !s.Contains(name) {
 				panic(fmt.Sprintf("step[%s] next not contains %s", key, name))
 			}
 		}
@@ -154,7 +155,7 @@ func TestProcessorRandomOrder(t *testing.T) {
 		if !feature.Success() {
 			t.Errorf("process[%s] failed,explian=%v", name, explain)
 		}
-		if slices.Contains(explain, "Panic") {
+		if feature.Contain(flow.Panic) {
 			t.Errorf("process[%s] not panic, but explain contain, but explain=%v", name, explain)
 		}
 	}
@@ -182,7 +183,7 @@ func TestProcessorOrder2(t *testing.T) {
 		if !feature.Success() {
 			t.Errorf("process[%s] failed,explian=%v", name, explain)
 		}
-		if slices.Contains(explain, "Panic") {
+		if feature.Contain(flow.Panic) {
 			t.Errorf("process[%s] not panic, but explain contain, but explain=%v", name, explain)
 		}
 	}
@@ -210,7 +211,7 @@ func TestProcessorOrder1(t *testing.T) {
 		if !feature.Success() {
 			t.Errorf("process[%s] failed,explian=%v", name, explain)
 		}
-		if slices.Contains(explain, "Panic") {
+		if feature.Contain(flow.Panic) {
 			t.Errorf("process[%s] not panic, but explain contain, but explain=%v", name, explain)
 		}
 	}
@@ -231,7 +232,7 @@ func TestNonEssentialProcProcessorPanic(t *testing.T) {
 		if !feature.Success() {
 			t.Errorf("process[%s] failed,explian=%v", name, explain)
 		}
-		if slices.Contains(explain, "Panic") {
+		if feature.Contain(flow.Panic) {
 			t.Errorf("process[%s] not panic, but explain contain, but explain=%v", name, explain)
 		}
 	}
@@ -249,7 +250,7 @@ func TestNonEssentialProcProcessorPanic(t *testing.T) {
 		if !feature.Success() {
 			t.Errorf("process[%s] failed,explian=%v", name, explain)
 		}
-		if slices.Contains(explain, "Panic") {
+		if feature.Contain(flow.Panic) {
 			t.Errorf("process[%s] not panic, but explain not contain, but explain=%v", name, explain)
 		}
 	}
@@ -270,7 +271,7 @@ func TestEssentialProcProcessorPanic(t *testing.T) {
 			t.Errorf("process[%s] success, but expected failed", name)
 		}
 		explain := feature.ExplainStatus()
-		if !slices.Contains(explain, "Panic") {
+		if !feature.Contain(flow.Panic) {
 			t.Errorf("process[%s] panic, but explain not cotain, but explain=%v", name, explain)
 		}
 	}
@@ -288,7 +289,7 @@ func TestEssentialProcProcessorPanic(t *testing.T) {
 			t.Errorf("process[%s] success, but expected failed", name)
 		}
 		explain := feature.ExplainStatus()
-		if !slices.Contains(explain, "Panic") {
+		if !feature.Contain(flow.Panic) {
 			t.Errorf("process[%s] panic, but explain not cotain, but explain=%v", name, explain)
 		}
 	}
@@ -309,7 +310,7 @@ func TestNonEssentialStepProcessorPanic(t *testing.T) {
 		if !feature.Success() {
 			t.Errorf("process[%s] failed,explian=%v", name, explain)
 		}
-		if slices.Contains(explain, "Panic") {
+		if feature.Contain(flow.Panic) {
 			t.Errorf("process[%s] not panic, but explain contain, but explain=%v", name, explain)
 		}
 	}
@@ -327,7 +328,7 @@ func TestNonEssentialStepProcessorPanic(t *testing.T) {
 		if !feature.Success() {
 			t.Errorf("process[%s] failed,explian=%v", name, explain)
 		}
-		if slices.Contains(explain, "Panic") {
+		if feature.Contain(flow.Panic) {
 			t.Errorf("process[%s] not panic, but explain not contain, but explain=%v", name, explain)
 		}
 	}
@@ -348,7 +349,7 @@ func TestEssentialStepProcessorPanic(t *testing.T) {
 			t.Errorf("process[%s] success, but expected failed", name)
 		}
 		explain := feature.ExplainStatus()
-		if !slices.Contains(explain, "Panic") {
+		if !feature.Contain(flow.Panic) {
 			t.Errorf("process[%s] panic, but explain not cotain, but explain=%v", name, explain)
 		}
 	}
@@ -366,7 +367,7 @@ func TestEssentialStepProcessorPanic(t *testing.T) {
 			t.Errorf("process[%s] success, but expected failed", name)
 		}
 		explain := feature.ExplainStatus()
-		if !slices.Contains(explain, "Panic") {
+		if !feature.Contain(flow.Panic) {
 			t.Errorf("process[%s] panic, but explain not cotain, but explain=%v", name, explain)
 		}
 	}
@@ -393,13 +394,13 @@ func TestProcessorWhenExceptionOccur(t *testing.T) {
 			t.Errorf("process[%s] success, but expected failed", name)
 		}
 		explain := feature.ExplainStatus()
-		if !slices.Contains(explain, "Timeout") {
+		if !feature.Contain(flow.Timeout) {
 			t.Errorf("process[%s] timeout, but explain not cotain, explain=%v", name, explain)
 		}
-		if !slices.Contains(explain, "Error") {
+		if !feature.Contain(flow.Error) {
 			t.Errorf("process[%s] error, but explain not cotain, but explain=%v", name, explain)
 		}
-		if !slices.Contains(explain, "Panic") {
+		if !feature.Contain(flow.Panic) {
 			t.Errorf("process[%s] panic, but explain not cotain, but explain=%v", name, explain)
 		}
 	}

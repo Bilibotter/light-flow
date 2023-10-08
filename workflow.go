@@ -28,6 +28,7 @@ type Controller interface {
 type Result interface {
 	InfoI
 	Features() map[string]*Feature
+	FailFeatures() map[string]*Feature
 }
 
 type WorkFlowCtrl interface {
@@ -426,6 +427,16 @@ func (rf *RunFlow) skipProcessStep(processName, stepName string, result any) err
 	}
 	step.setStepResult(stepName, result)
 	return nil
+}
+
+func (rf *RunFlow) FailFeatures() map[string]*Feature {
+	features := make(map[string]*Feature)
+	for name, feature := range rf.features {
+		if len(feature.Exceptions()) != 0 {
+			features[name] = feature
+		}
+	}
+	return features
 }
 
 func (rf *RunFlow) Features() map[string]*Feature {

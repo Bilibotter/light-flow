@@ -61,7 +61,7 @@ func TestInfoCorrect(t *testing.T) {
 	features := flow.DoneFlow("TestInfoCorrect", nil)
 	for name, feature := range features.Features() {
 		if !feature.Success() {
-			t.Errorf("process[%s] fail", name)
+			t.Errorf("process[%s] fail, exception=%v", name, feature.Exceptions())
 		}
 	}
 	if atomic.LoadInt64(&current) != 12 {

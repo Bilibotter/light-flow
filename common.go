@@ -10,9 +10,9 @@ import (
 
 // these constants are used to indicate the scope of the context
 const (
-	InternalPrefix = "~"
-	WorkflowCtx    = "~workflow~"
-	ProcessCtx     = "~process~"
+	InternalPrefix = "::"
+	WorkflowCtx    = "Flow::"
+	ProcessCtx     = "Proc::"
 )
 
 // these constants are used to indicate the position of the process
@@ -53,7 +53,7 @@ type StatusI interface {
 	Exceptions() []string
 }
 
-type Info interface {
+type InfoI interface {
 	StatusI
 	addr() *Status
 	GetId() string
@@ -71,11 +71,11 @@ type BasicInfo struct {
 	Name string
 }
 
-type CallbackChain[T Info] struct {
+type CallbackChain[T InfoI] struct {
 	filters []*Callback[T]
 }
 
-type Callback[T Info] struct {
+type Callback[T InfoI] struct {
 	// If must is false, the process will continue to execute
 	// even if the processor fails
 	must bool
@@ -96,6 +96,7 @@ type Context struct {
 
 type Feature struct {
 	*Status
+	*BasicInfo
 	finish *sync.WaitGroup
 }
 
@@ -137,7 +138,7 @@ func toStepName(value any) string {
 }
 
 func (s *Status) Success() bool {
-	return s.Contain(Success) && (*s&AbnormalMask.flag == 0)
+	return s.Contain(Success) && s.Normal()
 }
 
 func (s *Status) Normal() bool {
@@ -153,16 +154,16 @@ func (s *Status) Exceptions() []string {
 	if s.Normal() {
 		return nil
 	}
-	return s.Explain()
+	return s.ExplainStatus()
 }
 
-// Explain function explains the status represented by the provided bitmask.
+// ExplainStatus function explains the status represented by the provided bitmask.
 // The function checks the status against predefined abnormal and normal flags,
 // and returns a slice of strings containing the names of the matching flags.
 // Parameter status is the bitmask representing the status.
 // The returned slice contains the names of the matching flags in the layer they were found.
 // If abnormal flags are found, normal flags will be ignored.
-func (s *Status) Explain() []string {
+func (s *Status) ExplainStatus() []string {
 	compress := make([]string, 0)
 
 	for _, enum := range abnormal {
@@ -374,6 +375,10 @@ func (c *Callback[T]) call(flag string, info T) (keepOn bool, panicStack string)
 	return
 }
 
+func (ctx *Context) Name() string {
+	return ctx.name
+}
+
 // Set method sets the value associated with the given key in own context.
 func (ctx *Context) Set(key string, value any) {
 	ctx.table.Store(key, value)
@@ -408,6 +413,26 @@ func (ctx *Context) search(key string, prev *Set) (any, bool) {
 	}
 
 	return nil, false
+}
+
+func (ctx *Context) GetAll(key string) map[string]any {
+	saved := make(map[string]any)
+	ctx.getAll(key, saved)
+	return saved
+}
+
+func (ctx *Context) getAll(key string, saved map[string]any) {
+	if _, visited := saved[key]; visited {
+		return
+	}
+
+	if value, exist := ctx.table.Load(key); exist {
+		saved[ctx.Name()] = value
+	}
+
+	for _, parent := range ctx.parents {
+		parent.getAll(key, saved)
+	}
 }
 
 // Exposed method exposes a key-value pair to the scope,
