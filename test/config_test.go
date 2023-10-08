@@ -387,7 +387,7 @@ func TestProcessorWhenExceptionOccur(t *testing.T) {
 	process.AddStepWithAlias("1", GenerateErrorStep(1, "ms"))
 	process.AddStepWithAlias("2", GeneratePanicStep(2, "ms"))
 	step := process.AddStepWithAlias("3", GenerateErrorStep(3, "ms"))
-	step.AddConfig(&flow.StepConfig{Timeout: time.Millisecond})
+	step.AddConfig(&flow.StepConfig{StepTimeout: time.Millisecond})
 	features := flow.DoneFlow("TestProcessorWhenExceptionOccur", nil)
 	for name, feature := range features.Features() {
 		if feature.Success() {
@@ -476,7 +476,7 @@ func TestWithShortProcessTimeout(t *testing.T) {
 func TestParallelWithLongDefaultStepTimeout(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestParallelWithLongDefaultStepTimeout")
-	config := flow.ProcessConfig{StepRetry: 3, StepTimeout: 300 * time.Millisecond}
+	config := flow.ProcessConfig{StepConfig: &flow.StepConfig{StepRetry: 3, StepTimeout: 300 * time.Millisecond}}
 	process := workflow.AddProcessWithConf("TestParallelWithLongDefaultStepTimeout", &config)
 	process.AddStepWithAlias("1", GenerateStep(1))
 	process.AddStepWithAlias("2", GenerateStep(2))
@@ -498,7 +498,7 @@ func TestParallelWithLongDefaultStepTimeout(t *testing.T) {
 func TestWithLongDefaultStepTimeout(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestWithLongDefaultStepTimeout")
-	config := flow.ProcessConfig{StepRetry: 3, StepTimeout: 1 * time.Second}
+	config := flow.ProcessConfig{StepConfig: &flow.StepConfig{StepRetry: 3, StepTimeout: 1 * time.Second}}
 	process := workflow.AddProcessWithConf("TestWithLongDefaultStepTimeout", &config)
 	process.AddStepWithAlias("1", GenerateStep(1))
 	process.AddStepWithAlias("2", GenerateStep(2), "1")
@@ -520,7 +520,7 @@ func TestWithLongDefaultStepTimeout(t *testing.T) {
 func TestWithShortDefaultStepTimeout(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestWithShortDefaultStepTimeout")
-	config := flow.ProcessConfig{StepRetry: 3, StepTimeout: 1 * time.Millisecond}
+	config := flow.ProcessConfig{StepConfig: &flow.StepConfig{StepRetry: 3, StepTimeout: 1 * time.Millisecond}}
 	process := workflow.AddProcessWithConf("TestWithShortDefaultStepTimeout", &config)
 	process.AddStepWithAlias("1", GenerateStep(1, "ms"))
 	process.AddStepWithAlias("2", GenerateStep(2, "ms"), "1")
@@ -540,11 +540,33 @@ func TestWithShortDefaultStepTimeout(t *testing.T) {
 	}
 }
 
+func TestAddStepTimeoutAndRetry(t *testing.T) {
+	defer resetCurrent()
+	workflow := flow.RegisterFlow("TestAddStepTimeoutAndRetry")
+	proc := workflow.AddProcess("TestAddStepTimeoutAndRetry")
+	proc.AddStepRetry(3).AddStepTimeout(100 * time.Millisecond)
+	proc.AddStepWithAlias("1", GenerateStep(1))
+	result := flow.DoneFlow("TestAddStepTimeoutAndRetry", nil)
+	if atomic.LoadInt64(&current) != 1 {
+		t.Errorf("execute 1 step, but current = %d", current)
+	}
+	if !result.Success() {
+		t.Errorf("workflow[%s] fail, exceptions=%v", result.GetName(), result.Exceptions())
+		for _, feature := range result.Features() {
+			if !feature.Success() {
+				t.Errorf("process[%s] fail, exceptions=%v", feature.GetName(), feature.Exceptions())
+			}
+		}
+	} else {
+		t.Logf("workflow[%s] success", result.GetName())
+	}
+}
+
 func TestWithLongStepTimeout(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestWithLongStepTimeout")
 	process := workflow.AddProcessWithConf("TestWithLongStepTimeout", nil)
-	config := flow.StepConfig{MaxRetry: 3, Timeout: 1 * time.Second}
+	config := flow.StepConfig{StepRetry: 3, StepTimeout: 1 * time.Second}
 	process.AddStepWithAlias("1", GenerateStep(1)).AddConfig(&config)
 	process.AddStepWithAlias("2", GenerateStep(2), "1")
 	process.AddStepWithAlias("3", GenerateStep(3), "2")
@@ -566,7 +588,7 @@ func TestWithShortStepTimeout(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestWithShortStepTimeout")
 	process := workflow.AddProcessWithConf("TestWithShortStepTimeout", nil)
-	config := flow.StepConfig{MaxRetry: 3, Timeout: 1 * time.Millisecond}
+	config := flow.StepConfig{StepRetry: 3, StepTimeout: 1 * time.Millisecond}
 	process.AddStepWithAlias("1", GenerateStep(1, "ms")).AddConfig(&config)
 	process.AddStepWithAlias("2", GenerateStep(2, "ms"), "1")
 	process.AddStepWithAlias("3", GenerateStep(3, "ms"), "2")
@@ -588,7 +610,7 @@ func TestWithShortStepTimeout(t *testing.T) {
 func TestSingleErrorStepWithProcessRetry(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestSingleErrorStepWithProcessRetry")
-	config := flow.ProcessConfig{StepRetry: 3}
+	config := flow.ProcessConfig{StepConfig: &flow.StepConfig{StepRetry: 3}}
 	process := workflow.AddProcessWithConf("TestSingleErrorStepWithProcessRetry", &config)
 	process.AddStepWithAlias("1", GenerateErrorStep(1))
 	features := flow.DoneFlow("TestSingleErrorStepWithProcessRetry", nil)
@@ -607,7 +629,7 @@ func TestSingleErrorStepWithProcessRetry(t *testing.T) {
 func TestSingleErrorStepWithStepRetry(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestSingleErrorStepWithStepRetry")
-	config := flow.StepConfig{MaxRetry: 3}
+	config := flow.StepConfig{StepRetry: 3}
 	process := workflow.AddProcessWithConf("TestSingleErrorStepWithStepRetry", nil)
 	process.AddStepWithAlias("1", GenerateErrorStep(1)).AddConfig(&config)
 	features := flow.DoneFlow("TestSingleErrorStepWithStepRetry", nil)
@@ -626,8 +648,8 @@ func TestSingleErrorStepWithStepRetry(t *testing.T) {
 func TestSingleErrorStepWithProcessAndStepRetry(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestSingleErrorStepWithProcessAndStepRetry")
-	config := flow.ProcessConfig{StepRetry: 3}
-	stepConfig := flow.StepConfig{MaxRetry: 2}
+	config := flow.ProcessConfig{StepConfig: &flow.StepConfig{StepRetry: 3}}
+	stepConfig := flow.StepConfig{StepRetry: 2}
 	process := workflow.AddProcessWithConf("TestSingleErrorStepWithProcessAndStepRetry", &config)
 	process.AddStepWithAlias("1", GenerateErrorStep(1)).AddConfig(&stepConfig)
 	features := flow.DoneFlow("TestSingleErrorStepWithProcessAndStepRetry", nil)
@@ -647,7 +669,7 @@ func TestRecoverSerialStep(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestRecoverSerialStep")
 	process := workflow.AddProcessWithConf("TestRecoverSerialStep", nil)
-	config := flow.StepConfig{MaxRetry: 3, Timeout: 1 * time.Second}
+	config := flow.StepConfig{StepRetry: 3, StepTimeout: 1 * time.Second}
 	process.AddStepWithAlias("1", GenerateStep(1)).AddConfig(&config)
 	process.AddStepWithAlias("2", GenerateStep(2), "1")
 	process.AddStepWithAlias("3", GenerateStep(3), "2")

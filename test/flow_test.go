@@ -101,7 +101,7 @@ func TestMultipleExceptionStatus(t *testing.T) {
 	process.AddStepWithAlias("1", GenerateErrorStep(1, "ms"))
 	process.AddStepWithAlias("2", GeneratePanicStep(2, "ms"))
 	step := process.AddStepWithAlias("3", GenerateErrorStep(3, "ms"))
-	step.AddConfig(&flow.StepConfig{Timeout: time.Millisecond})
+	step.AddConfig(&flow.StepConfig{StepTimeout: time.Millisecond})
 	result := flow.DoneFlow("TestMultipleExceptionStatus", nil)
 	if result.Success() {
 		t.Errorf("process[%s] success, but expected failed", result.GetName())

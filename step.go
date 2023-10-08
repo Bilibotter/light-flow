@@ -45,8 +45,8 @@ type StepInfo struct {
 }
 
 type StepConfig struct {
-	Timeout  time.Duration
-	MaxRetry int
+	StepTimeout time.Duration
+	StepRetry   int
 }
 
 func (si *StepInfo) Error() error {

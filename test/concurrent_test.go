@@ -177,7 +177,7 @@ func TestConcurrentSameFlow(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		process.AddStepWithAlias(strconv.Itoa(i), GenerateNoDelayStep(i))
 	}
-	flows := make([]flow.WorkFlowCtrl, 0, 1000)
+	flows := make([]flow.FlowController, 0, 1000)
 	for i := 0; i < 1000; i++ {
 		flows = append(flows, flow.AsyncFlow("TestConcurrentSameFlow", nil))
 	}

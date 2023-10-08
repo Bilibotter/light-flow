@@ -403,7 +403,7 @@ func TestFlowMultipleAsyncExecute(t *testing.T) {
 	flow3 := flow.AsyncFlow("TestFlowMultipleExecute", map[string]any{addrKey: &ctx3})
 	flow4 := flow.AsyncFlow("TestFlowMultipleExecute", map[string]any{addrKey: &ctx4})
 	flow5 := flow.AsyncFlow("TestFlowMultipleExecute", map[string]any{addrKey: &ctx5})
-	for _, flowing := range []flow.WorkFlowCtrl{flow1, flow2, flow3, flow4, flow5} {
+	for _, flowing := range []flow.FlowController{flow1, flow2, flow3, flow4, flow5} {
 		for name, feature := range flowing.Done() {
 			explain := strings.Join(feature.ExplainStatus(), ", ")
 			fmt.Printf("process[%s] explain=%s\n", name, explain)

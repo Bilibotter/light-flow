@@ -31,7 +31,7 @@ var (
 	Success    = &StatusEnum{0b1 << 15, "Success"}
 	NormalMask = &StatusEnum{0b1<<16 - 1, "NormalMask"}
 	Cancel     = &StatusEnum{0b1 << 16, "Cancel"}
-	Timeout    = &StatusEnum{0b1 << 17, "Timeout"}
+	Timeout    = &StatusEnum{0b1 << 17, "StepTimeout"}
 	Panic      = &StatusEnum{0b1 << 18, "Panic"}
 	Error      = &StatusEnum{0b1 << 19, "Error"}
 	Stop       = &StatusEnum{0b1 << 20, "Stop"}

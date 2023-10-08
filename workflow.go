@@ -25,15 +25,15 @@ type Controller interface {
 	Stop()
 }
 
-type Result interface {
+type ResultI interface {
 	InfoI
 	Features() map[string]*Feature
 	FailFeatures() map[string]*Feature
 }
 
-type WorkFlowCtrl interface {
+type FlowController interface {
 	Controller
-	Result
+	ResultI
 	Done() map[string]*Feature
 	ListProcess() []string
 	ProcessController(name string) Controller
@@ -95,7 +95,7 @@ func RegisterFlow(name string) *FlowMeta {
 	return &flow
 }
 
-func AsyncArgs(name string, args ...any) WorkFlowCtrl {
+func AsyncArgs(name string, args ...any) FlowController {
 	input := make(map[string]any, len(args))
 	for _, arg := range args {
 		input[GetStructName(arg)] = arg
@@ -103,7 +103,7 @@ func AsyncArgs(name string, args ...any) WorkFlowCtrl {
 	return AsyncFlow(name, input)
 }
 
-func AsyncFlow(name string, input map[string]any) WorkFlowCtrl {
+func AsyncFlow(name string, input map[string]any) FlowController {
 	factory, ok := allFlows.Load(name)
 	if !ok {
 		panic(fmt.Sprintf("flow factory [%s] not found", name))
@@ -113,7 +113,7 @@ func AsyncFlow(name string, input map[string]any) WorkFlowCtrl {
 	return flow
 }
 
-func DoneArgs(name string, args ...any) Result {
+func DoneArgs(name string, args ...any) ResultI {
 	input := make(map[string]any, len(args))
 	for _, arg := range args {
 		input[GetStructName(arg)] = arg
@@ -121,7 +121,7 @@ func DoneArgs(name string, args ...any) Result {
 	return DoneFlow(name, input)
 }
 
-func DoneFlow(name string, input map[string]any) Result {
+func DoneFlow(name string, input map[string]any) ResultI {
 	factory, ok := allFlows.Load(name)
 	if !ok {
 		panic(fmt.Sprintf("flow factory [%s] not found", name))

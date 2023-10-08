@@ -118,11 +118,11 @@ func (rp *RunProcess) scheduleStep(step *RunStep) {
 	go rp.runStep(step)
 
 	timeout := 3 * time.Hour
-	if rp.ProcessConfig != nil && rp.StepTimeout != 0 {
+	if rp.ProcessConfig != nil && rp.StepConfig != nil && rp.StepTimeout != 0 {
 		timeout = rp.StepTimeout
 	}
-	if step.config != nil && step.config.Timeout != 0 {
-		timeout = step.config.Timeout
+	if step.config != nil && step.config.StepTimeout != 0 {
+		timeout = step.config.StepTimeout
 	}
 
 	timer := time.NewTimer(timeout)
@@ -198,11 +198,11 @@ func (rp *RunProcess) runStep(step *RunStep) {
 	}
 
 	retry := 1
-	if rp.ProcessConfig != nil && rp.StepRetry > 0 {
+	if rp.ProcessConfig != nil && rp.StepConfig != nil && rp.StepRetry > 0 {
 		retry = rp.StepRetry
 	}
-	if step.config != nil && step.config.MaxRetry > 0 {
-		retry = step.config.MaxRetry
+	if step.config != nil && step.config.StepRetry > 0 {
+		retry = step.config.StepRetry
 	}
 
 	defer func() {

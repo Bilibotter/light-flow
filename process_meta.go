@@ -27,8 +27,7 @@ type ProcessInfo struct {
 }
 
 type ProcessConfig struct {
-	StepRetry     int
-	StepTimeout   time.Duration
+	*StepConfig
 	ProcTimeout   time.Duration
 	notUseDefault bool
 	stepChain     *CallbackChain[*StepInfo]
@@ -51,6 +50,22 @@ func (pc *ProcessConfig) merge(merged *ProcessConfig) *ProcessConfig {
 		pc.procChain.filters = append(merged.procChain.CopyChain(), pc.procChain.filters...)
 		pc.procChain.maintain()
 	}
+	return pc
+}
+
+func (pc *ProcessConfig) AddStepRetry(retry int) *ProcessConfig {
+	if pc.StepConfig == nil {
+		pc.StepConfig = &StepConfig{}
+	}
+	pc.StepConfig.StepRetry = retry
+	return pc
+}
+
+func (pc *ProcessConfig) AddStepTimeout(timeout time.Duration) *ProcessConfig {
+	if pc.StepConfig == nil {
+		pc.StepConfig = &StepConfig{}
+	}
+	pc.StepConfig.StepTimeout = timeout
 	return pc
 }
 
