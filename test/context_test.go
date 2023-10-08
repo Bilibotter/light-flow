@@ -28,9 +28,8 @@ func resetCtx() {
 	atomic.StoreInt64(&ctx6, 0)
 }
 
-func GenerateSleep(duration time.Duration) func(ctx *flow.Context) (any, error) {
+func GenerateSleep(duration time.Duration, args ...any) func(ctx *flow.Context) (any, error) {
 	return func(ctx *flow.Context) (any, error) {
-		time.Sleep(duration)
 		addrWrap, ok := ctx.Get(addrKey)
 		if !ok {
 			panic("not found addr")
@@ -40,9 +39,11 @@ func GenerateSleep(duration time.Duration) func(ctx *flow.Context) (any, error) 
 	}
 }
 
-func ChangeCtxStepFunc(addr *int64) func(ctx *flow.Context) (any, error) {
+func ChangeCtxStepFunc(addr *int64, args ...any) func(ctx *flow.Context) (any, error) {
 	return func(ctx *flow.Context) (any, error) {
-		time.Sleep(100 * time.Millisecond)
+		if len(args) > 0 {
+			time.Sleep(100 * time.Millisecond)
+		}
 		ctx.Set(addrKey, addr)
 		println("change ctx")
 		addrWrap, ok := ctx.Get(addrKey)
@@ -54,9 +55,11 @@ func ChangeCtxStepFunc(addr *int64) func(ctx *flow.Context) (any, error) {
 	}
 }
 
-func GenerateStepIncAddr(i int) func(ctx *flow.Context) (any, error) {
+func GenerateStepIncAddr(i int, args ...any) func(ctx *flow.Context) (any, error) {
 	return func(ctx *flow.Context) (any, error) {
-		time.Sleep(100 * time.Millisecond)
+		if len(args) > 0 {
+			time.Sleep(100 * time.Millisecond)
+		}
 		fmt.Printf("%d.step finish\n", i)
 		addrWrap, ok := ctx.Get(addrKey)
 		if !ok {
@@ -225,7 +228,7 @@ func TestWaitToDoneInMultiple(t *testing.T) {
 	process2.AddStepWithAlias("11", GenerateStepIncAddr(11))
 	process2.AddStepWithAlias("12", GenerateStepIncAddr(12), "11")
 	process2.AddStepWithAlias("13", GenerateStepIncAddr(13), "12")
-	process2.AddStepWithAlias("14", GenerateSleep(1*time.Second), "13")
+	process2.AddStepWithAlias("14", GenerateSleep(100*time.Millisecond), "13")
 	features := flow.DoneFlow("TestWaitToDoneInMultiple", map[string]any{addrKey: &ctx1})
 	for name, feature := range features.Features() {
 		explain := strings.Join(feature.Explain(), ", ")

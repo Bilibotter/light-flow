@@ -383,9 +383,9 @@ func TestProcessorWhenExceptionOccur(t *testing.T) {
 	process.AddAfterStep(true, PostProcessor)
 	process.AddBeforeProcess(true, ProcProcessor)
 	process.AddAfterProcess(true, ProcProcessor)
-	process.AddStepWithAlias("1", GenerateErrorStep(1))
-	process.AddStepWithAlias("2", GeneratePanicStep(2))
-	step := process.AddStepWithAlias("3", GenerateErrorStep(3))
+	process.AddStepWithAlias("1", GenerateErrorStep(1, "ms"))
+	process.AddStepWithAlias("2", GeneratePanicStep(2, "ms"))
+	step := process.AddStepWithAlias("3", GenerateErrorStep(3, "ms"))
 	step.AddConfig(&flow.StepConfig{Timeout: time.Millisecond})
 	features := flow.DoneFlow("TestProcessorWhenExceptionOccur", nil)
 	for name, feature := range features.Features() {
@@ -456,10 +456,10 @@ func TestWithShortProcessTimeout(t *testing.T) {
 	workflow := flow.RegisterFlow("TestWithShortProcessTimeout")
 	config := flow.ProcessConfig{ProcTimeout: 1 * time.Millisecond}
 	process := workflow.AddProcessWithConf("TestWithShortProcessTimeout", &config)
-	process.AddStepWithAlias("1", GenerateStep(1))
-	process.AddStepWithAlias("2", GenerateStep(2), "1")
-	process.AddStepWithAlias("3", GenerateStep(3), "2")
-	process.AddStepWithAlias("4", GenerateStep(4), "3")
+	process.AddStepWithAlias("1", GenerateStep(1, "ms"))
+	process.AddStepWithAlias("2", GenerateStep(2, "ms"), "1")
+	process.AddStepWithAlias("3", GenerateStep(3, "ms"), "2")
+	process.AddStepWithAlias("4", GenerateStep(4, "ms"), "3")
 	features := flow.DoneFlow("TestWithShortProcessTimeout", nil)
 	for name, feature := range features.Features() {
 		if feature.Success() {
@@ -521,10 +521,10 @@ func TestWithShortDefaultStepTimeout(t *testing.T) {
 	workflow := flow.RegisterFlow("TestWithShortDefaultStepTimeout")
 	config := flow.ProcessConfig{StepRetry: 3, StepTimeout: 1 * time.Millisecond}
 	process := workflow.AddProcessWithConf("TestWithShortDefaultStepTimeout", &config)
-	process.AddStepWithAlias("1", GenerateStep(1))
-	process.AddStepWithAlias("2", GenerateStep(2), "1")
-	process.AddStepWithAlias("3", GenerateStep(3), "2")
-	process.AddStepWithAlias("4", GenerateStep(4), "3")
+	process.AddStepWithAlias("1", GenerateStep(1, "ms"))
+	process.AddStepWithAlias("2", GenerateStep(2, "ms"), "1")
+	process.AddStepWithAlias("3", GenerateStep(3, "ms"), "2")
+	process.AddStepWithAlias("4", GenerateStep(4, "ms"), "3")
 	features := flow.DoneFlow("TestWithShortDefaultStepTimeout", nil)
 	for name, feature := range features.Features() {
 		explain := strings.Join(feature.Explain(), ", ")
@@ -566,10 +566,10 @@ func TestWithShortStepTimeout(t *testing.T) {
 	workflow := flow.RegisterFlow("TestWithShortStepTimeout")
 	process := workflow.AddProcessWithConf("TestWithShortStepTimeout", nil)
 	config := flow.StepConfig{MaxRetry: 3, Timeout: 1 * time.Millisecond}
-	process.AddStepWithAlias("1", GenerateStep(1)).AddConfig(&config)
-	process.AddStepWithAlias("2", GenerateStep(2), "1")
-	process.AddStepWithAlias("3", GenerateStep(3), "2")
-	process.AddStepWithAlias("4", GenerateStep(4), "3")
+	process.AddStepWithAlias("1", GenerateStep(1, "ms")).AddConfig(&config)
+	process.AddStepWithAlias("2", GenerateStep(2, "ms"), "1")
+	process.AddStepWithAlias("3", GenerateStep(3, "ms"), "2")
+	process.AddStepWithAlias("4", GenerateStep(4, "ms"), "3")
 	features := flow.DoneFlow("TestWithShortStepTimeout", nil)
 	for name, feature := range features.Features() {
 		explain := strings.Join(feature.Explain(), ", ")
