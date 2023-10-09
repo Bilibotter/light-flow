@@ -76,15 +76,8 @@ func Step2(ctx *flow.Context) (any, error) {
 ```go
 func init() {
 	workflow := flow.RegisterFlow("MyFlow")
-	config := flow.ProcessConfig{
-		StepRetry:   3,
-		StepTimeout: 30 * time.Minute,
-	}
-    // Processes of workflow are parallel
-	process := workflow.AddProcess("MyProcess", &config)
-	process.AddStep(Step1)
-    // Identify Step 1 as a dependency of Step 2
-	process.AddStepWithAlias("Step2", Step2, Step1)
+     // Processes of workflow are parallel
+	process := workflow.AddProcess("MyProcess")
 }
 ```
 
@@ -93,7 +86,7 @@ func init() {
 ```go
 func init() {
 	...
-	process := workflow.AddProcess("MyProcess", &config)
+	process := workflow.AddProcess("MyProcess")
     // AddStep automatically uses "Step1" as step name
 	process.AddStep(Step1)
     // AddStepWithAlias use alias "Step2" as the step name
@@ -113,20 +106,17 @@ func main() {
 }
 ```
 
-### Step 5: Get Execute Result By Features
+### Step 5: Get Execute ResultI By Features
 
 ```go
 func main() {
-	features := flow.DoneFlow("MyFlow", map[string]any{"name": "foo"})
-	for processName, feature := range features {
-        // ExplainStatus compresses the status of all steps in the process.
-        // The status includes Success, Failed, Error, Timeout, and Panic.
-        // More status define see in common.go
-		explain := feature.ExplainStatus()
-		fmt.Printf("process[%s] explain=%s\n", processName, explain)
-		if !feature.Success() {
-			fmt.Printf("process[%s] run fail\n", processName)
-		}
+	result := flow.DoneFlow("MyFlow", map[string]any{"name": "foo"})
+	if result.Success() {
+		return
+	}
+	for processName, feature := range result.Features() {
+        // Exceptions may include Timeout、Panic、Error
+		fmt.Printf("process [%s] failed exceptions: %v \n", processName, feature.Exceptions())
 	}
 }
 ```
@@ -134,10 +124,11 @@ func main() {
 ### Complete Example
 
 ```go
+package main
+
 import (
 	"fmt"
 	flow "gitee.com/MetaphysicCoding/light-flow"
-	"time"
 )
 
 func Step1(ctx *flow.Context) (any, error) {
@@ -163,23 +154,18 @@ func Step2(ctx *flow.Context) (any, error) {
 
 func init() {
 	workflow := flow.RegisterFlow("MyFlow")
-	config := flow.ProcessConfig{
-		StepRetry:   3,
-		StepTimeout: 30 * time.Minute,
-	}
-	process := workflow.AddProcess("MyProcess", &config)
+	process := workflow.AddProcess("MyProcess")
 	process.AddStep(Step1)
 	process.AddStepWithAlias("Step2", Step2, Step1)
 }
 
 func main() {
-	features := flow.DoneFlow("MyFlow", map[string]any{"name": "foo"})
-	for processName, feature := range features {
-		explain := feature.ExplainStatus()
-		fmt.Printf("process[%s] explain=%s\n", processName, explain)
-		if !feature.Success() {
-			fmt.Printf("process[%s] run fail\n", processName)
-		}
+	result := flow.DoneFlow("MyFlow", map[string]any{"name": "foo"})
+	if result.Success() {
+		return
+	}
+	for processName, feature := range result.Features() {
+		fmt.Printf("process [%s] failed exceptions: %v \n", processName, feature.Exceptions())
 	}
 }
 ```
@@ -197,7 +183,7 @@ We define dependencies like flow code.
 
 ```go
 workflow := flow.RegisterFlow("MyFlow")
-process := workflow.AddProcess("MyProcess", nil)
+process := workflow.AddProcess("MyProcess")
 process.AddStep(TaskA)
 process.AddStep(TaskB, TaskA)
 process.AddStep(TaskC, TaskA)
@@ -230,7 +216,7 @@ workflow := flow.RegisterFlow("MyFlow")
 // Add a registered process called 'RegisterProcess' to the current workflow.
 workflow.AddRegisterProcess("RegisterProcess")
 
-process := workflow.AddProcess("MyProcess", nil)
+process := workflow.AddProcess("MyProcess")
 // Merge process called 'AnotherProcess' to the current process.
 process.Merge("AnotherProcess")
 // You can merge a process to the current process at any position, 
