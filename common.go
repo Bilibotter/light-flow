@@ -388,11 +388,11 @@ func (ctx *Context) Set(key string, value any) {
 // The method first checks the priority context, then own context, finally parents context.
 // Returns the value associated with the key (if found) and a boolean indicating its presence.
 func (ctx *Context) Get(key string) (any, bool) {
-	s := NewRoutineUnsafeSet()
+	s := NewRoutineUnsafeSet[string]()
 	return ctx.search(key, s)
 }
 
-func (ctx *Context) search(key string, prev *Set) (any, bool) {
+func (ctx *Context) search(key string, prev *Set[string]) (any, bool) {
 	if prev.Contains(ctx.name) {
 		return nil, false
 	}
@@ -460,7 +460,7 @@ func (ctx *Context) getByPriority(key string) (any, bool) {
 	if !exist {
 		return nil, false
 	}
-	return ctx.scopeCtxs[name].search(key, NewRoutineUnsafeSet())
+	return ctx.scopeCtxs[name].search(key, NewRoutineUnsafeSet[string]())
 }
 
 // Done method waits for the corresponding process to complete.

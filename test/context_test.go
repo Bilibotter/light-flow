@@ -92,8 +92,8 @@ func invalidUse(ctx *flow.Context) (any, error) {
 func getAllAndSet(value string, history ...string) func(ctx *flow.Context) (any, error) {
 	return func(ctx *flow.Context) (any, error) {
 		ctx.Set("all", value)
-		ks := flow.NewRoutineUnsafeSet()
-		vs := flow.NewRoutineUnsafeSet()
+		ks := flow.NewRoutineUnsafeSet[string]()
+		vs := flow.NewRoutineUnsafeSet[string]()
 		m := ctx.GetAll("all")
 		for k, v := range m {
 			ks.Add(k)

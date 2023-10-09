@@ -8,45 +8,45 @@ import (
 	"strings"
 )
 
-type Set struct {
-	data map[string]bool
+type Set[T comparable] struct {
+	data map[T]bool
 }
 
-func NewRoutineUnsafeSet() *Set {
-	s := &Set{}
-	s.data = make(map[string]bool)
+func NewRoutineUnsafeSet[T comparable]() *Set[T] {
+	s := &Set[T]{}
+	s.data = make(map[T]bool)
 	return s
 }
 
-func CreateFromSliceFunc[T any](src []T, transfer func(T) string) *Set {
-	result := NewRoutineUnsafeSet()
+func CreateFromSliceFunc[T any, K comparable](src []T, transfer func(T) K) *Set[K] {
+	result := NewRoutineUnsafeSet[K]()
 	for _, ele := range src {
 		result.Add(transfer(ele))
 	}
 	return result
 }
 
-func (s *Set) Slice() []string {
-	result := make([]string, 0, len(s.data))
+func (s *Set[T]) Slice() []T {
+	result := make([]T, 0, len(s.data))
 	for key := range s.data {
 		result = append(result, key)
 	}
 	return result
 }
 
-func (s *Set) Add(item string) {
+func (s *Set[T]) Add(item T) {
 	s.data[item] = true
 }
 
-func (s *Set) Contains(item string) bool {
+func (s *Set[T]) Contains(item T) bool {
 	return s.data[item]
 }
 
-func (s *Set) Remove(item string) {
+func (s *Set[T]) Remove(item T) {
 	delete(s.data, item)
 }
 
-func (s *Set) Size() int {
+func (s *Set[T]) Size() int {
 	return len(s.data)
 }
 

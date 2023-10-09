@@ -211,7 +211,7 @@ func (pm *ProcessMeta) AddWaitAll(alias string, run func(ctx *Context) (any, err
 
 func (pm *ProcessMeta) AddStepWithAlias(alias string, run func(ctx *Context) (any, error), depends ...any) *StepMeta {
 	var meta *StepMeta
-	var oldDepends *Set
+	var oldDepends *Set[string]
 
 	if old, exist := pm.steps[alias]; exist {
 		if !contains(&pm.steps[alias].position, Merged) {

@@ -67,7 +67,7 @@ func TestGetStructName(t *testing.T) {
 }
 
 func TestSet(t *testing.T) {
-	s := light_flow.NewRoutineUnsafeSet()
+	s := light_flow.NewRoutineUnsafeSet[string]()
 	for i := 0; i < 1000; i++ {
 		s.Add(strconv.Itoa(i))
 	}
@@ -80,6 +80,31 @@ func TestSet(t *testing.T) {
 			t.Errorf("set contains %d", i+1000)
 			break
 		}
+	}
+}
+
+func TestComparableSet(t *testing.T) {
+	s := light_flow.NewRoutineUnsafeSet[Dst]()
+	d1 := Dst{
+		Name:     "",
+		Id:       1,
+		Start:    time.Now(),
+		Internal: Internal{},
+		SameName: 0,
+		UnExist:  false,
+	}
+	s.Add(d1)
+	if !s.Contains(d1) {
+		t.Errorf("set not contains d1")
+	} else {
+		t.Logf("set contains d1")
+	}
+	d2 := d1
+	d2.Id = 2
+	if s.Contains(d2) {
+		t.Errorf("set contains d2")
+	} else {
+		t.Logf("set not contains d2")
 	}
 }
 
