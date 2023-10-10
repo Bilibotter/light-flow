@@ -76,9 +76,9 @@ func (rp *RunProcess) flow() *Feature {
 		}
 	}
 
+	rp.finish.Add(1)
 	go rp.finalize()
 
-	rp.finish.Add(1)
 	feature := Feature{
 		BasicInfo: &BasicInfo{
 			Id:     rp.id,
@@ -115,8 +115,6 @@ func (rp *RunProcess) scheduleStep(step *RunStep) {
 		rp.pause.Wait()
 	}
 
-	go rp.runStep(step)
-
 	timeout := 3 * time.Hour
 	if rp.ProcessConfig != nil && rp.StepConfig != nil && rp.StepTimeout != 0 {
 		timeout = rp.StepTimeout
@@ -126,6 +124,7 @@ func (rp *RunProcess) scheduleStep(step *RunStep) {
 	}
 
 	timer := time.NewTimer(timeout)
+	go rp.runStep(step)
 	select {
 	case <-timer.C:
 		step.AppendStatus(Timeout)
@@ -135,18 +134,17 @@ func (rp *RunProcess) scheduleStep(step *RunStep) {
 }
 
 func (rp *RunProcess) finalize() {
-	finish := make(chan bool, 1)
-	go func() {
-		rp.running.Wait()
-		finish <- true
-	}()
-
 	timeout := 3 * time.Hour
 	if rp.ProcessConfig != nil && rp.ProcTimeout != 0 {
 		timeout = rp.ProcTimeout
 	}
 
 	timer := time.NewTimer(timeout)
+	finish := make(chan bool, 1)
+	go func() {
+		rp.running.Wait()
+		finish <- true
+	}()
 	select {
 	case <-timer.C:
 		rp.AppendStatus(Timeout)

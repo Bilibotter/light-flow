@@ -284,7 +284,7 @@ func (pm *ProcessMeta) sortedStepMeta() []*StepMeta {
 	for _, step := range pm.steps {
 		steps = append(steps, step)
 	}
-	sort.Slice(steps, func(i, j int) bool {
+	sort.SliceStable(steps, func(i, j int) bool {
 		return steps[i].layer < steps[j].layer
 	})
 	return steps

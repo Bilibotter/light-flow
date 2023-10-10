@@ -29,6 +29,26 @@ func NoDelayContextStep(ctx *flow.Context) (any, error) {
 	return nil, nil
 }
 
+func TestQuickStepConcurrent(t *testing.T) {
+	workflow := flow.RegisterFlow("TestQuickStepConcurrent")
+	proc := make([]*flow.ProcessMeta, 0, 100)
+	for i := 0; i < 100; i++ {
+		p := workflow.AddProcess("TestQuickStepConcurrent" + strconv.Itoa(i))
+		proc = append(proc, p)
+	}
+	for i := 0; i < 100; i++ {
+		for _, p := range proc {
+			p.AddStepWithAlias(strconv.Itoa(i), func(ctx *flow.Context) (any, error) {
+				return nil, nil
+			})
+		}
+	}
+	flow.DoneFlow("TestQuickStepConcurrent", nil)
+	flow.DoneFlow("TestQuickStepConcurrent", nil)
+	flow.DoneFlow("TestQuickStepConcurrent", nil)
+	flow.DoneFlow("TestQuickStepConcurrent", nil)
+}
+
 func TestTestMultipleConcurrentDependContext(t *testing.T) {
 	defer resetCtx()
 	factory := flow.RegisterFlow("TestTestMultipleConcurrentDependContext")
