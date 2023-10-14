@@ -152,7 +152,7 @@ func (pm *ProcessMeta) mergeStep(merge *StepMeta) {
 		step.ctxPriority[k] = v
 	}
 
-	// create a set contains all depended on step name
+	// create a set contains all depended on step flowName
 	current := CreateFromSliceFunc[*StepMeta](step.depends,
 		func(meta *StepMeta) string { return meta.stepName })
 

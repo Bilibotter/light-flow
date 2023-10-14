@@ -47,7 +47,7 @@ type Configuration struct {
 type FlowMeta struct {
 	*FlowConfig
 	init         sync.Once
-	name         string
+	flowName     string
 	noUseDefault bool
 	processes    []*ProcessMeta
 }
@@ -59,8 +59,8 @@ type FlowConfig struct {
 type RunFlow struct {
 	*FlowMeta
 	*BasicInfo
+	*Context
 	processMap map[string]*RunProcess
-	context    *Context
 	features   map[string]*Feature
 	lock       sync.Mutex
 	finish     sync.WaitGroup
@@ -68,7 +68,7 @@ type RunFlow struct {
 
 type FlowInfo struct {
 	*BasicInfo
-	Ctx *Context
+	*Context
 }
 
 func init() {
@@ -88,7 +88,7 @@ func SetDefaultConfig(config *Configuration) {
 func RegisterFlow(name string) *FlowMeta {
 	flow := FlowMeta{
 		FlowConfig: &FlowConfig{&CallbackChain[*FlowInfo]{}},
-		name:       name,
+		flowName:   name,
 		init:       sync.Once{},
 	}
 	flow.register()
@@ -205,13 +205,13 @@ func (fc *FlowConfig) merge(merged *FlowConfig) *FlowConfig {
 }
 
 func (fm *FlowMeta) register() *FlowMeta {
-	if len(fm.name) == 0 {
+	if len(fm.flowName) == 0 {
 		panic("can't register flow factory with empty stepName")
 	}
 
-	_, load := allFlows.LoadOrStore(fm.name, fm)
+	_, load := allFlows.LoadOrStore(fm.flowName, fm)
 	if load {
-		panic(fmt.Sprintf("register duplicate flow factory named [%s]", fm.name))
+		panic(fmt.Sprintf("register duplicate flow factory named [%s]", fm.flowName))
 	}
 
 	return fm
@@ -240,7 +240,7 @@ func (fm *FlowMeta) NotUseDefault() *FlowMeta {
 
 func (fm *FlowMeta) BuildRunFlow(input map[string]any) *RunFlow {
 	context := Context{
-		name:      WorkflowCtx + fm.name,
+		name:      WorkflowCtx + fm.flowName,
 		scopes:    []string{WorkflowCtx},
 		scopeCtxs: make(map[string]*Context),
 		table:     sync.Map{},
@@ -254,12 +254,12 @@ func (fm *FlowMeta) BuildRunFlow(input map[string]any) *RunFlow {
 	rf := RunFlow{
 		BasicInfo: &BasicInfo{
 			Status: emptyStatus(),
-			Name:   fm.name,
+			Name:   fm.flowName,
 			Id:     generateId(),
 		},
 		FlowMeta:   fm,
 		lock:       sync.Mutex{},
-		context:    &context,
+		Context:    &context,
 		processMap: make(map[string]*RunProcess),
 		finish:     sync.WaitGroup{},
 	}
@@ -325,7 +325,7 @@ func (rf *RunFlow) buildRunProcess(meta *ProcessMeta) *RunProcess {
 		finish:      sync.WaitGroup{},
 	}
 	pcsCtx.scopeCtxs = process.pcsScope
-	pcsCtx.parents = append(pcsCtx.parents, rf.context)
+	pcsCtx.parents = append(pcsCtx.parents, rf.Context)
 
 	for _, stepMeta := range meta.sortedStepMeta() {
 		process.buildRunStep(stepMeta)
@@ -365,9 +365,9 @@ func (rf *RunFlow) Flow() map[string]*Feature {
 		BasicInfo: &BasicInfo{
 			Status: rf.Status,
 			Id:     rf.Id,
-			Name:   rf.name,
+			Name:   rf.flowName,
 		},
-		Ctx: rf.context,
+		Context: rf.Context,
 	}
 	if rf.FlowConfig != nil && rf.FlowConfig.CallbackChain != nil {
 		rf.process(Before, info)

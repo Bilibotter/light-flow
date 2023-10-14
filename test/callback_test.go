@@ -14,7 +14,7 @@ func AfterFlowProcessor(info *flow.FlowInfo) bool {
 	if len(info.Id) == 0 {
 		panic("flow id is empty")
 	}
-	if info.Ctx == nil {
+	if info.Context == nil {
 		panic("flow context is nil")
 	}
 	atomic.AddInt64(&current, 1)
@@ -29,7 +29,7 @@ func BeforeFlowProcessor(info *flow.FlowInfo) bool {
 	if len(info.Id) == 0 {
 		panic("flow id is empty")
 	}
-	if info.Ctx == nil {
+	if info.Context == nil {
 		panic("flow context is nil")
 	}
 	atomic.AddInt64(&current, 1)
