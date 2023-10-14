@@ -268,11 +268,13 @@ func (cc *CallbackChain[T]) process(flag string, info T) string {
 		if keepOn {
 			if filter.must && err != nil {
 				info.addr().Append(Error)
+				info.addr().Append(Failed)
 			}
 			continue
 		}
 		if filter.must && len(panicStack) != 0 {
 			info.addr().Append(Panic)
+			info.addr().Append(Failed)
 		}
 
 		return panicStack

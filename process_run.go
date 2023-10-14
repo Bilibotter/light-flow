@@ -64,6 +64,7 @@ func (rp *RunProcess) Pause() {
 
 func (rp *RunProcess) Stop() {
 	rp.Append(Stop)
+	rp.Append(Failed)
 }
 
 func (rp *RunProcess) flow() *Feature {
@@ -128,6 +129,7 @@ func (rp *RunProcess) scheduleStep(step *RunStep) {
 	select {
 	case <-timer.C:
 		step.Append(Timeout)
+		step.Append(Failed)
 	case <-step.finish:
 		return
 	}
@@ -148,6 +150,7 @@ func (rp *RunProcess) finalize() {
 	select {
 	case <-timer.C:
 		rp.Append(Timeout)
+		rp.Append(Failed)
 	case <-finish:
 	}
 
@@ -207,6 +210,7 @@ func (rp *RunProcess) runStep(step *RunStep) {
 		if r := recover(); r != nil {
 			panicErr := fmt.Errorf("panic: %v\n\n%s", r, string(debug.Stack()))
 			step.Append(Panic)
+			step.Append(Failed)
 			step.Err = panicErr
 			step.End = time.Now().UTC()
 		}
@@ -220,6 +224,7 @@ func (rp *RunProcess) runStep(step *RunStep) {
 		step.Set(step.stepName, result)
 		if err != nil {
 			step.Append(Error)
+			step.Append(Failed)
 			continue
 		}
 		rp.setStepResult(step.stepName, result)
