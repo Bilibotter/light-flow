@@ -390,7 +390,7 @@ func (rf *RunFlow) Flow() map[string]*Feature {
 			rf.combine(process.Status)
 		}
 		if rf.Normal() {
-			rf.AppendStatus(Success)
+			rf.Append(Success)
 		}
 		rf.process(After, info)
 		rf.finish.Done()

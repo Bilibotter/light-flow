@@ -32,7 +32,7 @@ func GenerateSleep(duration time.Duration, args ...any) func(ctx *flow.Context) 
 	return func(ctx *flow.Context) (any, error) {
 		addrWrap, ok := ctx.Get(addrKey)
 		if !ok {
-			panic(fmt.Sprintf("%s not found addr", ctx.Name()))
+			panic(fmt.Sprintf("%s not found addr", ctx.GetCtxName()))
 		}
 		atomic.AddInt64(addrWrap.(*int64), 1)
 		return nil, nil
@@ -48,7 +48,7 @@ func ChangeCtxStepFunc(addr *int64, args ...any) func(ctx *flow.Context) (any, e
 		println("change ctx")
 		addrWrap, ok := ctx.Get(addrKey)
 		if !ok {
-			panic(fmt.Sprintf("%s not found addr", ctx.Name()))
+			panic(fmt.Sprintf("%s not found addr", ctx.GetCtxName()))
 		}
 		atomic.AddInt64(addrWrap.(*int64), 1)
 		return nil, nil
@@ -63,7 +63,7 @@ func GenerateStepIncAddr(i int, args ...any) func(ctx *flow.Context) (any, error
 		fmt.Printf("%d.step finish\n", i)
 		addrWrap, ok := ctx.Get(addrKey)
 		if !ok {
-			panic(fmt.Sprintf("%s not found addr", ctx.Name()))
+			panic(fmt.Sprintf("%s not found addr", ctx.GetCtxName()))
 		}
 		atomic.AddInt64(addrWrap.(*int64), 1)
 		return i, nil
@@ -101,10 +101,10 @@ func getAllAndSet(value string, history ...string) func(ctx *flow.Context) (any,
 		}
 		for _, v := range history {
 			if !vs.Contains(v) {
-				panic(fmt.Sprintf("ctx[%s] not contain %s", ctx.Name(), v))
+				panic(fmt.Sprintf("ctx[%s] not contain %s", ctx.GetCtxName(), v))
 			}
 		}
-		fmt.Printf("ctx[%s] get all keys=%s\n", ctx.Name(), strings.Join(ks.Slice(), ", "))
+		fmt.Printf("ctx[%s] get all keys=%s\n", ctx.GetCtxName(), strings.Join(ks.Slice(), ", "))
 		return nil, nil
 	}
 }

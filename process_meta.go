@@ -22,8 +22,8 @@ type ProcessMeta struct {
 
 type ProcessInfo struct {
 	*BasicInfo
+	*Context
 	FlowId string
-	Ctx    *Context
 }
 
 type ProcessConfig struct {
@@ -138,7 +138,7 @@ func (pm *ProcessMeta) Merge(name string) {
 			depends = append(depends, depend.stepName)
 		}
 		step := pm.AddStepWithAlias(merge.stepName, merge.run, depends...)
-		appendStatus(&step.position, Merged)
+		step.Append(Merged)
 	}
 }
 
@@ -201,7 +201,7 @@ func (pm *ProcessMeta) AddWaitBefore(alias string, run func(ctx *Context) (any, 
 func (pm *ProcessMeta) AddWaitAll(alias string, run func(ctx *Context) (any, error)) *StepMeta {
 	depends := make([]any, 0)
 	for name, step := range pm.steps {
-		if !contains(&step.position, HasNext) {
+		if step.Contain(End) {
 			depends = append(depends, name)
 		}
 	}
@@ -214,7 +214,7 @@ func (pm *ProcessMeta) AddStepWithAlias(alias string, run func(ctx *Context) (an
 	var oldDepends *Set[string]
 
 	if old, exist := pm.steps[alias]; exist {
-		if !contains(&pm.steps[alias].position, Merged) {
+		if !old.Contain(Merged) {
 			panic(fmt.Sprintf("step named [%s] already exist, can used %s to avoid stepName duplicate",
 				alias, GetFuncName(pm.AddStepWithAlias)))
 		}
@@ -243,18 +243,9 @@ func (pm *ProcessMeta) AddStepWithAlias(alias string, run func(ctx *Context) (an
 		}
 		meta.depends = append(meta.depends, depend)
 		depend.waiters = append(depend.waiters, meta)
-		if contains(&depend.position, End) {
-			appendStatus(&depend.position, HasNext)
-		}
-		if depend.layer+1 > meta.layer {
-			meta.layer = depend.layer + 1
-		}
 	}
 
-	appendStatus(&meta.position, End)
-	if len(depends) == 0 {
-		appendStatus(&meta.position, Start)
-	}
+	meta.wireDepends()
 
 	pm.tailStep = meta.stepName
 	pm.steps[alias] = meta

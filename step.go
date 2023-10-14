@@ -6,11 +6,11 @@ import (
 )
 
 type StepMeta struct {
+	*Status
+	*StepConfig
 	belong      *ProcessMeta
 	stepName    string
 	layer       int
-	position    int64
-	config      *StepConfig
 	depends     []*StepMeta // prev
 	waiters     []*StepMeta // next
 	ctxPriority map[string]string
@@ -33,12 +33,11 @@ type RunStep struct {
 
 type StepInfo struct {
 	*BasicInfo
+	*Context
 	ProcessId string
 	FlowId    string
 	Prev      map[string]string // prev step stepName to step id
 	Next      map[string]string // next step stepName to step id
-	Ctx       *Context
-	Config    *StepConfig
 	Start     time.Time
 	End       time.Time
 	Err       error
@@ -65,6 +64,33 @@ func (meta *StepMeta) CopyDepends(src ...any) {
 		name := toStepName(wrap)
 		meta.belong.copyDepends(name, meta.stepName)
 	}
+}
+
+func (meta *StepMeta) wireDepends() {
+	if meta.Status == nil {
+		meta.Status = emptyStatus()
+	}
+
+	for _, depend := range meta.depends {
+		for _, waiter := range depend.waiters {
+			if waiter == meta {
+				continue
+			}
+		}
+		meta.depends = append(meta.depends, depend)
+		depend.waiters = append(depend.waiters, meta)
+		if depend.Contain(End) {
+			depend.Append(HasNext)
+			depend.Pop(End)
+		}
+		if depend.layer+1 > meta.layer {
+			meta.layer = depend.layer + 1
+		}
+	}
+	if len(meta.depends) == 0 {
+		meta.Append(Head)
+	}
+	meta.Append(End)
 }
 
 // checkPriority checks if the priority key corresponds to an existing step.
@@ -106,5 +132,5 @@ func (meta *StepMeta) backSearch(searched string) bool {
 
 // AddConfig allow step not using process's config
 func (meta *StepMeta) AddConfig(config *StepConfig) {
-	meta.config = config
+	meta.StepConfig = config
 }

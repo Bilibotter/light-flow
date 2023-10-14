@@ -75,7 +75,7 @@ func AfterProcProcessor(info *flow.ProcessInfo) bool {
 	if len(info.FlowId) == 0 {
 		panic("process flow id is empty")
 	}
-	if info.Ctx == nil {
+	if info.Context == nil {
 		panic("process context is nil")
 	}
 	atomic.AddInt64(&current, 1)

@@ -102,7 +102,7 @@ func CopyProperties(src, dst interface{}) {
 	//srcType := srcElem.Type()
 	//for i := 0; i < srcElem.NumField(); i++ {
 	//	srcField := srcElem.Field(i)
-	//	srcFieldName := srcType.Field(i).Name
+	//	srcFieldName := srcType.Field(i).GetCtxName
 	//
 	//	if dstField := dstElem.FieldByName(srcFieldName); dstField.IsValid() && dstField.Type() == srcField.Type() {
 	//		if !srcField.IsZero() {

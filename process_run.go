@@ -57,18 +57,18 @@ func (rp *RunProcess) Resume() {
 }
 
 func (rp *RunProcess) Pause() {
-	if rp.AppendStatus(Pause) {
+	if rp.Append(Pause) {
 		rp.pause.Add(1)
 	}
 }
 
 func (rp *RunProcess) Stop() {
-	rp.AppendStatus(Stop)
+	rp.Append(Stop)
 }
 
 func (rp *RunProcess) flow() *Feature {
 	rp.initialize()
-	rp.AppendStatus(Running)
+	rp.Append(Running)
 	rp.procCallback(Before)
 	for _, step := range rp.flowSteps {
 		if step.layer == 1 {
@@ -96,12 +96,12 @@ func (rp *RunProcess) scheduleStep(step *RunStep) {
 	defer rp.scheduleNextSteps(step)
 
 	if _, finish := step.GetStepResult(step.stepName); finish {
-		step.AppendStatus(Success)
+		step.Append(Success)
 		return
 	}
 
 	if !rp.Normal() {
-		step.AppendStatus(Cancel)
+		step.Append(Cancel)
 		return
 	}
 
@@ -119,15 +119,15 @@ func (rp *RunProcess) scheduleStep(step *RunStep) {
 	if rp.ProcessConfig != nil && rp.StepConfig != nil && rp.StepTimeout != 0 {
 		timeout = rp.StepTimeout
 	}
-	if step.config != nil && step.config.StepTimeout != 0 {
-		timeout = step.config.StepTimeout
+	if step.StepConfig != nil && step.StepTimeout != 0 {
+		timeout = step.StepTimeout
 	}
 
 	timer := time.NewTimer(timeout)
 	go rp.runStep(step)
 	select {
 	case <-timer.C:
-		step.AppendStatus(Timeout)
+		step.Append(Timeout)
 	case <-step.finish:
 		return
 	}
@@ -147,7 +147,7 @@ func (rp *RunProcess) finalize() {
 	}()
 	select {
 	case <-timer.C:
-		rp.AppendStatus(Timeout)
+		rp.Append(Timeout)
 	case <-finish:
 	}
 
@@ -156,7 +156,7 @@ func (rp *RunProcess) finalize() {
 	}
 
 	if rp.Normal() {
-		rp.AppendStatus(Success)
+		rp.Append(Success)
 	}
 
 	rp.procCallback(After)
@@ -171,13 +171,13 @@ func (rp *RunProcess) scheduleNextSteps(step *RunStep) {
 		next := rp.flowSteps[waiter.stepName]
 		waiting := atomic.AddInt64(&next.waiting, -1)
 		if cancel {
-			next.AppendStatus(Cancel)
+			next.Append(Cancel)
 		}
 		if atomic.LoadInt64(&waiting) != 0 {
 			continue
 		}
 		if step.Success() {
-			next.AppendStatus(Running)
+			next.Append(Running)
 		}
 		go rp.scheduleStep(next)
 	}
@@ -199,14 +199,14 @@ func (rp *RunProcess) runStep(step *RunStep) {
 	if rp.ProcessConfig != nil && rp.StepConfig != nil && rp.StepRetry > 0 {
 		retry = rp.StepRetry
 	}
-	if step.config != nil && step.config.StepRetry > 0 {
-		retry = step.config.StepRetry
+	if step.StepConfig != nil && step.StepRetry > 0 {
+		retry = step.StepRetry
 	}
 
 	defer func() {
 		if r := recover(); r != nil {
 			panicErr := fmt.Errorf("panic: %v\n\n%s", r, string(debug.Stack()))
-			step.AppendStatus(Panic)
+			step.Append(Panic)
 			step.Err = panicErr
 			step.End = time.Now().UTC()
 		}
@@ -219,11 +219,11 @@ func (rp *RunProcess) runStep(step *RunStep) {
 		step.Err = err
 		step.Set(step.stepName, result)
 		if err != nil {
-			step.AppendStatus(Error)
+			step.Append(Error)
 			continue
 		}
 		rp.setStepResult(step.stepName, result)
-		step.AppendStatus(Success)
+		step.Append(Success)
 		break
 	}
 }
@@ -244,13 +244,13 @@ func (rp *RunProcess) procCallback(flag string) {
 	}
 
 	info := &ProcessInfo{
+		Context: rp.Context,
 		BasicInfo: &BasicInfo{
 			Status: rp.Status,
 			Id:     rp.id,
 			Name:   rp.processName,
 		},
 		FlowId: rp.flowId,
-		Ctx:    rp.Context,
 	}
 
 	rp.procChain.process(flag, info)
@@ -263,10 +263,9 @@ func (rp *RunProcess) summaryStepInfo(step *RunStep) *StepInfo {
 			Id:     step.id,
 			Name:   step.stepName,
 		},
+		Context:   step.Context,
 		ProcessId: step.processId,
 		FlowId:    step.flowId,
-		Ctx:       step.Context,
-		Config:    step.config,
 		Start:     step.Start,
 		End:       step.End,
 		Err:       step.Err,

@@ -45,7 +45,7 @@ func PreProcessor(info *flow.StepInfo) bool {
 	if info.Name == "" {
 		panic("step name is empty")
 	}
-	if info.Ctx == nil {
+	if info.Context == nil {
 		panic("step context is nil")
 	}
 	atomic.AddInt64(&current, 1)
@@ -72,7 +72,7 @@ func PostProcessor(info *flow.StepInfo) bool {
 	if info.End.IsZero() {
 		panic("step end time is zero")
 	}
-	if info.Ctx == nil {
+	if info.Context == nil {
 		panic("step context is nil")
 	}
 	atomic.AddInt64(&current, 1)
@@ -97,7 +97,7 @@ func ProcProcessor(info *flow.ProcessInfo) bool {
 	if len(info.FlowId) == 0 {
 		panic("process flow id is empty")
 	}
-	if info.Ctx == nil {
+	if info.Context == nil {
 		panic("process context is nil")
 	}
 	atomic.AddInt64(&current, 1)

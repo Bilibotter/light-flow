@@ -110,12 +110,12 @@ func TestComparableSet(t *testing.T) {
 
 func TestPopStatus(t *testing.T) {
 	status := light_flow.Status(0)
-	status.AppendStatus(light_flow.Cancel)
-	status.AppendStatus(light_flow.Panic)
-	status.AppendStatus(light_flow.Failed)
-	status.AppendStatus(light_flow.Error)
-	status.AppendStatus(light_flow.Timeout)
-	status.AppendStatus(light_flow.Stop)
+	status.Append(light_flow.Cancel)
+	status.Append(light_flow.Panic)
+	status.Append(light_flow.Failed)
+	status.Append(light_flow.Error)
+	status.Append(light_flow.Timeout)
+	status.Append(light_flow.Stop)
 
 	if !status.Contain(light_flow.Cancel) {
 		t.Errorf("cancel appended but not exist")
@@ -167,42 +167,42 @@ func TestPopStatus(t *testing.T) {
 }
 
 func TestExplainStatus1(t *testing.T) {
-	if status := light_flow.Status(0); !status.AppendStatus(light_flow.Cancel) {
+	if status := light_flow.Status(0); !status.Append(light_flow.Cancel) {
 		t.Errorf("cancel status append error")
 	} else if !status.Contain(light_flow.Cancel) {
 		t.Errorf("cancel status not cotain after append")
 	}
-	if status := light_flow.Status(0); !status.AppendStatus(light_flow.Pause) {
+	if status := light_flow.Status(0); !status.Append(light_flow.Pause) {
 		t.Errorf("panic status append error")
 	} else if !status.Contain(light_flow.Pause) {
 		t.Errorf("pause status not cotain after append")
 	}
-	if status := light_flow.Status(0); !status.AppendStatus(light_flow.Running) {
+	if status := light_flow.Status(0); !status.Append(light_flow.Running) {
 		t.Errorf("running status append error")
 	} else if !status.Contain(light_flow.Running) {
 		t.Errorf("running status not cotain after append")
 	}
-	if status := light_flow.Status(0); !status.AppendStatus(light_flow.Success) {
+	if status := light_flow.Status(0); !status.Append(light_flow.Success) {
 		t.Errorf("success status append error")
 	} else if !status.Contain(light_flow.Success) {
 		t.Errorf("success status not cotain after append")
 	}
-	if status := light_flow.Status(0); !status.AppendStatus(light_flow.Failed) {
+	if status := light_flow.Status(0); !status.Append(light_flow.Failed) {
 		t.Errorf("failed status append error")
 	} else if !status.Contain(light_flow.Failed) {
 		t.Errorf("failed status not cotain after append")
 	}
-	if status := light_flow.Status(0); !status.AppendStatus(light_flow.Timeout) {
+	if status := light_flow.Status(0); !status.Append(light_flow.Timeout) {
 		t.Errorf("timeout status append error")
 	} else if !status.Contain(light_flow.Timeout) {
 		t.Errorf("timeout status not cotain after append")
 	}
-	if status := light_flow.Status(0); !status.AppendStatus(light_flow.Panic) {
+	if status := light_flow.Status(0); !status.Append(light_flow.Panic) {
 		t.Errorf("panic status append error")
 	} else if !status.Contain(light_flow.Panic) {
 		t.Errorf("panic status not cotain after append")
 	}
-	if status := light_flow.Status(0); !status.AppendStatus(light_flow.Error) {
+	if status := light_flow.Status(0); !status.Append(light_flow.Error) {
 		t.Errorf("error status append error")
 	} else if !status.Contain(light_flow.Error) {
 		t.Errorf("error status not cotain after append")
@@ -211,13 +211,13 @@ func TestExplainStatus1(t *testing.T) {
 
 func TestExplainStatus2(t *testing.T) {
 	status := light_flow.Status(0)
-	status.AppendStatus(light_flow.Cancel)
-	status.AppendStatus(light_flow.Panic)
-	status.AppendStatus(light_flow.Failed)
-	status.AppendStatus(light_flow.Timeout)
-	status.AppendStatus(light_flow.Error)
-	status.AppendStatus(light_flow.Stop)
-	status.AppendStatus(light_flow.Success)
+	status.Append(light_flow.Cancel)
+	status.Append(light_flow.Panic)
+	status.Append(light_flow.Failed)
+	status.Append(light_flow.Timeout)
+	status.Append(light_flow.Error)
+	status.Append(light_flow.Stop)
+	status.Append(light_flow.Success)
 	if status.Success() {
 		t.Errorf("explain success while error occur")
 	}
@@ -238,9 +238,9 @@ func TestExplainStatus2(t *testing.T) {
 	}
 
 	status = light_flow.Status(0)
-	status.AppendStatus(light_flow.Pause)
-	status.AppendStatus(light_flow.Running)
-	status.AppendStatus(light_flow.Pending)
+	status.Append(light_flow.Pause)
+	status.Append(light_flow.Running)
+	status.Append(light_flow.Pending)
 	if !status.Normal() {
 		t.Errorf("normal status judge error")
 	}
@@ -250,7 +250,7 @@ func TestExplainStatus2(t *testing.T) {
 	if !status.Contain(light_flow.Running) {
 		t.Errorf("running status explain error")
 	}
-	status.AppendStatus(light_flow.Success)
+	status.Append(light_flow.Success)
 	if !status.Contain(light_flow.Success) || !status.Success() {
 		t.Errorf("success status explain error")
 	}
@@ -267,7 +267,7 @@ func TestCreateStruct(t *testing.T) {
 	}
 	dst := light_flow.CreateStruct[Dst](&src)
 	if dst.Name != src.Name {
-		t.Errorf("dst.Name != src.Name")
+		t.Errorf("dst.GetCtxName != src.GetCtxName")
 	}
 	if dst.Id != src.Id {
 		t.Errorf("dst.Id != src.Id")
@@ -296,7 +296,7 @@ func TestCopyProperties(t *testing.T) {
 	dst := Dst{}
 	light_flow.CopyProperties(&src, &dst)
 	if dst.Name != src.Name {
-		t.Errorf("dst.Name != src.Name")
+		t.Errorf("dst.GetCtxName != src.GetCtxName")
 	}
 	if dst.Id != src.Id {
 		t.Errorf("dst.Id != src.Id")

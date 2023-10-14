@@ -16,11 +16,11 @@ const (
 )
 
 // these constants are used to indicate the position of the process
-const (
-	End     = int64(0b1)
-	Start   = int64(0b1 << 1)
-	HasNext = int64(0b1 << 2)
-	Merged  = int64(0b1 << 3)
+var (
+	End     = &StatusEnum{0b1, "End"}
+	Head    = &StatusEnum{0b1 << 1, "Head"}
+	HasNext = &StatusEnum{0b1 << 2, "HasNext"}
+	Merged  = &StatusEnum{0b1 << 3, "Merged"}
 )
 
 // these variable are used to indicate the status of the unit
@@ -209,7 +209,7 @@ func (s *Status) Pop(enum *StatusEnum) bool {
 	return false
 }
 
-func (s *Status) AppendStatus(enum *StatusEnum) bool {
+func (s *Status) Append(enum *StatusEnum) bool {
 	for current := s.load(); !current.Contain(enum); current = s.load() {
 		if s.cas(current, current|enum.flag) {
 			return true
@@ -226,7 +226,7 @@ func (s *Status) cas(old, new Status) bool {
 	return atomic.CompareAndSwapInt64((*int64)(s), int64(old), int64(new))
 }
 
-func (s *StatusEnum) Contained(explain []string) bool {
+func (s *StatusEnum) Contained(explain ...string) bool {
 	for _, value := range explain {
 		if value == s.msg {
 			return true
@@ -286,7 +286,7 @@ func (cc *CallbackChain[T]) process(flag string, info T) (panicStack string) {
 		keepOn, panicStack = filter.call(flag, info)
 		// len(panicStack) != 0 when callback that must be executed encounters panic
 		if len(panicStack) != 0 {
-			info.addr().AppendStatus(Panic)
+			info.addr().Append(Panic)
 			return
 		}
 		if !keepOn {
@@ -375,7 +375,7 @@ func (c *Callback[T]) call(flag string, info T) (keepOn bool, panicStack string)
 	return
 }
 
-func (ctx *Context) Name() string {
+func (ctx *Context) GetCtxName() string {
 	return ctx.name
 }
 
@@ -427,7 +427,7 @@ func (ctx *Context) getAll(key string, saved map[string]any) {
 	}
 
 	if value, exist := ctx.table.Load(key); exist {
-		saved[ctx.Name()] = value
+		saved[ctx.GetCtxName()] = value
 	}
 
 	for _, parent := range ctx.parents {
