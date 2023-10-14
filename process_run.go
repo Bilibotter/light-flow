@@ -233,7 +233,7 @@ func (rp *RunProcess) stepCallback(step *RunStep, flag string) {
 		return
 	}
 	info := rp.summaryStepInfo(step)
-	if panicStack := rp.stepChain.process(flag, info); len(panicStack) != 0 {
+	if panicStack := rp.stepChain.process(flag, info); step.Err == nil && len(panicStack) != 0 {
 		step.Err = fmt.Errorf(panicStack)
 	}
 }

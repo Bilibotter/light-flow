@@ -69,30 +69,30 @@ func (pc *ProcessConfig) AddStepTimeout(timeout time.Duration) *ProcessConfig {
 	return pc
 }
 
-func (pc *ProcessConfig) AddBeforeStep(must bool, callback func(*StepInfo) (keepOn bool)) *Callback[*StepInfo] {
+func (pc *ProcessConfig) AddBeforeStep(must bool, callback func(*StepInfo) (keepOn bool, err error)) *Callback[*StepInfo] {
 	return pc.addStepCallback(Before, must, callback)
 }
 
-func (pc *ProcessConfig) AddAfterStep(must bool, callback func(*StepInfo) (keepOn bool)) *Callback[*StepInfo] {
+func (pc *ProcessConfig) AddAfterStep(must bool, callback func(*StepInfo) (keepOn bool, err error)) *Callback[*StepInfo] {
 	return pc.addStepCallback(After, must, callback)
 }
 
-func (pc *ProcessConfig) addStepCallback(flag string, must bool, callback func(*StepInfo) bool) *Callback[*StepInfo] {
+func (pc *ProcessConfig) addStepCallback(flag string, must bool, callback func(*StepInfo) (bool, error)) *Callback[*StepInfo] {
 	if pc.stepChain == nil {
 		pc.stepChain = &CallbackChain[*StepInfo]{}
 	}
 	return pc.stepChain.AddCallback(flag, must, callback)
 }
 
-func (pc *ProcessConfig) AddBeforeProcess(must bool, callback func(*ProcessInfo) (keepOn bool)) *Callback[*ProcessInfo] {
+func (pc *ProcessConfig) AddBeforeProcess(must bool, callback func(*ProcessInfo) (keepOn bool, err error)) *Callback[*ProcessInfo] {
 	return pc.addProcessCallback(Before, must, callback)
 }
 
-func (pc *ProcessConfig) AddAfterProcess(must bool, callback func(*ProcessInfo) (keepOn bool)) *Callback[*ProcessInfo] {
+func (pc *ProcessConfig) AddAfterProcess(must bool, callback func(*ProcessInfo) (keepOn bool, err error)) *Callback[*ProcessInfo] {
 	return pc.addProcessCallback(After, must, callback)
 }
 
-func (pc *ProcessConfig) addProcessCallback(flag string, must bool, callback func(*ProcessInfo) bool) *Callback[*ProcessInfo] {
+func (pc *ProcessConfig) addProcessCallback(flag string, must bool, callback func(*ProcessInfo) (bool, error)) *Callback[*ProcessInfo] {
 	if pc.procChain == nil {
 		pc.procChain = &CallbackChain[*ProcessInfo]{}
 	}

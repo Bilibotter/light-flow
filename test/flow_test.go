@@ -65,7 +65,7 @@ func GenerateErrorStep(i int, args ...any) func(ctx *flow.Context) (any, error) 
 	}
 }
 
-func AfterProcProcessor(info *flow.ProcessInfo) bool {
+func AfterProcProcessor(info *flow.ProcessInfo) (bool, error) {
 	if info.Name == "" {
 		panic("process name is empty")
 	}
@@ -80,7 +80,7 @@ func AfterProcProcessor(info *flow.ProcessInfo) bool {
 	}
 	atomic.AddInt64(&current, 1)
 	fmt.Printf("..process[%s] AfterProcProcessor execute \n", info.Name)
-	return true
+	return true, nil
 }
 
 func GeneratePanicStep(i int, args ...any) func(ctx *flow.Context) (any, error) {

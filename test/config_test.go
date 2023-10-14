@@ -9,10 +9,10 @@ import (
 	"time"
 )
 
-func StepInfoChecker(key string, prev, next []string) func(info *flow.StepInfo) bool {
-	return func(info *flow.StepInfo) bool {
+func StepInfoChecker(key string, prev, next []string) func(info *flow.StepInfo) (bool, error) {
+	return func(info *flow.StepInfo) (bool, error) {
 		if info.Name != key {
-			return true
+			return true, nil
 		}
 		println("matched", key)
 		atomic.AddInt64(&current, 1)
@@ -28,11 +28,11 @@ func StepInfoChecker(key string, prev, next []string) func(info *flow.StepInfo) 
 				panic(fmt.Sprintf("step[%s] next not contains %s", key, name))
 			}
 		}
-		return true
+		return true, nil
 	}
 }
 
-func PreProcessor(info *flow.StepInfo) bool {
+func PreProcessor(info *flow.StepInfo) (bool, error) {
 	if len(info.Id) == 0 {
 		panic("step id is empty")
 	}
@@ -50,10 +50,10 @@ func PreProcessor(info *flow.StepInfo) bool {
 	}
 	atomic.AddInt64(&current, 1)
 	fmt.Printf("..step[%s] PreProcessor exeucte\n", info.Name)
-	return true
+	return true, nil
 }
 
-func PostProcessor(info *flow.StepInfo) bool {
+func PostProcessor(info *flow.StepInfo) (bool, error) {
 	if len(info.Id) == 0 {
 		panic("step id is empty")
 	}
@@ -77,17 +77,17 @@ func PostProcessor(info *flow.StepInfo) bool {
 	}
 	atomic.AddInt64(&current, 1)
 	fmt.Printf("..step[%s] PostProcessor execute\n", info.Name)
-	return true
+	return true, nil
 }
 
-func ErrorResultPrinter(info *flow.StepInfo) bool {
+func ErrorResultPrinter(info *flow.StepInfo) (bool, error) {
 	if !info.Normal() {
 		fmt.Printf("step[%s] error, explain=%v, err=%v\n", info.Name, info.ExplainStatus(), info.Err)
 	}
-	return true
+	return true, nil
 }
 
-func ProcProcessor(info *flow.ProcessInfo) bool {
+func ProcProcessor(info *flow.ProcessInfo) (bool, error) {
 	if info.Name == "" {
 		panic("process name is empty")
 	}
@@ -102,39 +102,39 @@ func ProcProcessor(info *flow.ProcessInfo) bool {
 	}
 	atomic.AddInt64(&current, 1)
 	fmt.Printf("..process[%s] ProcProcessor execute \n", info.Name)
-	return true
+	return true, nil
 }
 
-func PanicProcProcessor(info *flow.ProcessInfo) bool {
+func PanicProcProcessor(info *flow.ProcessInfo) (bool, error) {
 	atomic.AddInt64(&current, 1)
 	panic("PanicProcProcessor panic")
-	return true
+	return true, nil
 }
 
-func CheckStepCurrent(i int) func(info *flow.StepInfo) bool {
-	return func(info *flow.StepInfo) bool {
+func CheckStepCurrent(i int) func(info *flow.StepInfo) (bool, error) {
+	return func(info *flow.StepInfo) (bool, error) {
 		if atomic.LoadInt64(&current) != int64(i) {
 			panic(fmt.Sprintf("current number not equal check number,check number=%d", i))
 		}
 		atomic.AddInt64(&current, 1)
-		return true
+		return true, nil
 	}
 }
 
-func CheckProcCurrent(i int) func(info *flow.ProcessInfo) bool {
-	return func(info *flow.ProcessInfo) bool {
+func CheckProcCurrent(i int) func(info *flow.ProcessInfo) (bool, error) {
+	return func(info *flow.ProcessInfo) (bool, error) {
 		if atomic.LoadInt64(&current) != int64(i) {
 			panic(fmt.Sprintf("current number not equal check number,check number=%d", i))
 		}
 		atomic.AddInt64(&current, 1)
-		return true
+		return true, nil
 	}
 }
 
-func PanicStepProcessor(info *flow.StepInfo) bool {
+func PanicStepProcessor(info *flow.StepInfo) (bool, error) {
 	atomic.AddInt64(&current, 1)
 	panic("PanicStepProcessor panic")
-	return true
+	return true, nil
 }
 
 func TestProcessorRandomOrder(t *testing.T) {

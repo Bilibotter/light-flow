@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func AfterFlowProcessor(info *flow.FlowInfo) bool {
+func AfterFlowProcessor(info *flow.FlowInfo) (bool, error) {
 	if info.Name == "" {
 		panic("flow name is empty")
 	}
@@ -19,10 +19,10 @@ func AfterFlowProcessor(info *flow.FlowInfo) bool {
 	}
 	atomic.AddInt64(&current, 1)
 	fmt.Printf("..process[%s] AfterFlowProcessor execute \n", info.Name)
-	return true
+	return true, nil
 }
 
-func BeforeFlowProcessor(info *flow.FlowInfo) bool {
+func BeforeFlowProcessor(info *flow.FlowInfo) (bool, error) {
 	if info.Name == "" {
 		panic("flow name is empty")
 	}
@@ -34,15 +34,15 @@ func BeforeFlowProcessor(info *flow.FlowInfo) bool {
 	}
 	atomic.AddInt64(&current, 1)
 	fmt.Printf("..process[%s] BeforeFlowProcessor execute \n", info.Name)
-	return true
+	return true, nil
 }
 
 func TestInfoCorrect(t *testing.T) {
 	defer resetCurrent()
 	defer func() {
-		flow.SetDefaultConfig(nil)
+		flow.CreateDefaultConfig()
 	}()
-	config := flow.Configuration{}
+	config := flow.CreateDefaultConfig()
 	config.AddBeforeStep(true, StepInfoChecker("1", []string{}, []string{"2", "3"}))
 	config.AddBeforeStep(true, StepInfoChecker("2", []string{"1"}, []string{"4"}))
 	config.AddBeforeStep(true, StepInfoChecker("3", []string{"1"}, []string{"4"}))
@@ -51,7 +51,7 @@ func TestInfoCorrect(t *testing.T) {
 	config.AddAfterStep(true, StepInfoChecker("2", []string{"1"}, []string{"4"}))
 	config.AddAfterStep(true, StepInfoChecker("3", []string{"1"}, []string{"4"}))
 	config.AddAfterStep(true, StepInfoChecker("4", []string{"2", "3"}, []string{}))
-	flow.SetDefaultConfig(&config)
+
 	workflow := flow.RegisterFlow("TestInfoCorrect")
 	process := workflow.AddProcessWithConf("TestInfoCorrect", nil)
 	process.AddStepWithAlias("1", GenerateStep(1))
@@ -72,16 +72,16 @@ func TestInfoCorrect(t *testing.T) {
 func TestDefaultProcessConfig(t *testing.T) {
 	defer resetCurrent()
 	defer func() {
-		flow.SetDefaultConfig(nil)
+		flow.CreateDefaultConfig()
 	}()
-	config := flow.Configuration{}
+	config := flow.CreateDefaultConfig()
 	config.AddBeforeStep(true, PreProcessor)
 	config.AddAfterStep(true, PostProcessor)
 	config.AddBeforeProcess(true, ProcProcessor)
 	config.AddAfterProcess(true, ProcProcessor)
 	config.AddBeforeFlow(true, BeforeFlowProcessor)
 	config.AddAfterFlow(true, AfterFlowProcessor)
-	flow.SetDefaultConfig(&config)
+
 	workflow := flow.RegisterFlow("TestDefaultProcessConfig")
 	process := workflow.AddProcessWithConf("TestDefaultProcessConfig", nil)
 	process.AddStepWithAlias("1", GenerateStep(1))
@@ -102,16 +102,16 @@ func TestDefaultProcessConfig(t *testing.T) {
 func TestMergeDefaultProcessConfig(t *testing.T) {
 	defer resetCurrent()
 	defer func() {
-		flow.SetDefaultConfig(nil)
+		flow.CreateDefaultConfig()
 	}()
-	config := flow.Configuration{}
+	config := flow.CreateDefaultConfig()
 	config.AddBeforeStep(true, PreProcessor)
 	config.AddAfterStep(true, PostProcessor)
 	config.AddBeforeProcess(true, ProcProcessor)
 	config.AddAfterProcess(true, ProcProcessor)
 	config.AddBeforeFlow(true, BeforeFlowProcessor)
 	config.AddAfterFlow(true, AfterFlowProcessor)
-	flow.SetDefaultConfig(&config)
+
 	workflow := flow.RegisterFlow("TestMergeDefaultProcessConfig")
 	workflow.AddBeforeFlow(true, BeforeFlowProcessor)
 	workflow.AddAfterFlow(true, AfterFlowProcessor)
@@ -136,9 +136,9 @@ func TestMergeDefaultProcessConfig(t *testing.T) {
 func TestCallbackCond(t *testing.T) {
 	defer resetCurrent()
 	defer func() {
-		flow.SetDefaultConfig(nil)
+		flow.CreateDefaultConfig()
 	}()
-	config := flow.Configuration{}
+	config := flow.CreateDefaultConfig()
 	config.AddBeforeFlow(true, BeforeFlowProcessor).OnlyFor("TestCallbackCond")
 	config.AddBeforeFlow(true, BeforeFlowProcessor).OnlyFor("TestCallbackCondNotExist")
 	config.AddAfterFlow(true, AfterFlowProcessor).OnlyFor("TestCallbackCond").When(flow.Failed)
@@ -151,7 +151,7 @@ func TestCallbackCond(t *testing.T) {
 	config.AddBeforeStep(true, PreProcessor).OnlyFor("NotExist")
 	config.AddAfterStep(true, PostProcessor).OnlyFor("1").When(flow.Success)
 	config.AddAfterStep(true, PostProcessor).OnlyFor("1").When(flow.Failed)
-	flow.SetDefaultConfig(&config)
+
 	workflow := flow.RegisterFlow("TestCallbackCond")
 	process := workflow.AddProcessWithConf("TestCallbackCond", nil)
 	process.AddStepWithAlias("1", GenerateStep(1))
@@ -170,9 +170,9 @@ func TestCallbackCond(t *testing.T) {
 func TestCallbackCond0(t *testing.T) {
 	defer resetCurrent()
 	defer func() {
-		flow.SetDefaultConfig(nil)
+		flow.CreateDefaultConfig()
 	}()
-	config := flow.Configuration{}
+	config := flow.CreateDefaultConfig()
 	config.AddBeforeFlow(true, BeforeFlowProcessor).NotFor("TestCallbackCond0")
 	config.AddBeforeFlow(true, BeforeFlowProcessor).NotFor("TestCallbackCondNotExist")
 	config.AddAfterFlow(true, AfterFlowProcessor).OnlyFor("TestCallbackCond0").Exclude(flow.Failed)
@@ -184,7 +184,7 @@ func TestCallbackCond0(t *testing.T) {
 	config.AddBeforeStep(true, PreProcessor).NotFor("1")
 	config.AddAfterStep(true, PostProcessor).OnlyFor("1").Exclude(flow.Success)
 	config.AddAfterStep(true, PostProcessor).OnlyFor("1").Exclude(flow.Failed)
-	flow.SetDefaultConfig(&config)
+
 	workflow := flow.RegisterFlow("TestCallbackCond0")
 	process := workflow.AddProcessWithConf("TestCallbackCond0", nil)
 	process.AddStepWithAlias("1", GenerateStep(1))
@@ -203,16 +203,16 @@ func TestCallbackCond0(t *testing.T) {
 func TestUnableDefaultProcessConfig(t *testing.T) {
 	defer resetCurrent()
 	defer func() {
-		flow.SetDefaultConfig(nil)
+		flow.CreateDefaultConfig()
 	}()
-	config := flow.Configuration{}
+	config := flow.CreateDefaultConfig()
 	config.AddBeforeStep(true, PreProcessor)
 	config.AddAfterStep(true, PostProcessor)
 	config.AddBeforeProcess(true, ProcProcessor)
 	config.AddAfterProcess(true, ProcProcessor)
 	config.AddBeforeFlow(true, BeforeFlowProcessor)
 	config.AddAfterFlow(true, AfterFlowProcessor)
-	flow.SetDefaultConfig(&config)
+
 	workflow := flow.RegisterFlow("TestUnableDefaultProcessConfig")
 	workflow.NotUseDefault()
 	process := workflow.AddProcessWithConf("TestUnableDefaultProcessConfig", nil)

@@ -82,7 +82,7 @@ type Callback[T InfoI] struct {
 	flag string
 	// If keepOn is false, the next processors will not be executed
 	// If execute success, info.Exceptions() will be nil
-	run func(info T) (keepOn bool)
+	run func(info T) (keepOn bool, err error)
 }
 
 type Context struct {
@@ -100,28 +100,9 @@ type Feature struct {
 	finish *sync.WaitGroup
 }
 
-// appendStatus function appends a status bit to the specified address.
-// The function checks if the specified update bit is already present in the current value.
-// If it is not present, it appends the update bit,
-// and returns true indicating successful appending of the update bit.
-// Otherwise, it returns false.
-func appendStatus(addr *int64, update int64) (change bool) {
-	for current := atomic.LoadInt64(addr); current&update != update; {
-		if atomic.CompareAndSwapInt64(addr, current, current|update) {
-			return true
-		}
-		current = atomic.LoadInt64(addr)
-	}
-	return false
-}
-
 func emptyStatus() *Status {
 	s := Status(0)
 	return &s
-}
-
-func contains(addr *int64, status int64) bool {
-	return atomic.LoadInt64(addr)&status == status
 }
 
 func toStepName(value any) string {
@@ -259,7 +240,7 @@ func (cc *CallbackChain[T]) CopyChain() []*Callback[T] {
 	return result
 }
 
-func (cc *CallbackChain[T]) AddCallback(flag string, must bool, run func(info T) bool) *Callback[T] {
+func (cc *CallbackChain[T]) AddCallback(flag string, must bool, run func(info T) (bool, error)) *Callback[T] {
 	callback := &Callback[T]{
 		must: must,
 		flag: flag,
@@ -280,29 +261,32 @@ func (cc *CallbackChain[T]) maintain() {
 	})
 }
 
-func (cc *CallbackChain[T]) process(flag string, info T) (panicStack string) {
-	var keepOn bool
+// don't want to raise error not deal hint, so return string
+func (cc *CallbackChain[T]) process(flag string, info T) string {
 	for _, filter := range cc.filters {
-		keepOn, panicStack = filter.call(flag, info)
-		// len(panicStack) != 0 when callback that must be executed encounters panic
-		if len(panicStack) != 0 {
+		keepOn, err, panicStack := filter.call(flag, info)
+		if keepOn {
+			if filter.must && err != nil {
+				info.addr().Append(Error)
+			}
+			continue
+		}
+		if filter.must && len(panicStack) != 0 {
 			info.addr().Append(Panic)
-			return
 		}
-		if !keepOn {
-			return
-		}
+
+		return panicStack
 	}
 
-	return
+	return ""
 }
 
 func (c *Callback[T]) NotFor(name ...string) *Callback[T] {
 	s := CreateFromSliceFunc(name, func(value string) string { return value })
 	old := c.run
-	f := func(info T) bool {
+	f := func(info T) (bool, error) {
 		if s.Contains(info.GetName()) {
-			return true
+			return true, nil
 		}
 		return old(info)
 	}
@@ -314,9 +298,9 @@ func (c *Callback[T]) NotFor(name ...string) *Callback[T] {
 func (c *Callback[T]) OnlyFor(name ...string) *Callback[T] {
 	s := CreateFromSliceFunc(name, func(value string) string { return value })
 	old := c.run
-	f := func(info T) bool {
+	f := func(info T) (bool, error) {
 		if !s.Contains(info.GetName()) {
-			return true
+			return true, nil
 		}
 		return old(info)
 	}
@@ -327,13 +311,13 @@ func (c *Callback[T]) OnlyFor(name ...string) *Callback[T] {
 
 func (c *Callback[T]) When(status ...*StatusEnum) *Callback[T] {
 	old := c.run
-	f := func(info T) bool {
+	f := func(info T) (bool, error) {
 		for _, match := range status {
 			if info.Contain(match) {
 				return old(info)
 			}
 		}
-		return true
+		return true, nil
 	}
 	c.run = f
 	return c
@@ -341,10 +325,10 @@ func (c *Callback[T]) When(status ...*StatusEnum) *Callback[T] {
 
 func (c *Callback[T]) Exclude(status ...*StatusEnum) *Callback[T] {
 	old := c.run
-	f := func(info T) bool {
+	f := func(info T) (bool, error) {
 		for _, match := range status {
 			if info.Contain(match) {
-				return true
+				return true, nil
 			}
 		}
 		return old(info)
@@ -353,25 +337,21 @@ func (c *Callback[T]) Exclude(status ...*StatusEnum) *Callback[T] {
 	return c
 }
 
-func (c *Callback[T]) call(flag string, info T) (keepOn bool, panicStack string) {
+func (c *Callback[T]) call(flag string, info T) (keepOn bool, err error, panicStack string) {
 	if c.flag != flag {
-		return true, ""
+		return true, nil, ""
 	}
 
 	defer func() {
 		r := recover()
-		if r == nil {
-			return
-		}
-		if !c.must {
-			return
+		if r != nil {
+			// this will lead to turn process status to panic
+			panicStack = fmt.Sprintf("panic: %v\n\n%s", r, string(debug.Stack()))
 		}
 
-		// this will lead to turn process status to panic
-		panicStack = fmt.Sprintf("panic: %v\n\n%s", r, string(debug.Stack()))
 	}()
 
-	keepOn = c.run(info)
+	keepOn, err = c.run(info)
 	return
 }
 

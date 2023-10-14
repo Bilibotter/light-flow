@@ -81,8 +81,12 @@ func SetIdGenerator(method func() string) {
 	generateId = method
 }
 
-func SetDefaultConfig(config *Configuration) {
-	defaultConfig = config
+func CreateDefaultConfig() *Configuration {
+	defaultConfig = &Configuration{
+		FlowConfig:    &FlowConfig{},
+		ProcessConfig: &ProcessConfig{StepConfig: &StepConfig{}},
+	}
+	return defaultConfig
 }
 
 func RegisterFlow(name string) *FlowMeta {
@@ -139,56 +143,14 @@ func BuildRunFlow(name string, input map[string]any) *RunFlow {
 	return factory.(*FlowMeta).BuildRunFlow(input)
 }
 
-func (c *Configuration) AddBeforeStep(must bool, callback func(*StepInfo) (keepOn bool)) *Callback[*StepInfo] {
-	if c.ProcessConfig == nil {
-		c.ProcessConfig = &ProcessConfig{}
-	}
-	return c.ProcessConfig.AddBeforeStep(must, callback)
-}
-
-func (c *Configuration) AddAfterStep(must bool, callback func(*StepInfo) (keepOn bool)) *Callback[*StepInfo] {
-	if c.ProcessConfig == nil {
-		c.ProcessConfig = &ProcessConfig{}
-	}
-	return c.ProcessConfig.AddAfterStep(must, callback)
-}
-
-func (c *Configuration) AddBeforeProcess(must bool, callback func(*ProcessInfo) (keepOn bool)) *Callback[*ProcessInfo] {
-	if c.ProcessConfig == nil {
-		c.ProcessConfig = &ProcessConfig{}
-	}
-	return c.ProcessConfig.AddBeforeProcess(must, callback)
-}
-
-func (c *Configuration) AddAfterProcess(must bool, callback func(*ProcessInfo) (keepOn bool)) *Callback[*ProcessInfo] {
-	if c.ProcessConfig == nil {
-		c.ProcessConfig = &ProcessConfig{}
-	}
-	return c.ProcessConfig.AddAfterProcess(must, callback)
-}
-
-func (c *Configuration) AddBeforeFlow(must bool, callback func(*FlowInfo) (keepOn bool)) *Callback[*FlowInfo] {
-	if c.FlowConfig == nil {
-		c.FlowConfig = &FlowConfig{}
-	}
-	return c.FlowConfig.AddBeforeFlow(must, callback)
-}
-
-func (c *Configuration) AddAfterFlow(must bool, callback func(*FlowInfo) (keepOn bool)) *Callback[*FlowInfo] {
-	if c.FlowConfig == nil {
-		c.FlowConfig = &FlowConfig{}
-	}
-	return c.FlowConfig.AddAfterFlow(must, callback)
-}
-
-func (fc *FlowConfig) AddBeforeFlow(must bool, callback func(*FlowInfo) (keepOn bool)) *Callback[*FlowInfo] {
+func (fc *FlowConfig) AddBeforeFlow(must bool, callback func(*FlowInfo) (keepOn bool, err error)) *Callback[*FlowInfo] {
 	if fc.CallbackChain == nil {
 		fc.CallbackChain = &CallbackChain[*FlowInfo]{}
 	}
 	return fc.AddCallback(Before, must, callback)
 }
 
-func (fc *FlowConfig) AddAfterFlow(must bool, callback func(*FlowInfo) (keepOn bool)) *Callback[*FlowInfo] {
+func (fc *FlowConfig) AddAfterFlow(must bool, callback func(*FlowInfo) (keepOn bool, err error)) *Callback[*FlowInfo] {
 	if fc.CallbackChain == nil {
 		fc.CallbackChain = &CallbackChain[*FlowInfo]{}
 	}
