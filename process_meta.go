@@ -140,42 +140,46 @@ func (pm *ProcessMeta) Merge(name string) {
 }
 
 func (pm *ProcessMeta) mergeStep(merge *StepMeta) {
-	step := pm.steps[merge.stepName]
+	target := pm.steps[merge.stepName]
 
 	for k, v := range merge.ctxPriority {
-		if _, exist := step.ctxPriority[k]; exist {
+		if _, exist := target.ctxPriority[k]; exist {
 			continue
 		}
-		step.ctxPriority[k] = v
+		target.ctxPriority[k] = v
 	}
 
-	// create a set contains all depended on step flowName
-	current := CreateFromSliceFunc[*StepMeta](step.depends,
+	// create a set contains all depended on target flowName
+	current := CreateFromSliceFunc[*StepMeta](target.depends,
 		func(meta *StepMeta) string { return meta.stepName })
 
-	depends := make([]*StepMeta, len(merge.depends))
-	copy(depends, merge.depends)
-	// Can't use sort depends instead, because depends order is context access order.
-	sort.Slice(depends, func(i, j int) bool {
-		return pm.steps[depends[i].stepName].layer < pm.steps[depends[j].stepName].layer
+	stepNames := make([]string, 0, len(merge.depends))
+	for _, step := range merge.depends {
+		stepNames = append(stepNames, step.stepName)
+	}
+	// Can't use sort stepNames instead, because stepNames order is context access order.
+	sort.Slice(stepNames, func(i, j int) bool {
+		return pm.steps[stepNames[i]].layer < pm.steps[stepNames[j]].layer
 	})
 
-	for _, add := range depends {
-		if current.Contains(add.stepName) {
+	for _, name := range stepNames {
+		if current.Contains(name) {
 			continue
 		}
-		depend := pm.steps[add.stepName]
-		if depend.layer > step.layer && step.forwardSearch(depend.stepName) {
-			panic(fmt.Sprintf("merge failed, a circle is formed between step[%s] and step[%s].",
-				depend.stepName, step.stepName))
+		depend := pm.steps[name]
+		if depend.layer > target.layer && target.forwardSearch(name) {
+			panic(fmt.Sprintf("merge failed, a circle is formed between target[%s] and target[%s].",
+				depend.stepName, target.stepName))
 		}
-		if depend.layer+1 > step.layer {
-			step.layer = depend.layer + 1
-			pm.updateWaitersLayer(step)
+		if depend.layer+1 > target.layer {
+			target.layer = depend.layer + 1
+			pm.updateWaitersLayer(target)
 		}
+		target.depends = append(target.depends, depend)
 	}
 
-	step.wireDepends()
+	target.wireDepends()
+	pm.tailStep = target.stepName
 }
 
 func (pm *ProcessMeta) updateWaitersLayer(step *StepMeta) {

@@ -76,7 +76,7 @@ func (meta *StepMeta) wireDepends() {
 
 	for _, depend := range meta.depends {
 		for _, waiter := range depend.waiters {
-			if waiter == meta {
+			if waiter.stepName == meta.stepName {
 				continue
 			}
 		}

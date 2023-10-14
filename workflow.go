@@ -26,7 +26,7 @@ type Controller interface {
 }
 
 type ResultI interface {
-	InfoI
+	BasicInfoI
 	Features() map[string]*Feature
 	FailFeatures() map[string]*Feature
 }

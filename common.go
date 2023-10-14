@@ -31,7 +31,7 @@ var (
 	Success    = &StatusEnum{0b1 << 15, "Success"}
 	NormalMask = &StatusEnum{0b1<<16 - 1, "NormalMask"}
 	Cancel     = &StatusEnum{0b1 << 16, "Cancel"}
-	Timeout    = &StatusEnum{0b1 << 17, "StepTimeout"}
+	Timeout    = &StatusEnum{0b1 << 17, "Timeout"}
 	Panic      = &StatusEnum{0b1 << 18, "Panic"}
 	Error      = &StatusEnum{0b1 << 19, "Error"}
 	Stop       = &StatusEnum{0b1 << 20, "Stop"}
@@ -53,7 +53,7 @@ type StatusI interface {
 	Exceptions() []string
 }
 
-type InfoI interface {
+type BasicInfoI interface {
 	StatusI
 	addr() *Status
 	GetId() string
@@ -71,11 +71,11 @@ type BasicInfo struct {
 	Name string
 }
 
-type CallbackChain[T InfoI] struct {
+type CallbackChain[T BasicInfoI] struct {
 	filters []*Callback[T]
 }
 
-type Callback[T InfoI] struct {
+type Callback[T BasicInfoI] struct {
 	// If must is false, the process will continue to execute
 	// even if the processor fails
 	must bool
@@ -118,10 +118,12 @@ func toStepName(value any) string {
 	return result
 }
 
+// Success return true if finish running and success
 func (s *Status) Success() bool {
 	return s.Contain(Success) && s.Normal()
 }
 
+// Normal return true if not exception occur
 func (s *Status) Normal() bool {
 	return s.load()&AbnormalMask.flag == 0
 }
@@ -131,6 +133,7 @@ func (s *Status) Contain(enum *StatusEnum) bool {
 	return s.load()&enum.flag == enum.flag
 }
 
+// Exceptions return contain exception's message
 func (s *Status) Exceptions() []string {
 	if s.Normal() {
 		return nil

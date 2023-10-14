@@ -384,3 +384,51 @@ func TestMergeLongCircleLongCircle(t *testing.T) {
 	}()
 	process2.Merge("TestMergeLongCircle1")
 }
+
+func TestAddWaitBeforeAfterMergeWithCircle(t *testing.T) {
+	defer resetCurrent()
+	factory1 := flow.RegisterFlow("TestAddWaitBeforeAfterMergeWithCircle1")
+	process1 := factory1.AddProcess("TestAddWaitBeforeAfterMergeWithCircle1")
+	process1.AddStepWithAlias("1", GenerateStep(1))
+	process1.AddStepWithAlias("2", GenerateStep(2), "1")
+	process1.AddStepWithAlias("3", GenerateStep(3), "2")
+	process1.AddStepWithAlias("4", GenerateStep(4), "3")
+	process1.AddStepWithAlias("5", GenerateStep(5), "4")
+	factory2 := flow.RegisterFlow("TestAddWaitBeforeAfterMergeWithCircle2")
+	process2 := factory2.AddProcess("TestAddWaitBeforeAfterMergeWithCircle2")
+	process2.AddStepWithAlias("5", GenerateStep(5))
+	process2.Merge("TestAddWaitBeforeAfterMergeWithCircle1")
+	defer func() {
+		if r := recover(); r != nil {
+			t.Logf("circle detect success info: %v", r)
+		} else {
+			t.Errorf("circle detect fail")
+		}
+	}()
+	process2.AddWaitBefore("2", GenerateStep(2))
+	return
+}
+
+func TestAddWaitAllAfterMergeWithCircle(t *testing.T) {
+	defer resetCurrent()
+	factory1 := flow.RegisterFlow("TestAddWaitAllAfterMergeWithCircle1")
+	process1 := factory1.AddProcess("TestAddWaitAllAfterMergeWithCircle1")
+	process1.AddStepWithAlias("1", GenerateStep(1))
+	process1.AddStepWithAlias("2", GenerateStep(2), "1")
+	process1.AddStepWithAlias("3", GenerateStep(3), "2")
+	process1.AddStepWithAlias("4", GenerateStep(4), "3")
+	process1.AddStepWithAlias("5", GenerateStep(5), "4")
+	factory2 := flow.RegisterFlow("TestAddWaitAllAfterMergeWithCircle2")
+	process2 := factory2.AddProcess("TestAddWaitAllAfterMergeWithCircle2")
+	process2.AddStepWithAlias("5", GenerateStep(5))
+	process2.Merge("TestAddWaitAllAfterMergeWithCircle1")
+	defer func() {
+		if r := recover(); r != nil {
+			t.Logf("circle detect success info: %v", r)
+		} else {
+			t.Errorf("circle detect fail")
+		}
+	}()
+	process2.AddWaitAll("2", GenerateStep(2))
+	return
+}
