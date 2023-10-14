@@ -53,6 +53,9 @@ func (si *StepInfo) Error() error {
 }
 
 func (meta *StepMeta) AddPriority(priority map[string]any) {
+	if meta.ctxPriority == nil {
+		meta.ctxPriority = make(map[string]string)
+	}
 	for key, stepName := range priority {
 		meta.ctxPriority[key] = toStepName(stepName)
 	}
@@ -77,7 +80,6 @@ func (meta *StepMeta) wireDepends() {
 				continue
 			}
 		}
-		meta.depends = append(meta.depends, depend)
 		depend.waiters = append(depend.waiters, meta)
 		if depend.Contain(End) {
 			depend.Append(HasNext)
@@ -87,9 +89,11 @@ func (meta *StepMeta) wireDepends() {
 			meta.layer = depend.layer + 1
 		}
 	}
+
 	if len(meta.depends) == 0 {
 		meta.Append(Head)
 	}
+
 	meta.Append(End)
 }
 

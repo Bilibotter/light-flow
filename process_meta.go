@@ -158,6 +158,7 @@ func (pm *ProcessMeta) mergeStep(merge *StepMeta) {
 
 	depends := make([]*StepMeta, len(merge.depends))
 	copy(depends, merge.depends)
+	// Can't use sort depends instead, because depends order is context access order.
 	sort.Slice(depends, func(i, j int) bool {
 		return pm.steps[depends[i].stepName].layer < pm.steps[depends[j].stepName].layer
 	})
@@ -175,9 +176,9 @@ func (pm *ProcessMeta) mergeStep(merge *StepMeta) {
 			step.layer = depend.layer + 1
 			pm.updateWaitersLayer(step)
 		}
-		step.depends = append(step.depends, depend)
-		depend.waiters = append(depend.waiters, step)
 	}
+
+	step.wireDepends()
 }
 
 func (pm *ProcessMeta) updateWaitersLayer(step *StepMeta) {
@@ -210,41 +211,28 @@ func (pm *ProcessMeta) AddWaitAll(alias string, run func(ctx *Context) (any, err
 }
 
 func (pm *ProcessMeta) AddStepWithAlias(alias string, run func(ctx *Context) (any, error), depends ...any) *StepMeta {
-	var meta *StepMeta
-	var oldDepends *Set[string]
+	meta := &StepMeta{stepName: alias}
+	for _, wrap := range depends {
+		name := toStepName(wrap)
+		depend, exist := pm.steps[name]
+		if !exist {
+			panic(fmt.Sprintf("can't find step[%s]", name))
+		}
+		meta.depends = append(meta.depends, depend)
+	}
 
 	if old, exist := pm.steps[alias]; exist {
 		if !old.Contain(Merged) {
 			panic(fmt.Sprintf("step named [%s] already exist, can used %s to avoid stepName duplicate",
 				alias, GetFuncName(pm.AddStepWithAlias)))
 		}
-		oldDepends = CreateFromSliceFunc(meta.depends, func(value *StepMeta) string { return value.stepName })
-		meta = old
+		pm.mergeStep(meta)
+		return old
 	}
 
-	if meta == nil {
-		meta = &StepMeta{
-			belong:      pm,
-			stepName:    alias,
-			run:         run,
-			layer:       1,
-			ctxPriority: make(map[string]string),
-		}
-	}
-
-	for _, wrap := range depends {
-		name := toStepName(wrap)
-		if oldDepends != nil && oldDepends.Contains(name) {
-			continue
-		}
-		depend, exist := pm.steps[name]
-		if !exist {
-			panic(fmt.Sprintf("can't find step[%s]", name))
-		}
-		meta.depends = append(meta.depends, depend)
-		depend.waiters = append(depend.waiters, meta)
-	}
-
+	meta.belong = pm
+	meta.run = run
+	meta.layer = 1
 	meta.wireDepends()
 
 	pm.tailStep = meta.stepName
