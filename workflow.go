@@ -205,7 +205,7 @@ func (fm *FlowMeta) BuildRunFlow(input map[string]any) *RunFlow {
 		name:      WorkflowCtx + fm.flowName,
 		scopes:    []string{WorkflowCtx},
 		scopeCtxs: make(map[string]*Context),
-		table:     sync.Map{},
+		table:     &sync.Map{},
 		priority:  make(map[string]string),
 	}
 
@@ -271,7 +271,7 @@ func (rf *RunFlow) buildRunProcess(meta *ProcessMeta) *RunProcess {
 	pcsCtx := Context{
 		name:   ProcessCtx + meta.processName,
 		scopes: []string{ProcessCtx},
-		table:  sync.Map{},
+		table:  &sync.Map{},
 	}
 
 	process := RunProcess{

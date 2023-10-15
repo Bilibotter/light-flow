@@ -87,7 +87,7 @@ type Callback[T BasicInfoI] struct {
 
 type Context struct {
 	name      string
-	table     sync.Map // current node's context
+	table     *sync.Map // current node's context
 	parents   []*Context
 	scopes    []string // todo use scope to provide more connect and isolate
 	scopeCtxs map[string]*Context
@@ -366,6 +366,9 @@ func (ctx *Context) GetCtxName() string {
 
 // Set method sets the value associated with the given key in own context.
 func (ctx *Context) Set(key string, value any) {
+	if ctx.table == nil {
+		ctx.table = &sync.Map{}
+	}
 	ctx.table.Store(key, value)
 }
 
@@ -386,8 +389,10 @@ func (ctx *Context) search(key string, prev *Set[string]) (any, bool) {
 		return target, true
 	}
 
-	if used, exist := ctx.table.Load(key); exist {
-		return used, true
+	if ctx.table != nil {
+		if used, exist := ctx.table.Load(key); exist {
+			return used, true
+		}
 	}
 
 	for _, parent := range ctx.parents {
@@ -411,8 +416,10 @@ func (ctx *Context) getAll(key string, saved map[string]any) {
 		return
 	}
 
-	if value, exist := ctx.table.Load(key); exist {
-		saved[ctx.GetCtxName()] = value
+	if ctx.table != nil {
+		if value, exist := ctx.table.Load(key); exist {
+			saved[ctx.GetCtxName()] = value
+		}
 	}
 
 	for _, parent := range ctx.parents {

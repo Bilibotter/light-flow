@@ -31,7 +31,6 @@ func (rp *RunProcess) buildRunStep(meta *StepMeta) *RunStep {
 		waiting:   int64(len(meta.depends)),
 		finish:    make(chan bool, 1),
 		Context: &Context{
-			table:     sync.Map{},
 			name:      meta.stepName,
 			scopes:    []string{ProcessCtx},
 			scopeCtxs: rp.pcsScope,
@@ -221,13 +220,14 @@ func (rp *RunProcess) runStep(step *RunStep) {
 		result, err := step.run(step.Context)
 		step.End = time.Now().UTC()
 		step.Err = err
-		step.Set(step.stepName, result)
 		if err != nil {
 			step.Append(Error)
 			step.Append(Failed)
 			continue
 		}
-		rp.setStepResult(step.stepName, result)
+		if result != nil {
+			rp.setStepResult(step.stepName, result)
+		}
 		step.Append(Success)
 		break
 	}
