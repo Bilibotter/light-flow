@@ -52,6 +52,25 @@ func (si *StepInfo) Error() error {
 	return si.Err
 }
 
+func (meta *StepMeta) Next(run func(ctx *Context) (any, error), alias ...string) *StepMeta {
+	if len(alias) == 1 {
+		return meta.belong.AliasStep(alias[0], run, meta.stepName)
+
+	}
+	return meta.belong.Step(run, meta.stepName)
+}
+
+func (meta *StepMeta) Same(run func(ctx *Context) (any, error), alias ...string) *StepMeta {
+	depends := make([]any, 0, len(meta.depends))
+	for i := 0; i < len(meta.depends); i++ {
+		depends = append(depends, meta.depends[i].stepName)
+	}
+	if len(alias) == 1 {
+		return meta.belong.AliasStep(alias[0], run, depends...)
+	}
+	return meta.belong.Step(run, depends)
+}
+
 func (meta *StepMeta) AddPriority(priority map[string]any) {
 	if meta.ctxPriority == nil {
 		meta.ctxPriority = make(map[string]string)
@@ -60,13 +79,6 @@ func (meta *StepMeta) AddPriority(priority map[string]any) {
 		meta.ctxPriority[key] = toStepName(stepName)
 	}
 	meta.checkPriority()
-}
-
-func (meta *StepMeta) CopyDepends(src ...any) {
-	for _, wrap := range src {
-		name := toStepName(wrap)
-		meta.belong.copyDepends(name, meta.stepName)
-	}
 }
 
 func (meta *StepMeta) wireDepends() {

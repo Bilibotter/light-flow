@@ -54,10 +54,10 @@ func TestInfoCorrect(t *testing.T) {
 
 	workflow := flow.RegisterFlow("TestInfoCorrect")
 	process := workflow.AddProcessWithConf("TestInfoCorrect", nil)
-	process.AddStepWithAlias("1", GenerateStep(1))
-	process.AddStepWithAlias("2", GenerateStep(2), "1")
-	process.AddStepWithAlias("3", GenerateStep(3), "1")
-	process.AddStepWithAlias("4", GenerateStep(4), "2", "3")
+	process.AliasStep("1", GenerateStep(1))
+	process.AliasStep("2", GenerateStep(2), "1")
+	process.AliasStep("3", GenerateStep(3), "1")
+	process.AliasStep("4", GenerateStep(4), "2", "3")
 	features := flow.DoneFlow("TestInfoCorrect", nil)
 	for name, feature := range features.Features() {
 		if !feature.Success() {
@@ -84,10 +84,10 @@ func TestDefaultProcessConfig(t *testing.T) {
 
 	workflow := flow.RegisterFlow("TestDefaultProcessConfig")
 	process := workflow.AddProcessWithConf("TestDefaultProcessConfig", nil)
-	process.AddStepWithAlias("1", GenerateStep(1))
-	process.AddStepWithAlias("2", GenerateStep(2), "1")
-	process.AddStepWithAlias("3", GenerateStep(3), "2")
-	process.AddStepWithAlias("4", GenerateStep(4), "3")
+	process.AliasStep("1", GenerateStep(1))
+	process.AliasStep("2", GenerateStep(2), "1")
+	process.AliasStep("3", GenerateStep(3), "2")
+	process.AliasStep("4", GenerateStep(4), "3")
 	features := flow.DoneFlow("TestDefaultProcessConfig", nil)
 	for name, feature := range features.Features() {
 		if !feature.Success() {
@@ -116,8 +116,8 @@ func TestMergeDefaultProcessConfig(t *testing.T) {
 	workflow.AddBeforeFlow(true, BeforeFlowProcessor)
 	workflow.AddAfterFlow(true, AfterFlowProcessor)
 	process := workflow.AddProcessWithConf("TestMergeDefaultProcessConfig", nil)
-	process.AddStepWithAlias("1", GenerateStep(1))
-	process.AddStepWithAlias("2", GenerateStep(2), "1")
+	process.AliasStep("1", GenerateStep(1))
+	process.AliasStep("2", GenerateStep(2), "1")
 	process.AddBeforeStep(true, PreProcessor)
 	process.AddAfterStep(true, PostProcessor)
 	process.AddBeforeProcess(true, ProcProcessor)
@@ -154,8 +154,8 @@ func TestCallbackCond(t *testing.T) {
 
 	workflow := flow.RegisterFlow("TestCallbackCond")
 	process := workflow.AddProcessWithConf("TestCallbackCond", nil)
-	process.AddStepWithAlias("1", GenerateStep(1))
-	process.AddStepWithAlias("2", GenerateStep(2), "1")
+	process.AliasStep("1", GenerateStep(1))
+	process.AliasStep("2", GenerateStep(2), "1")
 	features := flow.DoneFlow("TestCallbackCond", nil)
 	for name, feature := range features.Features() {
 		if !feature.Success() {
@@ -187,8 +187,8 @@ func TestCallbackCond0(t *testing.T) {
 
 	workflow := flow.RegisterFlow("TestCallbackCond0")
 	process := workflow.AddProcessWithConf("TestCallbackCond0", nil)
-	process.AddStepWithAlias("1", GenerateStep(1))
-	process.AddStepWithAlias("2", GenerateStep(2), "1")
+	process.AliasStep("1", GenerateStep(1))
+	process.AliasStep("2", GenerateStep(2), "1")
 	features := flow.DoneFlow("TestCallbackCond0", nil)
 	for name, feature := range features.Features() {
 		if !feature.Success() {
@@ -216,10 +216,10 @@ func TestUnableDefaultProcessConfig(t *testing.T) {
 	workflow := flow.RegisterFlow("TestUnableDefaultProcessConfig")
 	workflow.NotUseDefault()
 	process := workflow.AddProcessWithConf("TestUnableDefaultProcessConfig", nil)
-	process.AddStepWithAlias("1", GenerateStep(1))
-	process.AddStepWithAlias("2", GenerateStep(2), "1")
-	process.AddStepWithAlias("3", GenerateStep(3), "2")
-	process.AddStepWithAlias("4", GenerateStep(4), "3")
+	process.AliasStep("1", GenerateStep(1))
+	process.AliasStep("2", GenerateStep(2), "1")
+	process.AliasStep("3", GenerateStep(3), "2")
+	process.AliasStep("4", GenerateStep(4), "3")
 	process.NotUseDefault()
 	features := flow.DoneFlow("TestUnableDefaultProcessConfig", nil)
 	for name, feature := range features.Features() {

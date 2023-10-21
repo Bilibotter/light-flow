@@ -134,7 +134,7 @@ func (pm *ProcessMeta) Merge(name string) {
 		for _, depend := range merge.depends {
 			depends = append(depends, depend.stepName)
 		}
-		step := pm.AddStepWithAlias(merge.stepName, merge.run, depends...)
+		step := pm.AliasStep(merge.stepName, merge.run, depends...)
 		step.Append(Merged)
 	}
 }
@@ -191,16 +191,11 @@ func (pm *ProcessMeta) updateWaitersLayer(step *StepMeta) {
 	}
 }
 
-func (pm *ProcessMeta) AddStep(run func(ctx *Context) (any, error), depends ...any) *StepMeta {
-	return pm.AddStepWithAlias(GetFuncName(run), run, depends...)
+func (pm *ProcessMeta) Step(run func(ctx *Context) (any, error), depends ...any) *StepMeta {
+	return pm.AliasStep(GetFuncName(run), run, depends...)
 }
 
-// AddWaitBefore method treats the last added step as a dependency
-func (pm *ProcessMeta) AddWaitBefore(alias string, run func(ctx *Context) (any, error)) *StepMeta {
-	return pm.AddStepWithAlias(alias, run, pm.tailStep)
-}
-
-func (pm *ProcessMeta) AddWaitAll(alias string, run func(ctx *Context) (any, error)) *StepMeta {
+func (pm *ProcessMeta) Tail(alias string, run func(ctx *Context) (any, error)) *StepMeta {
 	depends := make([]any, 0)
 	for name, step := range pm.steps {
 		if step.Contain(End) {
@@ -208,10 +203,10 @@ func (pm *ProcessMeta) AddWaitAll(alias string, run func(ctx *Context) (any, err
 		}
 	}
 
-	return pm.AddStepWithAlias(alias, run, depends...)
+	return pm.AliasStep(alias, run, depends...)
 }
 
-func (pm *ProcessMeta) AddStepWithAlias(alias string, run func(ctx *Context) (any, error), depends ...any) *StepMeta {
+func (pm *ProcessMeta) AliasStep(alias string, run func(ctx *Context) (any, error), depends ...any) *StepMeta {
 	meta := &StepMeta{stepName: alias}
 	for _, wrap := range depends {
 		name := toStepName(wrap)
@@ -225,7 +220,7 @@ func (pm *ProcessMeta) AddStepWithAlias(alias string, run func(ctx *Context) (an
 	if old, exist := pm.steps[alias]; exist {
 		if !old.Contain(Merged) {
 			panic(fmt.Sprintf("step named [%s] already exist, can used %s to avoid stepName duplicate",
-				alias, GetFuncName(pm.AddStepWithAlias)))
+				alias, GetFuncName(pm.AliasStep)))
 		}
 		pm.mergeStep(meta)
 		return old
@@ -244,19 +239,6 @@ func (pm *ProcessMeta) AddStepWithAlias(alias string, run func(ctx *Context) (an
 
 func (pm *ProcessMeta) NotUseDefault() {
 	pm.notUseDefault = true
-}
-
-func (pm *ProcessMeta) copyDepends(src, dst string) {
-	srcStep := pm.steps[src]
-	dstStep := pm.steps[dst]
-	s := CreateFromSliceFunc(srcStep.depends, func(meta *StepMeta) string { return meta.stepName })
-	for _, depend := range srcStep.depends {
-		if s.Contains(depend.stepName) {
-			continue
-		}
-		dstStep.depends = append(srcStep.depends, depend)
-		depend.waiters = append(depend.waiters, dstStep)
-	}
 }
 
 func (pm *ProcessMeta) sortedStepMeta() []*StepMeta {

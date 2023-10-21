@@ -38,7 +38,7 @@ func TestQuickStepConcurrent(t *testing.T) {
 	}
 	for i := 0; i < 100; i++ {
 		for _, p := range proc {
-			p.AddStepWithAlias(strconv.Itoa(i), func(ctx *flow.Context) (any, error) {
+			p.AliasStep(strconv.Itoa(i), func(ctx *flow.Context) (any, error) {
 				return nil, nil
 			})
 		}
@@ -53,9 +53,9 @@ func TestTestMultipleConcurrentDependContext(t *testing.T) {
 	defer resetCtx()
 	factory := flow.RegisterFlow("TestTestMultipleConcurrentDependContext")
 	process := factory.AddProcessWithConf("TestTestMultipleConcurrentDependContext", nil)
-	process.AddStepWithAlias("-1", ChangeCtxStepFunc(&ctx1))
+	process.AliasStep("-1", ChangeCtxStepFunc(&ctx1))
 	for i := 0; i < 10000; i++ {
-		process.AddStepWithAlias(strconv.Itoa(i), NoDelayContextStep, "-1")
+		process.AliasStep(strconv.Itoa(i), NoDelayContextStep, "-1")
 	}
 	features := flow.DoneFlow("TestTestMultipleConcurrentDependContext", map[string]any{addrKey: &current})
 	for name, feature := range features.Features() {
@@ -76,7 +76,7 @@ func TestMultipleConcurrentContext(t *testing.T) {
 	factory := flow.RegisterFlow("TestMultipleConcurrentContext")
 	process := factory.AddProcessWithConf("TestMultipleConcurrentContext", nil)
 	for i := 0; i < 10000; i++ {
-		process.AddStepWithAlias(strconv.Itoa(i), NoDelayContextStep)
+		process.AliasStep(strconv.Itoa(i), NoDelayContextStep)
 	}
 	features := flow.DoneFlow("TestMultipleConcurrentContext", map[string]any{addrKey: &current})
 	for name, feature := range features.Features() {
@@ -101,7 +101,7 @@ func TestMultipleConcurrentProcess(t *testing.T) {
 		process.AddAfterStep(true, GenerateNoDelayProcessor)
 		for j := 0; j < 100; j++ {
 			key := strconv.Itoa(i) + "|" + strconv.Itoa(j)
-			process.AddStepWithAlias(key, GenerateNoDelayStep(i*1000+j))
+			process.AliasStep(key, GenerateNoDelayStep(i*1000+j))
 		}
 	}
 	features := flow.DoneFlow("TestMultipleConcurrentProcess", nil)
@@ -123,7 +123,7 @@ func TestMultipleConcurrentStepWithProcessor(t *testing.T) {
 	process.AddBeforeStep(true, GenerateNoDelayProcessor)
 	process.AddAfterStep(true, GenerateNoDelayProcessor)
 	for i := 0; i < 10000; i++ {
-		process.AddStepWithAlias(strconv.Itoa(i), GenerateNoDelayStep(i))
+		process.AliasStep(strconv.Itoa(i), GenerateNoDelayStep(i))
 	}
 	features := flow.DoneFlow("TestMultipleConcurrentStepWithProcessor", nil)
 	for name, feature := range features.Features() {
@@ -144,7 +144,7 @@ func TestMultipleConcurrentStep(t *testing.T) {
 	factory := flow.RegisterFlow("TestMultipleConcurrentStep")
 	process := factory.AddProcessWithConf("TestMultipleConcurrentStep", nil)
 	for i := 0; i < 10000; i++ {
-		process.AddStepWithAlias(strconv.Itoa(i), GenerateNoDelayStep(i))
+		process.AliasStep(strconv.Itoa(i), GenerateNoDelayStep(i))
 	}
 	features := flow.DoneFlow("TestMultipleConcurrentStep", nil)
 	for name, feature := range features.Features() {
@@ -169,9 +169,9 @@ func TestMultipleConcurrentDependStep(t *testing.T) {
 		for j := 0; j < 100; j++ {
 			key := strconv.Itoa(i) + "|" + strconv.Itoa(j)
 			if len(prev) == 0 {
-				process.AddStepWithAlias(key, GenerateNoDelayStep(i*1000+j))
+				process.AliasStep(key, GenerateNoDelayStep(i*1000+j))
 			} else {
-				process.AddStepWithAlias(key, GenerateNoDelayStep(i*1000+j), prev)
+				process.AliasStep(key, GenerateNoDelayStep(i*1000+j), prev)
 			}
 			prev = key
 		}
@@ -195,7 +195,7 @@ func TestConcurrentSameFlow(t *testing.T) {
 	factory := flow.RegisterFlow("TestConcurrentSameFlow")
 	process := factory.AddProcessWithConf("TestConcurrentSameFlow", nil)
 	for i := 0; i < 100; i++ {
-		process.AddStepWithAlias(strconv.Itoa(i), GenerateNoDelayStep(i))
+		process.AliasStep(strconv.Itoa(i), GenerateNoDelayStep(i))
 	}
 	flows := make([]flow.FlowController, 0, 1000)
 	for i := 0; i < 1000; i++ {
