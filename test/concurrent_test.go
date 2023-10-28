@@ -33,7 +33,7 @@ func TestQuickStepConcurrent(t *testing.T) {
 	workflow := flow.RegisterFlow("TestQuickStepConcurrent")
 	proc := make([]*flow.ProcessMeta, 0, 100)
 	for i := 0; i < 100; i++ {
-		p := workflow.AddProcess("TestQuickStepConcurrent" + strconv.Itoa(i))
+		p := workflow.Process("TestQuickStepConcurrent" + strconv.Itoa(i))
 		proc = append(proc, p)
 	}
 	for i := 0; i < 100; i++ {
@@ -52,7 +52,7 @@ func TestQuickStepConcurrent(t *testing.T) {
 func TestTestMultipleConcurrentDependContext(t *testing.T) {
 	defer resetCtx()
 	factory := flow.RegisterFlow("TestTestMultipleConcurrentDependContext")
-	process := factory.AddProcessWithConf("TestTestMultipleConcurrentDependContext", nil)
+	process := factory.ProcessWithConf("TestTestMultipleConcurrentDependContext", nil)
 	process.AliasStep("-1", ChangeCtxStepFunc(&ctx1))
 	for i := 0; i < 10000; i++ {
 		process.AliasStep(strconv.Itoa(i), NoDelayContextStep, "-1")
@@ -74,7 +74,7 @@ func TestTestMultipleConcurrentDependContext(t *testing.T) {
 func TestMultipleConcurrentContext(t *testing.T) {
 	defer resetCurrent()
 	factory := flow.RegisterFlow("TestMultipleConcurrentContext")
-	process := factory.AddProcessWithConf("TestMultipleConcurrentContext", nil)
+	process := factory.ProcessWithConf("TestMultipleConcurrentContext", nil)
 	for i := 0; i < 10000; i++ {
 		process.AliasStep(strconv.Itoa(i), NoDelayContextStep)
 	}
@@ -96,9 +96,9 @@ func TestMultipleConcurrentProcess(t *testing.T) {
 	defer resetCurrent()
 	factory := flow.RegisterFlow("TestMultipleConcurrentProcess")
 	for i := 0; i < 100; i++ {
-		process := factory.AddProcessWithConf("TestMultipleConcurrentProcess"+strconv.Itoa(i), nil)
-		process.AddBeforeStep(true, GenerateNoDelayProcessor)
-		process.AddAfterStep(true, GenerateNoDelayProcessor)
+		process := factory.ProcessWithConf("TestMultipleConcurrentProcess"+strconv.Itoa(i), nil)
+		process.BeforeStep(true, GenerateNoDelayProcessor)
+		process.AfterStep(true, GenerateNoDelayProcessor)
 		for j := 0; j < 100; j++ {
 			key := strconv.Itoa(i) + "|" + strconv.Itoa(j)
 			process.AliasStep(key, GenerateNoDelayStep(i*1000+j))
@@ -119,9 +119,9 @@ func TestMultipleConcurrentProcess(t *testing.T) {
 func TestMultipleConcurrentStepWithProcessor(t *testing.T) {
 	defer resetCurrent()
 	factory := flow.RegisterFlow("TestMultipleConcurrentStepWithProcessor")
-	process := factory.AddProcessWithConf("TestMultipleConcurrentStepWithProcessor", nil)
-	process.AddBeforeStep(true, GenerateNoDelayProcessor)
-	process.AddAfterStep(true, GenerateNoDelayProcessor)
+	process := factory.ProcessWithConf("TestMultipleConcurrentStepWithProcessor", nil)
+	process.BeforeStep(true, GenerateNoDelayProcessor)
+	process.AfterStep(true, GenerateNoDelayProcessor)
 	for i := 0; i < 10000; i++ {
 		process.AliasStep(strconv.Itoa(i), GenerateNoDelayStep(i))
 	}
@@ -142,7 +142,7 @@ func TestMultipleConcurrentStepWithProcessor(t *testing.T) {
 func TestMultipleConcurrentStep(t *testing.T) {
 	defer resetCurrent()
 	factory := flow.RegisterFlow("TestMultipleConcurrentStep")
-	process := factory.AddProcessWithConf("TestMultipleConcurrentStep", nil)
+	process := factory.ProcessWithConf("TestMultipleConcurrentStep", nil)
 	for i := 0; i < 10000; i++ {
 		process.AliasStep(strconv.Itoa(i), GenerateNoDelayStep(i))
 	}
@@ -163,7 +163,7 @@ func TestMultipleConcurrentStep(t *testing.T) {
 func TestMultipleConcurrentDependStep(t *testing.T) {
 	defer resetCurrent()
 	factory := flow.RegisterFlow("TestMultipleConcurrentDependStep")
-	process := factory.AddProcessWithConf("TestMultipleConcurrentDependStep", nil)
+	process := factory.ProcessWithConf("TestMultipleConcurrentDependStep", nil)
 	for i := 0; i < 100; i++ {
 		prev := ""
 		for j := 0; j < 100; j++ {
@@ -193,7 +193,7 @@ func TestMultipleConcurrentDependStep(t *testing.T) {
 func TestConcurrentSameFlow(t *testing.T) {
 	defer resetCurrent()
 	factory := flow.RegisterFlow("TestConcurrentSameFlow")
-	process := factory.AddProcessWithConf("TestConcurrentSameFlow", nil)
+	process := factory.ProcessWithConf("TestConcurrentSameFlow", nil)
 	for i := 0; i < 100; i++ {
 		process.AliasStep(strconv.Itoa(i), GenerateNoDelayStep(i))
 	}

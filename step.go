@@ -71,7 +71,7 @@ func (meta *StepMeta) Same(run func(ctx *Context) (any, error), alias ...string)
 	return meta.belong.Step(run, depends)
 }
 
-func (meta *StepMeta) AddPriority(priority map[string]any) {
+func (meta *StepMeta) Priority(priority map[string]any) {
 	if meta.ctxPriority == nil {
 		meta.ctxPriority = make(map[string]string)
 	}
@@ -146,7 +146,7 @@ func (meta *StepMeta) backSearch(searched string) bool {
 	return false
 }
 
-// AddConfig allow step not using process's config
-func (meta *StepMeta) AddConfig(config *StepConfig) {
+// Config allow step not using process's config
+func (meta *StepMeta) Config(config *StepConfig) {
 	meta.StepConfig = config
 }

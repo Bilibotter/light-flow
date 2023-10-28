@@ -28,7 +28,7 @@ type Controller interface {
 type ResultI interface {
 	BasicInfoI
 	Features() map[string]*Feature
-	FailFeatures() map[string]*Feature
+	Fails() map[string]*Feature
 }
 
 type FlowController interface {
@@ -143,14 +143,14 @@ func BuildRunFlow(name string, input map[string]any) *RunFlow {
 	return factory.(*FlowMeta).BuildRunFlow(input)
 }
 
-func (fc *FlowConfig) AddBeforeFlow(must bool, callback func(*FlowInfo) (keepOn bool, err error)) *Callback[*FlowInfo] {
+func (fc *FlowConfig) BeforeFlow(must bool, callback func(*FlowInfo) (keepOn bool, err error)) *Callback[*FlowInfo] {
 	if fc.CallbackChain == nil {
 		fc.CallbackChain = &CallbackChain[*FlowInfo]{}
 	}
 	return fc.AddCallback(Before, must, callback)
 }
 
-func (fc *FlowConfig) AddAfterFlow(must bool, callback func(*FlowInfo) (keepOn bool, err error)) *Callback[*FlowInfo] {
+func (fc *FlowConfig) AfterFlow(must bool, callback func(*FlowInfo) (keepOn bool, err error)) *Callback[*FlowInfo] {
 	if fc.CallbackChain == nil {
 		fc.CallbackChain = &CallbackChain[*FlowInfo]{}
 	}
@@ -234,7 +234,7 @@ func (fm *FlowMeta) BuildRunFlow(input map[string]any) *RunFlow {
 	return &rf
 }
 
-func (fm *FlowMeta) AddRegisterProcess(name string) {
+func (fm *FlowMeta) TakeProcess(name string) {
 	pm, exist := allProcess.Load(name)
 	if !exist {
 		panic(fmt.Sprintf("process [%s] not registered", name))
@@ -242,11 +242,11 @@ func (fm *FlowMeta) AddRegisterProcess(name string) {
 	fm.processes = append(fm.processes, pm.(*ProcessMeta))
 }
 
-func (fm *FlowMeta) AddProcess(name string) *ProcessMeta {
-	return fm.AddProcessWithConf(name, nil)
+func (fm *FlowMeta) Process(name string) *ProcessMeta {
+	return fm.ProcessWithConf(name, nil)
 }
 
-func (fm *FlowMeta) AddProcessWithConf(name string, conf *processConfig) *ProcessMeta {
+func (fm *FlowMeta) ProcessWithConf(name string, conf *processConfig) *ProcessMeta {
 	if conf != nil {
 		conf.notUseDefault = true
 	}
@@ -391,7 +391,7 @@ func (rf *RunFlow) skipProcessStep(processName, stepName string, result any) err
 	return nil
 }
 
-func (rf *RunFlow) FailFeatures() map[string]*Feature {
+func (rf *RunFlow) Fails() map[string]*Feature {
 	features := make(map[string]*Feature)
 	for name, feature := range rf.features {
 		if len(feature.Exceptions()) != 0 {

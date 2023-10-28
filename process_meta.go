@@ -64,7 +64,7 @@ func (pc *processConfig) merge(merged *processConfig) *processConfig {
 	return pc
 }
 
-func (pc *processConfig) AddStepRetry(retry int) *processConfig {
+func (pc *processConfig) StepsRetry(retry int) *processConfig {
 	if pc.StepConfig == nil {
 		pc.StepConfig = &StepConfig{}
 	}
@@ -72,7 +72,7 @@ func (pc *processConfig) AddStepRetry(retry int) *processConfig {
 	return pc
 }
 
-func (pc *processConfig) AddStepTimeout(timeout time.Duration) *processConfig {
+func (pc *processConfig) StepsTimeout(timeout time.Duration) *processConfig {
 	if pc.StepConfig == nil {
 		pc.StepConfig = &StepConfig{}
 	}
@@ -80,19 +80,19 @@ func (pc *processConfig) AddStepTimeout(timeout time.Duration) *processConfig {
 	return pc
 }
 
-func (pc *processConfig) AddBeforeStep(must bool, callback func(*StepInfo) (keepOn bool, err error)) *Callback[*StepInfo] {
+func (pc *processConfig) BeforeStep(must bool, callback func(*StepInfo) (keepOn bool, err error)) *Callback[*StepInfo] {
 	return pc.stepChain.AddCallback(Before, must, callback)
 }
 
-func (pc *processConfig) AddAfterStep(must bool, callback func(*StepInfo) (keepOn bool, err error)) *Callback[*StepInfo] {
+func (pc *processConfig) AfterStep(must bool, callback func(*StepInfo) (keepOn bool, err error)) *Callback[*StepInfo] {
 	return pc.stepChain.AddCallback(After, must, callback)
 }
 
-func (pc *processConfig) AddBeforeProcess(must bool, callback func(*ProcessInfo) (keepOn bool, err error)) *Callback[*ProcessInfo] {
+func (pc *processConfig) BeforeProcess(must bool, callback func(*ProcessInfo) (keepOn bool, err error)) *Callback[*ProcessInfo] {
 	return pc.procChain.AddCallback(Before, must, callback)
 }
 
-func (pc *processConfig) AddAfterProcess(must bool, callback func(*ProcessInfo) (keepOn bool, err error)) *Callback[*ProcessInfo] {
+func (pc *processConfig) AfterProcess(must bool, callback func(*ProcessInfo) (keepOn bool, err error)) *Callback[*ProcessInfo] {
 	return pc.procChain.AddCallback(After, must, callback)
 }
 
