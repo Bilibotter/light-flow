@@ -288,6 +288,11 @@ func (rp *RunProcess) summaryStepInfo(step *RunStep) *StepInfo {
 	return info
 }
 
-func (rp *RunProcess) SkipFinishedStep(name string, result any) {
+func (rp *RunProcess) SkipFinishedStep(name string, result any) bool {
+	if _, exist := rp.flowSteps[name]; !exist {
+		return false
+	}
+
 	rp.setStepResult(name, result)
+	return true
 }

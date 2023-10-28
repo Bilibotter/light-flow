@@ -21,22 +21,22 @@ func TestDependMergedWithEmptyHead(t *testing.T) {
 	process2.Merge("TestDependMergedWithEmptyHead1")
 	process2.AliasStep("5", GenerateStep(5), "4")
 	features := flow.DoneFlow("TestDependMergedWithEmptyHead2", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if !feature.Success() {
-			t.Errorf("process[%s] fail", name)
+			t.Errorf("process[%s] fail", feature.Name)
 		}
 	}
 	if atomic.LoadInt64(&current) != 5 {
 		t.Errorf("execute 5 step, but current = %d", current)
 	}
 	features = flow.DoneFlow("TestDependMergedWithEmptyHead1", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if !feature.Success() {
-			t.Errorf("process[%s] fail", name)
+			t.Errorf("process[%s] fail", feature.Name)
 		}
 	}
 	if atomic.LoadInt64(&current) != 9 {
@@ -58,22 +58,22 @@ func TestDependMergedWithNotEmptyHead(t *testing.T) {
 	process2.Merge("TestDependMergedWithNotEmptyHead1")
 	process2.AliasStep("5", GenerateStep(5), "4")
 	features := flow.DoneFlow("TestDependMergedWithNotEmptyHead2", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if !feature.Success() {
-			t.Errorf("process[%s] fail", name)
+			t.Errorf("process[%s] fail", feature.Name)
 		}
 	}
 	if atomic.LoadInt64(&current) != 6 {
 		t.Errorf("execute 6 step, but current = %d", current)
 	}
 	features = flow.DoneFlow("TestDependMergedWithNotEmptyHead1", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if !feature.Success() {
-			t.Errorf("process[%s] fail", name)
+			t.Errorf("process[%s] fail", feature.Name)
 		}
 	}
 	if atomic.LoadInt64(&current) != 10 {
@@ -93,11 +93,11 @@ func TestMergeEmpty(t *testing.T) {
 	process2.AliasStep("4", GenerateStep(4), "3")
 	process2.Merge("TestMergeEmpty1")
 	features := flow.DoneFlow("TestMergeEmpty2", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if !feature.Success() {
-			t.Errorf("process[%s] fail", name)
+			t.Errorf("process[%s] fail", feature.Name)
 		}
 	}
 	if atomic.LoadInt64(&current) != 4 {
@@ -117,22 +117,22 @@ func TestEmptyMerge(t *testing.T) {
 	process2 := factory2.ProcessWithConf("TestEmptyMerge2", nil)
 	process2.Merge("TestEmptyMerge1")
 	features := flow.DoneFlow("TestEmptyMerge2", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if !feature.Success() {
-			t.Errorf("process[%s] fail", name)
+			t.Errorf("process[%s] fail", feature.Name)
 		}
 	}
 	if atomic.LoadInt64(&current) != 4 {
 		t.Errorf("execute 4 step, but current = %d", current)
 	}
 	features = flow.DoneFlow("TestEmptyMerge1", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if !feature.Success() {
-			t.Errorf("process[%s] fail", name)
+			t.Errorf("process[%s] fail", feature.Name)
 		}
 	}
 	if atomic.LoadInt64(&current) != 8 {
@@ -156,22 +156,22 @@ func TestMergeAbsolutelyDifferent(t *testing.T) {
 	process2.AliasStep("14", GenerateStep(14), "13")
 	process2.Merge("TestMergeAbsolutelyDifferent1")
 	features := flow.DoneFlow("TestMergeAbsolutelyDifferent2", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if !feature.Success() {
-			t.Errorf("process[%s] fail", name)
+			t.Errorf("process[%s] fail", feature.Name)
 		}
 	}
 	if atomic.LoadInt64(&current) != 8 {
 		t.Errorf("execute 8 step, but current = %d", current)
 	}
 	features = flow.DoneFlow("TestMergeAbsolutelyDifferent1", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if !feature.Success() {
-			t.Errorf("process[%s] fail", name)
+			t.Errorf("process[%s] fail", feature.Name)
 		}
 	}
 	if atomic.LoadInt64(&current) != 12 {
@@ -195,22 +195,22 @@ func TestMergeLayerSame(t *testing.T) {
 	process2.AliasStep("5", GenerateStep(5), "4")
 	process2.Merge("TestMergeLayerSame1")
 	features := flow.DoneFlow("TestMergeLayerSame2", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if !feature.Success() {
-			t.Errorf("process[%s] fail", name)
+			t.Errorf("process[%s] fail", feature.Name)
 		}
 	}
 	if atomic.LoadInt64(&current) != 5 {
 		t.Errorf("execute 5 step, but current = %d", current)
 	}
 	features = flow.DoneFlow("TestMergeLayerSame1", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if !feature.Success() {
-			t.Errorf("process[%s] fail", name)
+			t.Errorf("process[%s] fail", feature.Name)
 		}
 	}
 	if atomic.LoadInt64(&current) != 9 {
@@ -234,22 +234,22 @@ func TestMergeLayerDec(t *testing.T) {
 	process2.AliasStep("6", GenerateStep(6), "5")
 	process2.Merge("TestMergeLayerDec1")
 	features := flow.DoneFlow("TestMergeLayerDec2", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if !feature.Success() {
-			t.Errorf("process[%s] fail", name)
+			t.Errorf("process[%s] fail", feature.Name)
 		}
 	}
 	if atomic.LoadInt64(&current) != 6 {
 		t.Errorf("execute 6 step, but current = %d", current)
 	}
 	features = flow.DoneFlow("TestMergeLayerDec1", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if !feature.Success() {
-			t.Errorf("process[%s] fail", name)
+			t.Errorf("process[%s] fail", feature.Name)
 		}
 	}
 	if atomic.LoadInt64(&current) != 10 {
@@ -272,11 +272,11 @@ func TestMergeLayerInc(t *testing.T) {
 	process2.AliasStep("5", GenerateStep(5), "3")
 	process2.Merge("TestMergeLayerInc1")
 	features := flow.DoneFlow("TestMergeLayerInc2", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if !feature.Success() {
-			t.Errorf("process[%s] fail", name)
+			t.Errorf("process[%s] fail", feature.Name)
 		}
 	}
 	if atomic.LoadInt64(&current) != 5 {
@@ -300,11 +300,11 @@ func TestMergeSomeSame(t *testing.T) {
 	process2.AliasStep("4", GenerateStep(4), "5")
 	process2.Merge("TestMergeSomeSame1")
 	features := flow.DoneFlow("TestMergeSomeSame2", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if !feature.Success() {
-			t.Errorf("process[%s] fail", name)
+			t.Errorf("process[%s] fail", feature.Name)
 		}
 	}
 	if atomic.LoadInt64(&current) != 5 {
@@ -328,11 +328,11 @@ func TestMergeSame(t *testing.T) {
 	process2.AliasStep("4", GenerateStep(4), "3")
 	process2.Merge("TestMergeSame1")
 	features := flow.DoneFlow("TestMergeSame2", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if !feature.Success() {
-			t.Errorf("process[%s] fail", name)
+			t.Errorf("process[%s] fail", feature.Name)
 		}
 	}
 	if atomic.LoadInt64(&current) != 4 {

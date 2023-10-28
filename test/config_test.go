@@ -150,13 +150,13 @@ func TestProcessorRandomOrder(t *testing.T) {
 	process.BeforeStep(true, CheckStepCurrent(2))
 	process.BeforeStep(false, CheckStepCurrent(6))
 	features := flow.DoneFlow("TestProcessorRandomOrder", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		explain := feature.ExplainStatus()
 		if !feature.Success() {
-			t.Errorf("process[%s] failed,explian=%v", name, explain)
+			t.Errorf("process[%s] failed,explian=%v", feature.Name, explain)
 		}
 		if feature.Contain(flow.Panic) {
-			t.Errorf("process[%s] not panic, but explain contain, but explain=%v", name, explain)
+			t.Errorf("process[%s] not panic, but explain contain, but explain=%v", feature.Name, explain)
 		}
 	}
 	if atomic.LoadInt64(&current) != 8 {
@@ -178,13 +178,13 @@ func TestProcessorOrder2(t *testing.T) {
 	process.AfterProcess(false, CheckProcCurrent(8))
 	process.AfterProcess(true, CheckProcCurrent(7))
 	features := flow.DoneFlow("TestProcessorOrder2", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		explain := feature.ExplainStatus()
 		if !feature.Success() {
-			t.Errorf("process[%s] failed,explian=%v", name, explain)
+			t.Errorf("process[%s] failed,explian=%v", feature.Name, explain)
 		}
 		if feature.Contain(flow.Panic) {
-			t.Errorf("process[%s] not panic, but explain contain, but explain=%v", name, explain)
+			t.Errorf("process[%s] not panic, but explain contain, but explain=%v", feature.Name, explain)
 		}
 	}
 	if atomic.LoadInt64(&current) != 9 {
@@ -206,13 +206,13 @@ func TestProcessorOrder1(t *testing.T) {
 	process.AfterProcess(true, CheckProcCurrent(7))
 	process.AfterProcess(false, CheckProcCurrent(8))
 	features := flow.DoneFlow("TestProcessorOrder1", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		explain := feature.ExplainStatus()
 		if !feature.Success() {
-			t.Errorf("process[%s] failed,explian=%v", name, explain)
+			t.Errorf("process[%s] failed,explian=%v", feature.Name, explain)
 		}
 		if feature.Contain(flow.Panic) {
-			t.Errorf("process[%s] not panic, but explain contain, but explain=%v", name, explain)
+			t.Errorf("process[%s] not panic, but explain contain, but explain=%v", feature.Name, explain)
 		}
 	}
 	if atomic.LoadInt64(&current) != 9 {
@@ -227,13 +227,13 @@ func TestNonEssentialProcProcessorPanic(t *testing.T) {
 	process.AliasStep("1", GenerateStep(1))
 	process.BeforeProcess(false, PanicProcProcessor)
 	features := flow.DoneFlow("TestNonEssentialProcProcessorPanic1", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		explain := feature.ExplainStatus()
 		if !feature.Success() {
-			t.Errorf("process[%s] failed,explian=%v", name, explain)
+			t.Errorf("process[%s] failed,explian=%v", feature.Name, explain)
 		}
 		if feature.Contain(flow.Panic) {
-			t.Errorf("process[%s] not panic, but explain contain, but explain=%v", name, explain)
+			t.Errorf("process[%s] not panic, but explain contain, but explain=%v", feature.Name, explain)
 		}
 	}
 	if atomic.LoadInt64(&current) != 2 {
@@ -245,13 +245,13 @@ func TestNonEssentialProcProcessorPanic(t *testing.T) {
 	process.AliasStep("1", GenerateStep(1))
 	process.AfterProcess(false, PanicProcProcessor)
 	features = flow.DoneFlow("TestNonEssentialProcProcessorPanic2", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		explain := feature.ExplainStatus()
 		if !feature.Success() {
-			t.Errorf("process[%s] failed,explian=%v", name, explain)
+			t.Errorf("process[%s] failed,explian=%v", feature.Name, explain)
 		}
 		if feature.Contain(flow.Panic) {
-			t.Errorf("process[%s] not panic, but explain not contain, but explain=%v", name, explain)
+			t.Errorf("process[%s] not panic, but explain not contain, but explain=%v", feature.Name, explain)
 		}
 	}
 	if atomic.LoadInt64(&current) != 2 {
@@ -266,13 +266,13 @@ func TestEssentialProcProcessorPanic(t *testing.T) {
 	process.AliasStep("1", GenerateStep(1))
 	process.BeforeProcess(true, PanicProcProcessor)
 	features := flow.DoneFlow("TestEssentialProcProcessorPanic1", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		if feature.Success() {
-			t.Errorf("process[%s] success, but expected failed", name)
+			t.Errorf("process[%s] success, but expected failed", feature.Name)
 		}
 		explain := feature.ExplainStatus()
 		if !feature.Contain(flow.Panic) {
-			t.Errorf("process[%s] panic, but explain not cotain, but explain=%v", name, explain)
+			t.Errorf("process[%s] panic, but explain not cotain, but explain=%v", feature.Name, explain)
 		}
 	}
 	if atomic.LoadInt64(&current) != 1 {
@@ -284,13 +284,13 @@ func TestEssentialProcProcessorPanic(t *testing.T) {
 	process.AliasStep("1", GenerateStep(1))
 	process.AfterProcess(true, PanicProcProcessor)
 	features = flow.DoneFlow("TestEssentialProcProcessorPanic2", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		if feature.Success() {
-			t.Errorf("process[%s] success, but expected failed", name)
+			t.Errorf("process[%s] success, but expected failed", feature.Name)
 		}
 		explain := feature.ExplainStatus()
 		if !feature.Contain(flow.Panic) {
-			t.Errorf("process[%s] panic, but explain not cotain, but explain=%v", name, explain)
+			t.Errorf("process[%s] panic, but explain not cotain, but explain=%v", feature.Name, explain)
 		}
 	}
 	if atomic.LoadInt64(&current) != 2 {
@@ -305,13 +305,13 @@ func TestNonEssentialStepProcessorPanic(t *testing.T) {
 	process.AliasStep("1", GenerateStep(1))
 	process.BeforeStep(false, PanicStepProcessor)
 	features := flow.DoneFlow("TestNonEssentialStepProcessorPanic1", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		explain := feature.ExplainStatus()
 		if !feature.Success() {
-			t.Errorf("process[%s] failed,explian=%v", name, explain)
+			t.Errorf("process[%s] failed,explian=%v", feature.Name, explain)
 		}
 		if feature.Contain(flow.Panic) {
-			t.Errorf("process[%s] not panic, but explain contain, but explain=%v", name, explain)
+			t.Errorf("process[%s] not panic, but explain contain, but explain=%v", feature.Name, explain)
 		}
 	}
 	if atomic.LoadInt64(&current) != 2 {
@@ -323,13 +323,13 @@ func TestNonEssentialStepProcessorPanic(t *testing.T) {
 	process.AliasStep("1", GenerateStep(1))
 	process.AfterStep(false, PanicStepProcessor)
 	features = flow.DoneFlow("TestNonEssentialStepProcessorPanic2", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		explain := feature.ExplainStatus()
 		if !feature.Success() {
-			t.Errorf("process[%s] failed,explian=%v", name, explain)
+			t.Errorf("process[%s] failed,explian=%v", feature.Name, explain)
 		}
 		if feature.Contain(flow.Panic) {
-			t.Errorf("process[%s] not panic, but explain not contain, but explain=%v", name, explain)
+			t.Errorf("process[%s] not panic, but explain not contain, but explain=%v", feature.Name, explain)
 		}
 	}
 	if atomic.LoadInt64(&current) != 2 {
@@ -344,13 +344,13 @@ func TestEssentialStepProcessorPanic(t *testing.T) {
 	process.AliasStep("1", GenerateStep(1))
 	process.BeforeStep(true, PanicStepProcessor)
 	features := flow.DoneFlow("TestEssentialStepProcessorPanic1", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		if feature.Success() {
-			t.Errorf("process[%s] success, but expected failed", name)
+			t.Errorf("process[%s] success, but expected failed", feature.Name)
 		}
 		explain := feature.ExplainStatus()
 		if !feature.Contain(flow.Panic) {
-			t.Errorf("process[%s] panic, but explain not cotain, but explain=%v", name, explain)
+			t.Errorf("process[%s] panic, but explain not cotain, but explain=%v", feature.Name, explain)
 		}
 	}
 	if atomic.LoadInt64(&current) != 1 {
@@ -362,13 +362,13 @@ func TestEssentialStepProcessorPanic(t *testing.T) {
 	process.AliasStep("1", GenerateStep(1))
 	process.AfterStep(true, PanicStepProcessor)
 	features = flow.DoneFlow("TestEssentialStepProcessorPanic2", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		if feature.Success() {
-			t.Errorf("process[%s] success, but expected failed", name)
+			t.Errorf("process[%s] success, but expected failed", feature.Name)
 		}
 		explain := feature.ExplainStatus()
 		if !feature.Contain(flow.Panic) {
-			t.Errorf("process[%s] panic, but explain not cotain, but explain=%v", name, explain)
+			t.Errorf("process[%s] panic, but explain not cotain, but explain=%v", feature.Name, explain)
 		}
 	}
 	if atomic.LoadInt64(&current) != 2 {
@@ -389,19 +389,19 @@ func TestProcessorWhenExceptionOccur(t *testing.T) {
 	step := process.AliasStep("3", GenerateErrorStep(3, "ms"))
 	step.Config(&flow.StepConfig{StepTimeout: time.Millisecond})
 	features := flow.DoneFlow("TestProcessorWhenExceptionOccur", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		if feature.Success() {
-			t.Errorf("process[%s] success, but expected failed", name)
+			t.Errorf("process[%s] success, but expected failed", feature.Name)
 		}
 		explain := feature.ExplainStatus()
 		if !feature.Contain(flow.Timeout) {
-			t.Errorf("process[%s] timeout, but explain not cotain, explain=%v", name, explain)
+			t.Errorf("process[%s] timeout, but explain not cotain, explain=%v", feature.Name, explain)
 		}
 		if !feature.Contain(flow.Error) {
-			t.Errorf("process[%s] error, but explain not cotain, but explain=%v", name, explain)
+			t.Errorf("process[%s] error, but explain not cotain, but explain=%v", feature.Name, explain)
 		}
 		if !feature.Contain(flow.Panic) {
-			t.Errorf("process[%s] panic, but explain not cotain, but explain=%v", name, explain)
+			t.Errorf("process[%s] panic, but explain not cotain, but explain=%v", feature.Name, explain)
 		}
 	}
 	if atomic.LoadInt64(&current) != 11 {
@@ -423,9 +423,9 @@ func TestPreAndPostProcessor(t *testing.T) {
 	process.BeforeProcess(true, ProcProcessor)
 	process.AfterProcess(true, ProcProcessor)
 	features := flow.DoneFlow("TestPreAndPostProcessor", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		if !feature.Success() {
-			t.Errorf("process[%s] fail", name)
+			t.Errorf("process[%s] fail", feature.Name)
 		}
 	}
 	if atomic.LoadInt64(&current) != 14 {
@@ -445,9 +445,9 @@ func TestWithLongProcessTimeout(t *testing.T) {
 	process.AliasStep("3", GenerateStep(3), "2")
 	process.AliasStep("4", GenerateStep(4), "3")
 	features := flow.DoneFlow("TestWithLongProcessTimeout", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		if !feature.Success() {
-			t.Errorf("process[%s] fail", name)
+			t.Errorf("process[%s] fail", feature.Name)
 		}
 	}
 	if atomic.LoadInt64(&current) != 4 {
@@ -466,9 +466,9 @@ func TestWithShortProcessTimeout(t *testing.T) {
 	process.AliasStep("3", GenerateStep(3, "ms"), "2")
 	process.AliasStep("4", GenerateStep(4, "ms"), "3")
 	features := flow.DoneFlow("TestWithShortProcessTimeout", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		if feature.Success() {
-			t.Errorf("process[%s] success with timeout", name)
+			t.Errorf("process[%s] success with timeout", feature.Name)
 		}
 	}
 	time.Sleep(400 * time.Millisecond)
@@ -488,11 +488,11 @@ func TestParallelWithLongDefaultStepTimeout(t *testing.T) {
 	process.AliasStep("3", GenerateStep(3))
 	process.AliasStep("4", GenerateStep(4))
 	features := flow.DoneFlow("TestParallelWithLongDefaultStepTimeout", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if !feature.Success() {
-			t.Errorf("process[%s] fail", name)
+			t.Errorf("process[%s] fail", feature.Name)
 		}
 	}
 	if atomic.LoadInt64(&current) != 4 {
@@ -511,11 +511,11 @@ func TestWithLongDefaultStepTimeout(t *testing.T) {
 	process.AliasStep("3", GenerateStep(3), "2")
 	process.AliasStep("4", GenerateStep(4), "3")
 	features := flow.DoneFlow("TestWithLongDefaultStepTimeout", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if !feature.Success() {
-			t.Errorf("process[%s] fail", name)
+			t.Errorf("process[%s] fail", feature.Name)
 		}
 	}
 	if atomic.LoadInt64(&current) != 4 {
@@ -534,11 +534,11 @@ func TestWithShortDefaultStepTimeout(t *testing.T) {
 	process.AliasStep("3", GenerateStep(3, "ms"), "2")
 	process.AliasStep("4", GenerateStep(4, "ms"), "3")
 	features := flow.DoneFlow("TestWithShortDefaultStepTimeout", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if feature.Success() {
-			t.Errorf("process[%s] success with timeout", name)
+			t.Errorf("process[%s] success with timeout", feature.Name)
 		}
 	}
 	time.Sleep(400 * time.Millisecond)
@@ -579,11 +579,11 @@ func TestWithLongStepTimeout(t *testing.T) {
 	process.AliasStep("3", GenerateStep(3), "2")
 	process.AliasStep("4", GenerateStep(4), "3")
 	features := flow.DoneFlow("TestWithLongStepTimeout", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if !feature.Success() {
-			t.Errorf("process[%s] failed", name)
+			t.Errorf("process[%s] failed", feature.Name)
 		}
 	}
 	if atomic.LoadInt64(&current) != 4 {
@@ -601,11 +601,11 @@ func TestWithShortStepTimeout(t *testing.T) {
 	process.AliasStep("3", GenerateStep(3, "ms"), "2")
 	process.AliasStep("4", GenerateStep(4, "ms"), "3")
 	features := flow.DoneFlow("TestWithShortStepTimeout", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if feature.Success() {
-			t.Errorf("process[%s] success with timeout", name)
+			t.Errorf("process[%s] success with timeout", feature.Name)
 		}
 	}
 	time.Sleep(300 * time.Millisecond)
@@ -622,11 +622,11 @@ func TestSingleErrorStepWithProcessRetry(t *testing.T) {
 	process := workflow.ProcessWithConf("TestSingleErrorStepWithProcessRetry", config)
 	process.AliasStep("1", GenerateErrorStep(1))
 	features := flow.DoneFlow("TestSingleErrorStepWithProcessRetry", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if feature.Success() {
-			t.Errorf("process[%s] success, but expected failed", name)
+			t.Errorf("process[%s] success, but expected failed", feature.Name)
 		}
 	}
 	if atomic.LoadInt64(&current) != 3 {
@@ -641,11 +641,11 @@ func TestSingleErrorStepWithStepRetry(t *testing.T) {
 	process := workflow.ProcessWithConf("TestSingleErrorStepWithStepRetry", nil)
 	process.AliasStep("1", GenerateErrorStep(1)).Config(&config)
 	features := flow.DoneFlow("TestSingleErrorStepWithStepRetry", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if feature.Success() {
-			t.Errorf("process[%s] success, but expected failed", name)
+			t.Errorf("process[%s] success, but expected failed", feature.Name)
 		}
 	}
 	if atomic.LoadInt64(&current) != 3 {
@@ -662,11 +662,11 @@ func TestSingleErrorStepWithProcessAndStepRetry(t *testing.T) {
 	process := workflow.ProcessWithConf("TestSingleErrorStepWithProcessAndStepRetry", config)
 	process.AliasStep("1", GenerateErrorStep(1)).Config(&stepConfig)
 	features := flow.DoneFlow("TestSingleErrorStepWithProcessAndStepRetry", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if feature.Success() {
-			t.Errorf("process[%s] success, but expected failed", name)
+			t.Errorf("process[%s] success, but expected failed", feature.Name)
 		}
 	}
 	if atomic.LoadInt64(&current) != 2 {
@@ -692,11 +692,11 @@ func TestRecoverSerialStep(t *testing.T) {
 		panic(err.Error())
 	}
 	features := wf.Done()
-	for name, feature := range features {
+	for _, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if !feature.Success() {
-			t.Errorf("process[%s] failed", name)
+			t.Errorf("process[%s] failed", feature.Name)
 		}
 	}
 	if atomic.LoadInt64(&current) != 3 {
@@ -730,11 +730,11 @@ func TestRecoverParallelStep(t *testing.T) {
 		panic(err.Error())
 	}
 	features := wf.Done()
-	for name, feature := range features {
+	for _, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if !feature.Success() {
-			t.Errorf("process[%s] fail", name)
+			t.Errorf("process[%s] fail", feature.Name)
 		}
 	}
 	if atomic.LoadInt64(&current) != 4 {
@@ -765,11 +765,11 @@ func TestRecoverAndWaitAll(t *testing.T) {
 		panic(err.Error())
 	}
 	features := wf.Done()
-	for name, feature := range features {
+	for _, feature := range features {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", name, explain)
+		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if !feature.Success() {
-			t.Errorf("process[%s] fail", name)
+			t.Errorf("process[%s] fail", feature.Name)
 		}
 	}
 	if atomic.LoadInt64(&current) != 1 {

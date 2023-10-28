@@ -1,7 +1,7 @@
 package test
 
 import (
-	light_flow "gitee.com/MetaphysicCoding/light-flow"
+	"gitee.com/MetaphysicCoding/light-flow"
 	"strconv"
 	"strings"
 	"testing"

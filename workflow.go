@@ -27,14 +27,14 @@ type Controller interface {
 
 type ResultI interface {
 	BasicInfoI
-	Features() map[string]*Feature
-	Fails() map[string]*Feature
+	Features() []*Feature
+	Fails() []*Feature
 }
 
 type FlowController interface {
 	Controller
 	ResultI
-	Done() map[string]*Feature
+	Done() []*Feature
 	ListProcess() []string
 	ProcessController(name string) Controller
 }
@@ -60,8 +60,8 @@ type RunFlow struct {
 	*FlowMeta
 	*BasicInfo
 	*Context
-	processMap map[string]*RunProcess
-	features   map[string]*Feature
+	processMap []*RunProcess
+	features   []*Feature
 	lock       sync.Mutex
 	finish     sync.WaitGroup
 }
@@ -222,13 +222,12 @@ func (fm *FlowMeta) BuildRunFlow(input map[string]any) *RunFlow {
 		FlowMeta:   fm,
 		lock:       sync.Mutex{},
 		Context:    &context,
-		processMap: make(map[string]*RunProcess),
+		processMap: make([]*RunProcess, 0, len(fm.processes)),
 		finish:     sync.WaitGroup{},
 	}
 
 	for _, processMeta := range fm.processes {
-		process := rf.buildRunProcess(processMeta)
-		rf.processMap[process.processName] = process
+		rf.processMap = append(rf.processMap, rf.buildRunProcess(processMeta))
 	}
 
 	return &rf
@@ -299,7 +298,7 @@ func (rf *RunFlow) buildRunProcess(meta *ProcessMeta) *RunProcess {
 }
 
 // Done function will block util all process done.
-func (rf *RunFlow) Done() map[string]*Feature {
+func (rf *RunFlow) Done() []*Feature {
 	features := rf.Flow()
 	for _, feature := range features {
 		// process finish running and callback
@@ -311,7 +310,7 @@ func (rf *RunFlow) Done() map[string]*Feature {
 }
 
 // Flow function asynchronous execute process of workflow and return immediately.
-func (rf *RunFlow) Flow() map[string]*Feature {
+func (rf *RunFlow) Flow() []*Feature {
 	if rf.features != nil {
 		return rf.features
 	}
@@ -334,9 +333,9 @@ func (rf *RunFlow) Flow() map[string]*Feature {
 	if rf.FlowConfig != nil && rf.FlowConfig.CallbackChain != nil {
 		rf.process(Before, info)
 	}
-	features := make(map[string]*Feature, len(rf.processMap))
-	for name, process := range rf.processMap {
-		features[name] = process.flow()
+	features := make([]*Feature, 0, len(rf.processMap))
+	for _, process := range rf.processMap {
+		features = append(features, process.flow())
 	}
 	rf.features = features
 	rf.finish.Add(1)
@@ -363,8 +362,8 @@ func (rf *RunFlow) Flow() map[string]*Feature {
 
 func (rf *RunFlow) SkipFinishedStep(name string, result any) error {
 	count := 0
-	for processName := range rf.processMap {
-		if err := rf.skipProcessStep(processName, name, result); err == nil {
+	for _, process := range rf.processMap {
+		if exist := process.SkipFinishedStep(name, result); exist {
 			count += 1
 		}
 	}
@@ -378,47 +377,35 @@ func (rf *RunFlow) SkipFinishedStep(name string, result any) error {
 	return nil
 }
 
-func (rf *RunFlow) skipProcessStep(processName, stepName string, result any) error {
-	process, exist := rf.processMap[processName]
-	if !exist {
-		return fmt.Errorf("prcoess [%s] not found in workflow", processName)
-	}
-	step, exist := process.flowSteps[stepName]
-	if !exist {
-		return fmt.Errorf("step [%s] not found in process", stepName)
-	}
-	step.setStepResult(stepName, result)
-	return nil
-}
-
-func (rf *RunFlow) Fails() map[string]*Feature {
-	features := make(map[string]*Feature)
-	for name, feature := range rf.features {
+func (rf *RunFlow) Fails() []*Feature {
+	features := make([]*Feature, 0)
+	for _, feature := range rf.features {
 		if len(feature.Exceptions()) != 0 {
-			features[name] = feature
+			features = append(features, feature)
 		}
 	}
 	return features
 }
 
-func (rf *RunFlow) Features() map[string]*Feature {
+func (rf *RunFlow) Features() []*Feature {
 	return rf.features
 }
 
 func (rf *RunFlow) ListProcess() []string {
 	processes := make([]string, 0, len(rf.processMap))
-	for name := range rf.processMap {
-		processes = append(processes, name)
+	for _, process := range rf.processMap {
+		processes = append(processes, process.processName)
 	}
 	return processes
 }
 
 func (rf *RunFlow) ProcessController(name string) Controller {
-	process, exist := rf.processMap[name]
-	if !exist {
-		return nil
+	for _, process := range rf.processMap {
+		if process.processName == name {
+			return process
+		}
 	}
-	return process
+	return nil
 }
 
 func (rf *RunFlow) Pause() {

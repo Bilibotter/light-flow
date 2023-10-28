@@ -59,9 +59,9 @@ func TestInfoCorrect(t *testing.T) {
 	process.AliasStep("3", GenerateStep(3), "1")
 	process.AliasStep("4", GenerateStep(4), "2", "3")
 	features := flow.DoneFlow("TestInfoCorrect", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		if !feature.Success() {
-			t.Errorf("process[%s] fail, exception=%v", name, feature.Exceptions())
+			t.Errorf("process[%s] fail, exception=%v", feature.GetName(), feature.Exceptions())
 		}
 	}
 	if atomic.LoadInt64(&current) != 12 {
@@ -89,9 +89,9 @@ func TestDefaultProcessConfig(t *testing.T) {
 	process.AliasStep("3", GenerateStep(3), "2")
 	process.AliasStep("4", GenerateStep(4), "3")
 	features := flow.DoneFlow("TestDefaultProcessConfig", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		if !feature.Success() {
-			t.Errorf("process[%s] fail, exception=%v", name, feature.ExplainStatus())
+			t.Errorf("process[%s] fail, exception=%v", feature.GetName(), feature.ExplainStatus())
 		}
 	}
 	if atomic.LoadInt64(&current) != 16 {
@@ -123,9 +123,9 @@ func TestMergeDefaultProcessConfig(t *testing.T) {
 	process.BeforeProcess(true, ProcProcessor)
 	process.AfterProcess(true, ProcProcessor)
 	features := flow.DoneFlow("TestMergeDefaultProcessConfig", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		if !feature.Success() {
-			t.Errorf("process[%s] fail", name)
+			t.Errorf("process[%s] fail", feature.GetName())
 		}
 	}
 	if atomic.LoadInt64(&current) != 18 {
@@ -157,9 +157,9 @@ func TestCallbackCond(t *testing.T) {
 	process.AliasStep("1", GenerateStep(1))
 	process.AliasStep("2", GenerateStep(2), "1")
 	features := flow.DoneFlow("TestCallbackCond", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		if !feature.Success() {
-			t.Errorf("process[%s] fail", name)
+			t.Errorf("process[%s] fail", feature.GetName())
 		}
 	}
 	if atomic.LoadInt64(&current) != 8 {
@@ -190,9 +190,9 @@ func TestCallbackCond0(t *testing.T) {
 	process.AliasStep("1", GenerateStep(1))
 	process.AliasStep("2", GenerateStep(2), "1")
 	features := flow.DoneFlow("TestCallbackCond0", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		if !feature.Success() {
-			t.Errorf("process[%s] fail", name)
+			t.Errorf("process[%s] fail", feature.GetName())
 		}
 	}
 	if atomic.LoadInt64(&current) != 8 {
@@ -222,9 +222,9 @@ func TestUnableDefaultProcessConfig(t *testing.T) {
 	process.AliasStep("4", GenerateStep(4), "3")
 	process.NotUseDefault()
 	features := flow.DoneFlow("TestUnableDefaultProcessConfig", nil)
-	for name, feature := range features.Features() {
+	for _, feature := range features.Features() {
 		if !feature.Success() {
-			t.Errorf("process[%s] fail", name)
+			t.Errorf("process[%s] fail", feature.GetName())
 		}
 	}
 	if atomic.LoadInt64(&current) != 4 {
