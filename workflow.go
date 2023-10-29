@@ -60,10 +60,10 @@ type RunFlow struct {
 	*FlowMeta
 	*BasicInfo
 	*Context
-	processMap []*RunProcess
-	features   []*Feature
-	lock       sync.Mutex
-	finish     sync.WaitGroup
+	processes []*RunProcess
+	features  []*Feature
+	lock      sync.Mutex
+	finish    sync.WaitGroup
 }
 
 type FlowInfo struct {
@@ -219,15 +219,15 @@ func (fm *FlowMeta) BuildRunFlow(input map[string]any) *RunFlow {
 			Name:   fm.flowName,
 			Id:     generateId(),
 		},
-		FlowMeta:   fm,
-		lock:       sync.Mutex{},
-		Context:    &context,
-		processMap: make([]*RunProcess, 0, len(fm.processes)),
-		finish:     sync.WaitGroup{},
+		FlowMeta:  fm,
+		lock:      sync.Mutex{},
+		Context:   &context,
+		processes: make([]*RunProcess, 0, len(fm.processes)),
+		finish:    sync.WaitGroup{},
 	}
 
 	for _, processMeta := range fm.processes {
-		rf.processMap = append(rf.processMap, rf.buildRunProcess(processMeta))
+		rf.processes = append(rf.processes, rf.buildRunProcess(processMeta))
 	}
 
 	return &rf
@@ -333,8 +333,8 @@ func (rf *RunFlow) Flow() []*Feature {
 	if rf.FlowConfig != nil && rf.FlowConfig.CallbackChain != nil {
 		rf.process(Before, info)
 	}
-	features := make([]*Feature, 0, len(rf.processMap))
-	for _, process := range rf.processMap {
+	features := make([]*Feature, 0, len(rf.processes))
+	for _, process := range rf.processes {
 		features = append(features, process.flow())
 	}
 	rf.features = features
@@ -347,7 +347,7 @@ func (rf *RunFlow) Flow() []*Feature {
 		for _, feature := range features {
 			feature.Done()
 		}
-		for _, process := range rf.processMap {
+		for _, process := range rf.processes {
 			rf.combine(process.Status)
 		}
 		if rf.Normal() {
@@ -362,7 +362,7 @@ func (rf *RunFlow) Flow() []*Feature {
 
 func (rf *RunFlow) SkipFinishedStep(name string, result any) error {
 	count := 0
-	for _, process := range rf.processMap {
+	for _, process := range rf.processes {
 		if exist := process.SkipFinishedStep(name, result); exist {
 			count += 1
 		}
@@ -392,15 +392,15 @@ func (rf *RunFlow) Features() []*Feature {
 }
 
 func (rf *RunFlow) ListProcess() []string {
-	processes := make([]string, 0, len(rf.processMap))
-	for _, process := range rf.processMap {
+	processes := make([]string, 0, len(rf.processes))
+	for _, process := range rf.processes {
 		processes = append(processes, process.processName)
 	}
 	return processes
 }
 
 func (rf *RunFlow) ProcessController(name string) Controller {
-	for _, process := range rf.processMap {
+	for _, process := range rf.processes {
 		if process.processName == name {
 			return process
 		}
@@ -409,19 +409,19 @@ func (rf *RunFlow) ProcessController(name string) Controller {
 }
 
 func (rf *RunFlow) Pause() {
-	for _, process := range rf.processMap {
+	for _, process := range rf.processes {
 		process.Pause()
 	}
 }
 
 func (rf *RunFlow) Resume() {
-	for _, process := range rf.processMap {
+	for _, process := range rf.processes {
 		process.Resume()
 	}
 }
 
 func (rf *RunFlow) Stop() {
-	for _, process := range rf.processMap {
+	for _, process := range rf.processes {
 		process.Stop()
 	}
 }
