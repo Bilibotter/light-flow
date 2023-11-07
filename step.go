@@ -28,6 +28,7 @@ type RunStep struct {
 	finish    chan bool
 	Start     time.Time
 	End       time.Time
+	infoCache *StepInfo
 	Err       error
 }
 
@@ -149,4 +150,14 @@ func (meta *StepMeta) backSearch(searched string) bool {
 // Config allow step not using process's config
 func (meta *StepMeta) Config(config *StepConfig) {
 	meta.StepConfig = config
+}
+
+func (step *RunStep) syncInfo() {
+	if step.infoCache == nil {
+		return
+	}
+	step.infoCache.Status = step.Status
+	step.infoCache.Err = step.Err
+	step.infoCache.Start = step.Start
+	step.infoCache.End = step.End
 }

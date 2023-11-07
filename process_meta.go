@@ -13,7 +13,7 @@ const (
 )
 
 type ProcessMeta struct {
-	*processConfig
+	*ProcessConfig
 	init        sync.Once
 	processName string
 	steps       map[string]*StepMeta
@@ -26,7 +26,7 @@ type ProcessInfo struct {
 	FlowId string
 }
 
-type processConfig struct {
+type ProcessConfig struct {
 	*StepConfig
 	ProcTimeout   time.Duration
 	notUseDefault bool
@@ -34,10 +34,10 @@ type processConfig struct {
 	procChain     *CallbackChain[*ProcessInfo]
 }
 
-func NewProcessConfig() *processConfig {
+func NewProcessConfig() *ProcessConfig {
 	stepChain := &CallbackChain[*StepInfo]{}
 	procChain := &CallbackChain[*ProcessInfo]{}
-	config := &processConfig{
+	config := &ProcessConfig{
 		StepConfig: &StepConfig{},
 		stepChain:  stepChain,
 		procChain:  procChain,
@@ -45,7 +45,7 @@ func NewProcessConfig() *processConfig {
 	return config
 }
 
-func (pc *processConfig) merge(merged *processConfig) *processConfig {
+func (pc *ProcessConfig) merge(merged *ProcessConfig) *ProcessConfig {
 	CopyPropertiesSkipNotEmpty(merged, pc)
 	if pc.stepChain == nil {
 		pc.stepChain = &CallbackChain[*StepInfo]{}
@@ -64,7 +64,7 @@ func (pc *processConfig) merge(merged *processConfig) *processConfig {
 	return pc
 }
 
-func (pc *processConfig) StepsRetry(retry int) *processConfig {
+func (pc *ProcessConfig) StepsRetry(retry int) *ProcessConfig {
 	if pc.StepConfig == nil {
 		pc.StepConfig = &StepConfig{}
 	}
@@ -72,7 +72,7 @@ func (pc *processConfig) StepsRetry(retry int) *processConfig {
 	return pc
 }
 
-func (pc *processConfig) StepsTimeout(timeout time.Duration) *processConfig {
+func (pc *ProcessConfig) StepsTimeout(timeout time.Duration) *ProcessConfig {
 	if pc.StepConfig == nil {
 		pc.StepConfig = &StepConfig{}
 	}
@@ -80,19 +80,19 @@ func (pc *processConfig) StepsTimeout(timeout time.Duration) *processConfig {
 	return pc
 }
 
-func (pc *processConfig) BeforeStep(must bool, callback func(*StepInfo) (keepOn bool, err error)) *Callback[*StepInfo] {
+func (pc *ProcessConfig) BeforeStep(must bool, callback func(*StepInfo) (keepOn bool, err error)) *Callback[*StepInfo] {
 	return pc.stepChain.AddCallback(Before, must, callback)
 }
 
-func (pc *processConfig) AfterStep(must bool, callback func(*StepInfo) (keepOn bool, err error)) *Callback[*StepInfo] {
+func (pc *ProcessConfig) AfterStep(must bool, callback func(*StepInfo) (keepOn bool, err error)) *Callback[*StepInfo] {
 	return pc.stepChain.AddCallback(After, must, callback)
 }
 
-func (pc *processConfig) BeforeProcess(must bool, callback func(*ProcessInfo) (keepOn bool, err error)) *Callback[*ProcessInfo] {
+func (pc *ProcessConfig) BeforeProcess(must bool, callback func(*ProcessInfo) (keepOn bool, err error)) *Callback[*ProcessInfo] {
 	return pc.procChain.AddCallback(Before, must, callback)
 }
 
-func (pc *processConfig) AfterProcess(must bool, callback func(*ProcessInfo) (keepOn bool, err error)) *Callback[*ProcessInfo] {
+func (pc *ProcessConfig) AfterProcess(must bool, callback func(*ProcessInfo) (keepOn bool, err error)) *Callback[*ProcessInfo] {
 	return pc.procChain.AddCallback(After, must, callback)
 }
 
@@ -108,14 +108,14 @@ func (pm *ProcessMeta) initialize() {
 		if pm.notUseDefault {
 			return
 		}
-		if defaultConfig == nil || defaultConfig.processConfig == nil {
+		if defaultConfig == nil || defaultConfig.ProcessConfig == nil {
 			return
 		}
-		if pm.processConfig == nil {
-			pm.processConfig = defaultConfig.processConfig
+		if pm.ProcessConfig == nil {
+			pm.ProcessConfig = defaultConfig.ProcessConfig
 			return
 		}
-		pm.processConfig.merge(defaultConfig.processConfig)
+		pm.ProcessConfig.merge(defaultConfig.ProcessConfig)
 	})
 }
 

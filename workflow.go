@@ -41,7 +41,7 @@ type FlowController interface {
 
 type Configuration struct {
 	*FlowConfig
-	*processConfig
+	*ProcessConfig
 }
 
 type FlowMeta struct {
@@ -84,7 +84,7 @@ func SetIdGenerator(method func() string) {
 func CreateDefaultConfig() *Configuration {
 	defaultConfig = &Configuration{
 		FlowConfig:    &FlowConfig{},
-		processConfig: NewProcessConfig(),
+		ProcessConfig: NewProcessConfig(),
 	}
 	return defaultConfig
 }
@@ -245,7 +245,7 @@ func (fm *FlowMeta) Process(name string) *ProcessMeta {
 	return fm.ProcessWithConf(name, nil)
 }
 
-func (fm *FlowMeta) ProcessWithConf(name string, conf *processConfig) *ProcessMeta {
+func (fm *FlowMeta) ProcessWithConf(name string, conf *ProcessConfig) *ProcessMeta {
 	if conf != nil {
 		conf.notUseDefault = true
 	}
@@ -254,7 +254,7 @@ func (fm *FlowMeta) ProcessWithConf(name string, conf *processConfig) *ProcessMe
 	}
 
 	pm := ProcessMeta{
-		processConfig: conf,
+		ProcessConfig: conf,
 		processName:   name,
 		init:          sync.Once{},
 		steps:         make(map[string]*StepMeta),

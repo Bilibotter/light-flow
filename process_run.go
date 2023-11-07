@@ -116,7 +116,7 @@ func (rp *RunProcess) scheduleStep(step *RunStep) {
 	}
 
 	timeout := 3 * time.Hour
-	if rp.processConfig != nil && rp.StepConfig != nil && rp.StepTimeout != 0 {
+	if rp.ProcessConfig != nil && rp.StepConfig != nil && rp.StepTimeout != 0 {
 		timeout = rp.StepTimeout
 	}
 	if step.StepConfig != nil && step.StepTimeout != 0 {
@@ -136,7 +136,7 @@ func (rp *RunProcess) scheduleStep(step *RunStep) {
 
 func (rp *RunProcess) finalize() {
 	timeout := 3 * time.Hour
-	if rp.processConfig != nil && rp.ProcTimeout != 0 {
+	if rp.ProcessConfig != nil && rp.ProcTimeout != 0 {
 		timeout = rp.ProcTimeout
 	}
 
@@ -198,7 +198,7 @@ func (rp *RunProcess) runStep(step *RunStep) {
 	}
 
 	retry := 1
-	if rp.processConfig != nil && rp.StepConfig != nil && rp.StepRetry > 0 {
+	if rp.ProcessConfig != nil && rp.StepConfig != nil && rp.StepRetry > 0 {
 		retry = rp.StepRetry
 	}
 	if step.StepConfig != nil && step.StepRetry > 0 {
@@ -234,7 +234,7 @@ func (rp *RunProcess) runStep(step *RunStep) {
 }
 
 func (rp *RunProcess) stepCallback(step *RunStep, flag string) {
-	if rp.processConfig == nil || rp.stepChain == nil {
+	if rp.ProcessConfig == nil || rp.stepChain == nil {
 		return
 	}
 	info := rp.summaryStepInfo(step)
@@ -244,7 +244,7 @@ func (rp *RunProcess) stepCallback(step *RunStep, flag string) {
 }
 
 func (rp *RunProcess) procCallback(flag string) {
-	if rp.processConfig == nil || rp.procChain == nil {
+	if rp.ProcessConfig == nil || rp.procChain == nil {
 		return
 	}
 
@@ -262,6 +262,10 @@ func (rp *RunProcess) procCallback(flag string) {
 }
 
 func (rp *RunProcess) summaryStepInfo(step *RunStep) *StepInfo {
+	if step.infoCache != nil {
+		step.syncInfo()
+		return step.infoCache
+	}
 	info := &StepInfo{
 		BasicInfo: &BasicInfo{
 			Status: step.Status,
@@ -285,6 +289,7 @@ func (rp *RunProcess) summaryStepInfo(step *RunStep) *StepInfo {
 		info.Next[next.stepName] = rp.flowSteps[next.stepName].id
 	}
 
+	step.infoCache = info
 	return info
 }
 
