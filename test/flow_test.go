@@ -25,26 +25,26 @@ func resetCurrent() {
 	atomic.StoreInt64(&current, 0)
 }
 
-func NormalStep3(ctx *flow.Context) (any, error) {
+func NormalStep3(ctx flow.Context) (any, error) {
 	atomic.AddInt64(&current, 1)
 	fmt.Printf("3.normal step finish\n")
 	return 3, nil
 }
 
-func NormalStep2(ctx *flow.Context) (any, error) {
+func NormalStep2(ctx flow.Context) (any, error) {
 	atomic.AddInt64(&current, 1)
 	fmt.Printf("2.normal step finish\n")
 	return 2, nil
 }
 
-func NormalStep1(ctx *flow.Context) (any, error) {
+func NormalStep1(ctx flow.Context) (any, error) {
 	atomic.AddInt64(&current, 1)
 	fmt.Printf("1.normal step finish\n")
 	return 1, nil
 }
 
-func GenerateStep(i int, args ...any) func(ctx *flow.Context) (any, error) {
-	return func(ctx *flow.Context) (any, error) {
+func GenerateStep(i int, args ...any) func(ctx flow.Context) (any, error) {
+	return func(ctx flow.Context) (any, error) {
 		if len(args) > 0 {
 			time.Sleep(100 * time.Millisecond)
 		}
@@ -54,8 +54,8 @@ func GenerateStep(i int, args ...any) func(ctx *flow.Context) (any, error) {
 	}
 }
 
-func GenerateErrorStep(i int, args ...any) func(ctx *flow.Context) (any, error) {
-	return func(ctx *flow.Context) (any, error) {
+func GenerateErrorStep(i int, args ...any) func(ctx flow.Context) (any, error) {
+	return func(ctx flow.Context) (any, error) {
 		if len(args) > 0 {
 			time.Sleep(100 * time.Millisecond)
 		}
@@ -75,7 +75,7 @@ func AfterProcProcessor(info *flow.ProcessInfo) (bool, error) {
 	if len(info.FlowId) == 0 {
 		panic("process flow id is empty")
 	}
-	if info.Context == nil {
+	if info.VisibleContext == nil {
 		panic("process context is nil")
 	}
 	atomic.AddInt64(&current, 1)
@@ -83,8 +83,8 @@ func AfterProcProcessor(info *flow.ProcessInfo) (bool, error) {
 	return true, nil
 }
 
-func GeneratePanicStep(i int, args ...any) func(ctx *flow.Context) (any, error) {
-	return func(ctx *flow.Context) (any, error) {
+func GeneratePanicStep(i int, args ...any) func(ctx flow.Context) (any, error) {
+	return func(ctx flow.Context) (any, error) {
 		if len(args) > 0 {
 			time.Sleep(100 * time.Millisecond)
 		}
@@ -133,6 +133,7 @@ func TestMultipleExceptionStatus(t *testing.T) {
 	if atomic.LoadInt64(&current) != 3 {
 		t.Errorf("execute 3 step, but current = %d", current)
 	}
+	time.Sleep(100 * time.Millisecond)
 }
 
 func TestSinglePanicStep(t *testing.T) {
@@ -176,6 +177,7 @@ func TestGoAheadWithoutDependPanicStep(t *testing.T) {
 	if atomic.LoadInt64(&current) != 5 {
 		t.Errorf("execute 5 step, but current = %d", current)
 	}
+	time.Sleep(100 * time.Millisecond)
 }
 
 func TestSingleErrorStep(t *testing.T) {
@@ -369,7 +371,8 @@ func TestWorkFlowPause(t *testing.T) {
 func TestArgs(t *testing.T) {
 	factory := flow.RegisterFlow("TestArgs")
 	process := factory.ProcessWithConf("TestArgs", nil)
-	process.AliasStep("1", func(ctx *flow.Context) (any, error) {
+	process.AfterStep(true, ErrorResultPrinter)
+	process.AliasStep("1", func(ctx flow.Context) (any, error) {
 		a, ok := ctx.Get("InputA")
 		if !ok {
 			panic("InputA not found")
@@ -395,10 +398,11 @@ func TestArgs(t *testing.T) {
 		}
 		return nil, nil
 	})
+
 	features := flow.DoneArgs("TestArgs", InputA{Name: "a"}, &InputB{Name: "b"})
 	for _, feature := range features.Features() {
 		if !feature.Success() {
-			t.Errorf("process[%s] fail", feature.Name)
+			t.Errorf("process[%s] fail, exception=%v", feature.Name, feature.ExplainStatus())
 		}
 	}
 }

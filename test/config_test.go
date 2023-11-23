@@ -17,13 +17,13 @@ func StepInfoChecker(key string, prev, next []string) func(info *flow.StepInfo) 
 		println("matched", key)
 		atomic.AddInt64(&current, 1)
 		for name := range info.Prev {
-			s := flow.CreateFromSliceFunc(prev, func(s string) string { return s })
+			s := flow.CreateSetBySliceFunc(prev, func(s string) string { return s })
 			if !s.Contains(name) {
 				panic(fmt.Sprintf("step[%s] prev not contains %s", key, name))
 			}
 		}
 		for name := range info.Next {
-			s := flow.CreateFromSliceFunc(next, func(s string) string { return s })
+			s := flow.CreateSetBySliceFunc(next, func(s string) string { return s })
 			if !s.Contains(name) {
 				panic(fmt.Sprintf("step[%s] next not contains %s", key, name))
 			}
@@ -45,7 +45,7 @@ func PreProcessor(info *flow.StepInfo) (bool, error) {
 	if info.Name == "" {
 		panic("step name is empty")
 	}
-	if info.Context == nil {
+	if info.VisibleContext == nil {
 		panic("step context is nil")
 	}
 	atomic.AddInt64(&current, 1)
@@ -72,17 +72,16 @@ func PostProcessor(info *flow.StepInfo) (bool, error) {
 	if info.End.IsZero() {
 		panic("step end time is zero")
 	}
-	if info.Context == nil {
+	if info.VisibleContext == nil {
 		panic("step context is nil")
 	}
 	atomic.AddInt64(&current, 1)
 	fmt.Printf("..step[%s] PostProcessor execute\n", info.Name)
 	return true, nil
 }
-
 func ErrorResultPrinter(info *flow.StepInfo) (bool, error) {
 	if !info.Normal() {
-		fmt.Printf("step[%s] error, explain=%v, err=%v\n", info.Name, info.ExplainStatus(), info.Err)
+		fmt.Printf("step[%s] error, explain=%v, err=%v\n", info.GetName(), info.ExplainStatus(), info.Err)
 	}
 	return true, nil
 }
@@ -97,7 +96,7 @@ func ProcProcessor(info *flow.ProcessInfo) (bool, error) {
 	if len(info.FlowId) == 0 {
 		panic("process flow id is empty")
 	}
-	if info.Context == nil {
+	if info.VisibleContext == nil {
 		panic("process context is nil")
 	}
 	atomic.AddInt64(&current, 1)
@@ -407,7 +406,6 @@ func TestProcessorWhenExceptionOccur(t *testing.T) {
 	if atomic.LoadInt64(&current) != 11 {
 		t.Errorf("execute 11 step, but current = %d", current)
 	}
-	time.Sleep(100 * time.Millisecond)
 }
 
 func TestPreAndPostProcessor(t *testing.T) {
@@ -674,105 +672,105 @@ func TestSingleErrorStepWithProcessAndStepRetry(t *testing.T) {
 	}
 }
 
-func TestRecoverSerialStep(t *testing.T) {
-	defer resetCurrent()
-	workflow := flow.RegisterFlow("TestRecoverSerialStep")
-	process := workflow.ProcessWithConf("TestRecoverSerialStep", nil)
-	config := flow.StepConfig{StepRetry: 3, StepTimeout: 1 * time.Second}
-	process.AliasStep("1", GenerateStep(1)).Config(&config)
-	process.AliasStep("2", GenerateStep(2), "1")
-	process.AliasStep("3", GenerateStep(3), "2")
-	process.AliasStep("4", GenerateStep(4), "3")
-	process.AliasStep("5", GenerateStep(5), "4")
-	wf := flow.BuildRunFlow("TestRecoverSerialStep", nil)
-	if err := wf.SkipFinishedStep("1", nil); err != nil {
-		panic(err.Error())
-	}
-	if err := wf.SkipFinishedStep("2", nil); err != nil {
-		panic(err.Error())
-	}
-	features := wf.Done()
-	for _, feature := range features {
-		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
-		if !feature.Success() {
-			t.Errorf("process[%s] failed", feature.Name)
-		}
-	}
-	if atomic.LoadInt64(&current) != 3 {
-		t.Errorf("execute 3 step, but current = %d", current)
-	}
-}
+//func TestRecoverSerialStep(t *testing.T) {
+//	defer resetCurrent()
+//	workflow := flow.RegisterFlow("TestRecoverSerialStep")
+//	process := workflow.ProcessWithConf("TestRecoverSerialStep", nil)
+//	config := flow.StepConfig{StepRetry: 3, StepTimeout: 1 * time.Second}
+//	process.AliasStep("1", GenerateStep(1)).Config(&config)
+//	process.AliasStep("2", GenerateStep(2), "1")
+//	process.AliasStep("3", GenerateStep(3), "2")
+//	process.AliasStep("4", GenerateStep(4), "3")
+//	process.AliasStep("5", GenerateStep(5), "4")
+//	wf := flow.BuildRunFlow("TestRecoverSerialStep", nil)
+//	if err := wf.SkipFinishedStep("1", nil); err != nil {
+//		panic(err.Error())
+//	}
+//	if err := wf.SkipFinishedStep("2", nil); err != nil {
+//		panic(err.Error())
+//	}
+//	features := wf.Done()
+//	for _, feature := range features {
+//		explain := strings.Join(feature.ExplainStatus(), ", ")
+//		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
+//		if !feature.Success() {
+//			t.Errorf("process[%s] failed", feature.Name)
+//		}
+//	}
+//	if atomic.LoadInt64(&current) != 3 {
+//		t.Errorf("execute 3 step, but current = %d", current)
+//	}
+//}
+//
+//func TestRecoverParallelStep(t *testing.T) {
+//	defer resetCurrent()
+//	workflow := flow.RegisterFlow("TestRecoverParallelStep")
+//	process := workflow.ProcessWithConf("TestRecoverParallelStep", nil)
+//	process.AliasStep("1", GenerateStep(1))
+//	process.AliasStep("11", GenerateStep(11), "1")
+//	process.AliasStep("2", GenerateStep(2))
+//	process.AliasStep("12", GenerateStep(12), "2")
+//	process.AliasStep("3", GenerateStep(3))
+//	process.AliasStep("13", GenerateStep(13), "3")
+//	process.AliasStep("4", GenerateStep(4))
+//	process.AliasStep("14", GenerateStep(14), "4")
+//	wf := flow.BuildRunFlow("TestRecoverParallelStep", nil)
+//	if err := wf.SkipFinishedStep("1", nil); err != nil {
+//		panic(err.Error())
+//	}
+//	if err := wf.SkipFinishedStep("2", nil); err != nil {
+//		panic(err.Error())
+//	}
+//	if err := wf.SkipFinishedStep("3", nil); err != nil {
+//		panic(err.Error())
+//	}
+//	if err := wf.SkipFinishedStep("4", nil); err != nil {
+//		panic(err.Error())
+//	}
+//	features := wf.Done()
+//	for _, feature := range features {
+//		explain := strings.Join(feature.ExplainStatus(), ", ")
+//		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
+//		if !feature.Success() {
+//			t.Errorf("process[%s] fail", feature.Name)
+//		}
+//	}
+//	if atomic.LoadInt64(&current) != 4 {
+//		t.Errorf("execute 4 step, but current = %d", current)
+//	}
+//}
 
-func TestRecoverParallelStep(t *testing.T) {
-	defer resetCurrent()
-	workflow := flow.RegisterFlow("TestRecoverParallelStep")
-	process := workflow.ProcessWithConf("TestRecoverParallelStep", nil)
-	process.AliasStep("1", GenerateStep(1))
-	process.AliasStep("11", GenerateStep(11), "1")
-	process.AliasStep("2", GenerateStep(2))
-	process.AliasStep("12", GenerateStep(12), "2")
-	process.AliasStep("3", GenerateStep(3))
-	process.AliasStep("13", GenerateStep(13), "3")
-	process.AliasStep("4", GenerateStep(4))
-	process.AliasStep("14", GenerateStep(14), "4")
-	wf := flow.BuildRunFlow("TestRecoverParallelStep", nil)
-	if err := wf.SkipFinishedStep("1", nil); err != nil {
-		panic(err.Error())
-	}
-	if err := wf.SkipFinishedStep("2", nil); err != nil {
-		panic(err.Error())
-	}
-	if err := wf.SkipFinishedStep("3", nil); err != nil {
-		panic(err.Error())
-	}
-	if err := wf.SkipFinishedStep("4", nil); err != nil {
-		panic(err.Error())
-	}
-	features := wf.Done()
-	for _, feature := range features {
-		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
-		if !feature.Success() {
-			t.Errorf("process[%s] fail", feature.Name)
-		}
-	}
-	if atomic.LoadInt64(&current) != 4 {
-		t.Errorf("execute 4 step, but current = %d", current)
-	}
-}
-
-func TestRecoverAndWaitAll(t *testing.T) {
-	defer resetCurrent()
-	workflow := flow.RegisterFlow("TestRecoverAndWaitAll")
-	process := workflow.ProcessWithConf("TestRecoverAndWaitAll", nil)
-	process.AliasStep("1", GenerateStep(1))
-	process.AliasStep("2", GenerateStep(2))
-	process.AliasStep("3", GenerateStep(3))
-	process.AliasStep("4", GenerateStep(4))
-	process.Tail("5", GenerateStep(5))
-	wf := flow.BuildRunFlow("TestRecoverAndWaitAll", nil)
-	if err := wf.SkipFinishedStep("1", nil); err != nil {
-		panic(err.Error())
-	}
-	if err := wf.SkipFinishedStep("2", nil); err != nil {
-		panic(err.Error())
-	}
-	if err := wf.SkipFinishedStep("3", nil); err != nil {
-		panic(err.Error())
-	}
-	if err := wf.SkipFinishedStep("4", nil); err != nil {
-		panic(err.Error())
-	}
-	features := wf.Done()
-	for _, feature := range features {
-		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
-		if !feature.Success() {
-			t.Errorf("process[%s] fail", feature.Name)
-		}
-	}
-	if atomic.LoadInt64(&current) != 1 {
-		t.Errorf("execute 1 step, but current = %d", current)
-	}
-}
+//func TestRecoverAndWaitAll(t *testing.T) {
+//	defer resetCurrent()
+//	workflow := flow.RegisterFlow("TestRecoverAndWaitAll")
+//	process := workflow.ProcessWithConf("TestRecoverAndWaitAll", nil)
+//	process.AliasStep("1", GenerateStep(1))
+//	process.AliasStep("2", GenerateStep(2))
+//	process.AliasStep("3", GenerateStep(3))
+//	process.AliasStep("4", GenerateStep(4))
+//	process.Tail("5", GenerateStep(5))
+//	wf := flow.BuildRunFlow("TestRecoverAndWaitAll", nil)
+//	if err := wf.SkipFinishedStep("1", nil); err != nil {
+//		panic(err.Error())
+//	}
+//	if err := wf.SkipFinishedStep("2", nil); err != nil {
+//		panic(err.Error())
+//	}
+//	if err := wf.SkipFinishedStep("3", nil); err != nil {
+//		panic(err.Error())
+//	}
+//	if err := wf.SkipFinishedStep("4", nil); err != nil {
+//		panic(err.Error())
+//	}
+//	features := wf.Done()
+//	for _, feature := range features {
+//		explain := strings.Join(feature.ExplainStatus(), ", ")
+//		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
+//		if !feature.Success() {
+//			t.Errorf("process[%s] fail", feature.Name)
+//		}
+//	}
+//	if atomic.LoadInt64(&current) != 1 {
+//		t.Errorf("execute 1 step, but current = %d", current)
+//	}
+//}

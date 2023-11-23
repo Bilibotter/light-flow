@@ -18,7 +18,7 @@ func NewRoutineUnsafeSet[T comparable]() *Set[T] {
 	return s
 }
 
-func CreateFromSliceFunc[T any, K comparable](src []T, transfer func(T) K) *Set[K] {
+func CreateSetBySliceFunc[T any, K comparable](src []T, transfer func(T) K) *Set[K] {
 	result := NewRoutineUnsafeSet[K]()
 	for _, ele := range src {
 		result.Add(transfer(ele))

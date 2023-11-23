@@ -14,15 +14,17 @@ const (
 
 type ProcessMeta struct {
 	*ProcessConfig
+	*Visitor
 	init        sync.Once
 	processName string
 	steps       map[string]*StepMeta
 	tailStep    string
+	nodeNum     int
 }
 
 type ProcessInfo struct {
 	*BasicInfo
-	*Context
+	*VisibleContext
 	FlowId string
 }
 
@@ -105,6 +107,7 @@ func (pm *ProcessMeta) register() {
 
 func (pm *ProcessMeta) initialize() {
 	pm.init.Do(func() {
+		pm.completeVisitorInfo()
 		if pm.notUseDefault {
 			return
 		}
@@ -119,13 +122,22 @@ func (pm *ProcessMeta) initialize() {
 	})
 }
 
+func (pm *ProcessMeta) completeVisitorInfo() {
+	for _, step := range pm.sortedStep() {
+		for _, waiter := range step.waiters {
+			waiter.Visible = step.Visible | waiter.Visible
+		}
+	}
+	return
+}
+
 func (pm *ProcessMeta) Merge(name string) {
 	wrap, exist := allProcess.Load(name)
 	if !exist {
 		panic(fmt.Sprintf("can't merge not exist process[%s]", name))
 	}
 	mergedProcess := wrap.(*ProcessMeta)
-	for _, merge := range mergedProcess.sortedStepMeta() {
+	for _, merge := range mergedProcess.sortedStep() {
 		if _, exist = pm.steps[merge.stepName]; exist {
 			pm.mergeStep(merge)
 			continue
@@ -142,15 +154,15 @@ func (pm *ProcessMeta) Merge(name string) {
 func (pm *ProcessMeta) mergeStep(merge *StepMeta) {
 	target := pm.steps[merge.stepName]
 
-	for k, v := range merge.ctxPriority {
-		if _, exist := target.ctxPriority[k]; exist {
+	for k, v := range merge.priority {
+		if _, exist := target.priority[k]; exist {
 			continue
 		}
-		target.ctxPriority[k] = v
+		target.priority[k] = v
 	}
 
 	// create a set contains all depended on target flowName
-	current := CreateFromSliceFunc[*StepMeta](target.depends,
+	current := CreateSetBySliceFunc[*StepMeta](target.depends,
 		func(meta *StepMeta) string { return meta.stepName })
 
 	stepNames := make([]string, 0, len(merge.depends))
@@ -191,11 +203,11 @@ func (pm *ProcessMeta) updateWaitersLayer(step *StepMeta) {
 	}
 }
 
-func (pm *ProcessMeta) Step(run func(ctx *Context) (any, error), depends ...any) *StepMeta {
+func (pm *ProcessMeta) Step(run func(ctx Context) (any, error), depends ...any) *StepMeta {
 	return pm.AliasStep(GetFuncName(run), run, depends...)
 }
 
-func (pm *ProcessMeta) Tail(alias string, run func(ctx *Context) (any, error)) *StepMeta {
+func (pm *ProcessMeta) Tail(alias string, run func(ctx Context) (any, error)) *StepMeta {
 	depends := make([]any, 0)
 	for name, step := range pm.steps {
 		if step.Contain(End) {
@@ -206,7 +218,7 @@ func (pm *ProcessMeta) Tail(alias string, run func(ctx *Context) (any, error)) *
 	return pm.AliasStep(alias, run, depends...)
 }
 
-func (pm *ProcessMeta) AliasStep(alias string, run func(ctx *Context) (any, error), depends ...any) *StepMeta {
+func (pm *ProcessMeta) AliasStep(alias string, run func(ctx Context) (any, error), depends ...any) *StepMeta {
 	meta := &StepMeta{stepName: alias}
 	for _, wrap := range depends {
 		name := toStepName(wrap)
@@ -230,6 +242,7 @@ func (pm *ProcessMeta) AliasStep(alias string, run func(ctx *Context) (any, erro
 	meta.run = run
 	meta.layer = 1
 	meta.wireDepends()
+	pm.addVisitorInfo(meta)
 
 	pm.tailStep = meta.stepName
 	pm.steps[alias] = meta
@@ -241,7 +254,20 @@ func (pm *ProcessMeta) NotUseDefault() {
 	pm.notUseDefault = true
 }
 
-func (pm *ProcessMeta) sortedStepMeta() []*StepMeta {
+func (pm *ProcessMeta) addVisitorInfo(step *StepMeta) {
+	if pm.nodeNum == 63 {
+		panic(fmt.Sprintf("step[%s] exceeds max nodes num, max node num is 63", step.stepName))
+	}
+	step.Visitor = &Visitor{
+		Visible: 1 << pm.nodeNum,
+		Index:   int32(pm.nodeNum),
+		roster:  pm.roster,
+	}
+	pm.roster[step.Index] = step.stepName
+	pm.nodeNum++
+}
+
+func (pm *ProcessMeta) sortedStep() []*StepMeta {
 	steps := make([]*StepMeta, 0, len(pm.steps))
 	for _, step := range pm.steps {
 		steps = append(steps, step)

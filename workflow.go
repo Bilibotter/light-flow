@@ -46,6 +46,7 @@ type Configuration struct {
 
 type FlowMeta struct {
 	*FlowConfig
+	*Visitor
 	init         sync.Once
 	flowName     string
 	noUseDefault bool
@@ -59,7 +60,7 @@ type FlowConfig struct {
 type RunFlow struct {
 	*FlowMeta
 	*BasicInfo
-	*Context
+	*VisibleContext
 	processes []*RunProcess
 	features  []*Feature
 	lock      sync.Mutex
@@ -68,7 +69,7 @@ type RunFlow struct {
 
 type FlowInfo struct {
 	*BasicInfo
-	*Context
+	*VisibleContext
 }
 
 func init() {
@@ -91,6 +92,11 @@ func CreateDefaultConfig() *Configuration {
 
 func RegisterFlow(name string) *FlowMeta {
 	flow := FlowMeta{
+		Visitor: &Visitor{
+			Index:   int32(visibleAll),
+			Visible: visibleAll,
+			roster:  map[int32]string{int32(visibleAll): name},
+		},
 		FlowConfig: &FlowConfig{&CallbackChain[*FlowInfo]{}},
 		flowName:   name,
 		init:       sync.Once{},
@@ -201,19 +207,15 @@ func (fm *FlowMeta) NotUseDefault() *FlowMeta {
 }
 
 func (fm *FlowMeta) BuildRunFlow(input map[string]any) *RunFlow {
-	context := Context{
-		name:      WorkflowCtx + fm.flowName,
-		scopes:    []string{WorkflowCtx},
-		scopeCtxs: make(map[string]*Context),
-		table:     &sync.Map{},
-		priority:  make(map[string]string),
+	table := &AdjacencyTable{
+		lock:  &sync.RWMutex{},
+		nodes: make(map[string]*Node, len(input)),
 	}
-
-	for k, v := range input {
-		context.table.Store(k, v)
-	}
-
 	rf := RunFlow{
+		VisibleContext: &VisibleContext{
+			AdjacencyTable: table,
+			Visitor:        fm.Visitor,
+		},
 		BasicInfo: &BasicInfo{
 			Status: emptyStatus(),
 			Name:   fm.flowName,
@@ -221,13 +223,17 @@ func (fm *FlowMeta) BuildRunFlow(input map[string]any) *RunFlow {
 		},
 		FlowMeta:  fm,
 		lock:      sync.Mutex{},
-		Context:   &context,
 		processes: make([]*RunProcess, 0, len(fm.processes)),
 		finish:    sync.WaitGroup{},
 	}
 
+	for k, v := range input {
+		rf.Set(k, v)
+	}
+
 	for _, processMeta := range fm.processes {
-		rf.processes = append(rf.processes, rf.buildRunProcess(processMeta))
+		process := rf.buildRunProcess(processMeta)
+		rf.processes = append(rf.processes, process)
 	}
 
 	return &rf
@@ -254,6 +260,11 @@ func (fm *FlowMeta) ProcessWithConf(name string, conf *ProcessConfig) *ProcessMe
 	}
 
 	pm := ProcessMeta{
+		Visitor: &Visitor{
+			Visible: 0,
+			Index:   0,
+			roster:  map[int32]string{0: name},
+		},
 		ProcessConfig: conf,
 		processName:   name,
 		init:          sync.Once{},
@@ -267,31 +278,35 @@ func (fm *FlowMeta) ProcessWithConf(name string, conf *ProcessConfig) *ProcessMe
 }
 
 func (rf *RunFlow) buildRunProcess(meta *ProcessMeta) *RunProcess {
-	pcsCtx := Context{
-		name:   ProcessCtx + meta.processName,
-		scopes: []string{ProcessCtx},
-		table:  &sync.Map{},
+	table := &AdjacencyTable{
+		lock:  &sync.RWMutex{},
+		nodes: map[string]*Node{},
 	}
-
 	process := RunProcess{
+		VisibleContext: &VisibleContext{
+			parent:         rf.VisibleContext,
+			Visitor:        meta.Visitor,
+			AdjacencyTable: table,
+		},
 		Status:      emptyStatus(),
 		ProcessMeta: meta,
-		Context:     &pcsCtx,
 		id:          generateId(),
 		flowId:      rf.Id,
 		flowSteps:   make(map[string]*RunStep),
-		pcsScope:    map[string]*Context{ProcessCtx: &pcsCtx},
 		pause:       sync.WaitGroup{},
 		running:     sync.WaitGroup{},
 		finish:      sync.WaitGroup{},
 	}
-	pcsCtx.scopeCtxs = process.pcsScope
-	pcsCtx.parents = append(pcsCtx.parents, rf.Context)
 
-	for _, stepMeta := range meta.sortedStepMeta() {
-		process.buildRunStep(stepMeta)
+	stepTable := &AdjacencyTable{
+		lock:  &sync.RWMutex{},
+		nodes: map[string]*Node{},
 	}
-
+	for _, stepMeta := range meta.sortedStep() {
+		runStep := process.buildRunStep(stepMeta)
+		runStep.AdjacencyTable = stepTable
+		process.flowSteps[stepMeta.stepName] = runStep
+	}
 	process.running.Add(len(process.flowSteps))
 
 	return &process
@@ -328,7 +343,7 @@ func (rf *RunFlow) Flow() []*Feature {
 			Id:     rf.Id,
 			Name:   rf.flowName,
 		},
-		Context: rf.Context,
+		VisibleContext: rf.VisibleContext,
 	}
 	if rf.FlowConfig != nil && rf.FlowConfig.CallbackChain != nil {
 		rf.process(Before, info)
@@ -358,23 +373,6 @@ func (rf *RunFlow) Flow() []*Feature {
 	}()
 
 	return features
-}
-
-func (rf *RunFlow) SkipFinishedStep(name string, result any) error {
-	count := 0
-	for _, process := range rf.processes {
-		if exist := process.SkipFinishedStep(name, result); exist {
-			count += 1
-		}
-	}
-
-	if count > 1 {
-		return fmt.Errorf("duplicate step [%s] found in workflow", name)
-	}
-	if count == 0 {
-		return fmt.Errorf("step [%s] not found in workflow", name)
-	}
-	return nil
 }
 
 func (rf *RunFlow) Fails() []*Feature {

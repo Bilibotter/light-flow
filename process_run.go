@@ -10,12 +10,11 @@ import (
 
 type RunProcess struct {
 	*ProcessMeta
-	*Context
+	*VisibleContext
 	*Status
 	id        string
 	flowId    string
 	flowSteps map[string]*RunStep
-	pcsScope  map[string]*Context
 	pause     sync.WaitGroup
 	running   sync.WaitGroup
 	finish    sync.WaitGroup
@@ -23,6 +22,10 @@ type RunProcess struct {
 
 func (rp *RunProcess) buildRunStep(meta *StepMeta) *RunStep {
 	step := RunStep{
+		VisibleContext: &VisibleContext{
+			parent:  rp.VisibleContext,
+			Visitor: meta.Visitor,
+		},
 		Status:    emptyStatus(),
 		StepMeta:  meta,
 		id:        generateId(),
@@ -30,22 +33,10 @@ func (rp *RunProcess) buildRunStep(meta *StepMeta) *RunStep {
 		flowId:    rp.flowId,
 		waiting:   int64(len(meta.depends)),
 		finish:    make(chan bool, 1),
-		Context: &Context{
-			name:      meta.stepName,
-			scopes:    []string{ProcessCtx},
-			scopeCtxs: rp.pcsScope,
-			priority:  meta.ctxPriority,
-		},
 	}
 
 	rp.flowSteps[meta.stepName] = &step
-	rp.pcsScope[meta.stepName] = step.Context
 
-	for _, depend := range meta.depends {
-		parent := step.scopeCtxs[depend.stepName]
-		step.parents = append(step.parents, parent)
-	}
-	step.parents = append(step.parents, rp.Context)
 	return &step
 }
 
@@ -95,7 +86,7 @@ func (rp *RunProcess) flow() *Feature {
 func (rp *RunProcess) scheduleStep(step *RunStep) {
 	defer rp.scheduleNextSteps(step)
 
-	if _, finish := step.GetStepResult(step.stepName); finish {
+	if _, finish := step.GetResult(step.stepName); finish {
 		step.Append(Success)
 		return
 	}
@@ -217,7 +208,7 @@ func (rp *RunProcess) runStep(step *RunStep) {
 	}()
 
 	for i := 0; i < retry; i++ {
-		result, err := step.run(step.Context)
+		result, err := step.run(step)
 		step.End = time.Now().UTC()
 		step.Err = err
 		if err != nil {
@@ -226,7 +217,7 @@ func (rp *RunProcess) runStep(step *RunStep) {
 			continue
 		}
 		if result != nil {
-			rp.setStepResult(step.stepName, result)
+			step.setResult(step.stepName, result)
 		}
 		step.Append(Success)
 		break
@@ -249,7 +240,7 @@ func (rp *RunProcess) procCallback(flag string) {
 	}
 
 	info := &ProcessInfo{
-		Context: rp.Context,
+		VisibleContext: rp.VisibleContext,
 		BasicInfo: &BasicInfo{
 			Status: rp.Status,
 			Id:     rp.id,
@@ -272,14 +263,14 @@ func (rp *RunProcess) summaryStepInfo(step *RunStep) *StepInfo {
 			Id:     step.id,
 			Name:   step.stepName,
 		},
-		Context:   step.Context,
-		ProcessId: step.processId,
-		FlowId:    step.flowId,
-		Start:     step.Start,
-		End:       step.End,
-		Err:       step.Err,
-		Prev:      make(map[string]string, len(step.depends)),
-		Next:      make(map[string]string, len(step.waiters)),
+		VisibleContext: step.VisibleContext,
+		ProcessId:      step.processId,
+		FlowId:         step.flowId,
+		Start:          step.Start,
+		End:            step.End,
+		Err:            step.Err,
+		Prev:           make(map[string]string, len(step.depends)),
+		Next:           make(map[string]string, len(step.waiters)),
 	}
 	for _, prev := range step.depends {
 		info.Prev[prev.stepName] = rp.flowSteps[prev.stepName].id
@@ -291,13 +282,4 @@ func (rp *RunProcess) summaryStepInfo(step *RunStep) *StepInfo {
 
 	step.infoCache = info
 	return info
-}
-
-func (rp *RunProcess) SkipFinishedStep(name string, result any) bool {
-	if _, exist := rp.flowSteps[name]; !exist {
-		return false
-	}
-
-	rp.setStepResult(name, result)
-	return true
 }

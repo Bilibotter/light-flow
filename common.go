@@ -8,11 +8,9 @@ import (
 	"sync/atomic"
 )
 
-// these constants are used to indicate the scope of the context
-const (
-	InternalPrefix = "::"
-	WorkflowCtx    = "Flow::"
-	ProcessCtx     = "Proc::"
+var (
+	visibleAll = Status(0)
+	resultMark = Status(-1)
 )
 
 // these constants are used to indicate the position of the process
@@ -60,6 +58,14 @@ type BasicInfoI interface {
 	GetName() string
 }
 
+type Context interface {
+	QueryName() string
+	Get(key string) (value any, exist bool)
+	GetAll(key string) map[string]any
+	GetResult(key string) (value any, exist bool)
+	Set(key string, value any)
+}
+
 type StatusEnum struct {
 	flag Status
 	msg  string
@@ -85,13 +91,29 @@ type Callback[T BasicInfoI] struct {
 	run func(info T) (keepOn bool, err error)
 }
 
-type Context struct {
-	name      string
-	table     *sync.Map // current node's context
-	parents   []*Context
-	scopes    []string // todo use scope to provide more connect and isolate
-	scopeCtxs map[string]*Context
-	priority  map[string]string
+type VisibleContext struct {
+	*AdjacencyTable
+	*Visitor
+	parent *VisibleContext
+}
+
+type Visitor struct {
+	roster   map[int32]string // Index to name
+	priority map[string]int32 // specify the  key to Index
+	Index    int32
+	Visible  Status
+}
+
+type AdjacencyTable struct {
+	lock  *sync.RWMutex
+	nodes map[string]*Node
+}
+
+type Node struct {
+	Index   int32  // used to identify a node
+	Visible Status // combine current node connected node's index, corresponding bit will be set to 1
+	Value   any
+	Next    *Node
 }
 
 type Feature struct {
@@ -101,19 +123,23 @@ type Feature struct {
 }
 
 func emptyStatus() *Status {
-	s := Status(0)
+	return createStatus(0)
+}
+
+func createStatus(i int64) *Status {
+	s := Status(i)
 	return &s
 }
 
 func toStepName(value any) string {
 	var result string
 	switch value.(type) {
-	case func(ctx *Context) (any, error):
+	case func(ctx Context) (any, error):
 		result = GetFuncName(value)
 	case string:
 		result = value.(string)
 	default:
-		panic("value must be func(ctx *Context) (any, error) or string")
+		panic("value must be func(ctx Context) (any, error) or string")
 	}
 	return result
 }
@@ -131,6 +157,10 @@ func (s *Status) Normal() bool {
 func (s *Status) Contain(enum *StatusEnum) bool {
 	// can't use s.load()&enum.flag != 0, because enum.flag may be 0
 	return s.load()&enum.flag == enum.flag
+}
+
+func (s *Status) contain(flag Status) bool {
+	return s.load()&flag == flag
 }
 
 // Exceptions return contain exception's message
@@ -196,6 +226,15 @@ func (s *Status) Pop(enum *StatusEnum) bool {
 func (s *Status) Append(enum *StatusEnum) bool {
 	for current := s.load(); !current.Contain(enum); current = s.load() {
 		if s.cas(current, current|enum.flag) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Status) append(flag Status) bool {
+	for current := s.load(); !current.contain(flag); current = s.load() {
+		if s.cas(current, current|flag) {
 			return true
 		}
 	}
@@ -287,7 +326,7 @@ func (cc *CallbackChain[T]) process(flag string, info T) string {
 }
 
 func (c *Callback[T]) NotFor(name ...string) *Callback[T] {
-	s := CreateFromSliceFunc(name, func(value string) string { return value })
+	s := CreateSetBySliceFunc(name, func(value string) string { return value })
 	old := c.run
 	f := func(info T) (bool, error) {
 		if s.Contains(info.GetName()) {
@@ -301,7 +340,7 @@ func (c *Callback[T]) NotFor(name ...string) *Callback[T] {
 }
 
 func (c *Callback[T]) OnlyFor(name ...string) *Callback[T] {
-	s := CreateFromSliceFunc(name, func(value string) string { return value })
+	s := CreateSetBySliceFunc(name, func(value string) string { return value })
 	old := c.run
 	f := func(info T) (bool, error) {
 		if !s.Contains(info.GetName()) {
@@ -360,99 +399,146 @@ func (c *Callback[T]) call(flag string, info T) (keepOn bool, err error, panicSt
 	return
 }
 
-func (ctx *Context) GetCtxName() string {
-	return ctx.name
+// Set method sets the value associated with the given key in own context.
+func (t *AdjacencyTable) set(num int32, visible Status, key string, value any) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+	node := &Node{
+		Index:   num,
+		Value:   value,
+		Visible: visible.load(),
+		Next:    t.nodes[key],
+	}
+	t.nodes[key] = node
 }
 
-// Set method sets the value associated with the given key in own context.
-func (ctx *Context) Set(key string, value any) {
-	if ctx.table == nil {
-		ctx.table = &sync.Map{}
+func (t *AdjacencyTable) find(num int32, key string) (any, bool) {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+	node, exist := t.nodes[key]
+	if !exist {
+		return nil, false
 	}
-	ctx.table.Store(key, value)
+	return node.searchByIndex(num)
 }
 
 // Get method retrieves the value associated with the given key from the context path.
 // The method first checks the priority context, then own context, finally parents context.
 // Returns the value associated with the key (if found) and a boolean indicating its presence.
-func (ctx *Context) Get(key string) (any, bool) {
-	s := NewRoutineUnsafeSet[string]()
-	return ctx.search(key, s)
-}
-
-func (ctx *Context) search(key string, prev *Set[string]) (any, bool) {
-	if prev.Contains(ctx.name) {
-		return nil, false
-	}
-	prev.Add(ctx.name)
-	if target, find := ctx.getByPriority(key); find {
-		return target, true
-	}
-
-	if ctx.table != nil {
-		if used, exist := ctx.table.Load(key); exist {
-			return used, true
+func (t *AdjacencyTable) get(visible Status, key string) (any, bool) {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+	if node, exist := t.nodes[key]; exist {
+		if value, find := node.search(visible); find {
+			return value, find
 		}
 	}
-
-	for _, parent := range ctx.parents {
-		used, exist := parent.search(key, prev)
-		if exist {
-			return used, exist
-		}
-	}
-
 	return nil, false
 }
 
-func (ctx *Context) GetAll(key string) map[string]any {
-	saved := make(map[string]any)
-	ctx.getAll(key, saved)
-	return saved
-}
-
-func (ctx *Context) getAll(key string, saved map[string]any) {
-	if _, visited := saved[key]; visited {
-		return
-	}
-
-	if ctx.table != nil {
-		if value, exist := ctx.table.Load(key); exist {
-			saved[ctx.GetCtxName()] = value
-		}
-	}
-
-	for _, parent := range ctx.parents {
-		parent.getAll(key, saved)
-	}
-}
-
-// Exposed method exposes a key-value pair to the scope,
-// so that units within the scope (steps in the process) can access it.
-func (ctx *Context) Exposed(key string, value any) {
-	ctx.scopeCtxs[ProcessCtx].Set(key, value)
-}
-
-// GetStepResult method retrieves the result of a step's execution.
-// Each time a step is executed,
-// its execution result is saved in the context of the process.
-// Use this method to retrieve the execution result of a step.
-func (ctx *Context) GetStepResult(name string) (any, bool) {
-	key := InternalPrefix + name
-	return ctx.scopeCtxs[ProcessCtx].Get(key)
-}
-
-func (ctx *Context) setStepResult(name string, value any) {
-	key := InternalPrefix + name
-	ctx.scopeCtxs[ProcessCtx].Set(key, value)
-}
-
-func (ctx *Context) getByPriority(key string) (any, bool) {
-	name, exist := ctx.priority[key]
+func (t *AdjacencyTable) getAll(visible Status, key string) map[int32]any {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+	node, exist := t.nodes[key]
 	if !exist {
+		return nil
+	}
+	all := make(map[int32]any)
+	for node != nil {
+		if visible.contain(node.Visible) {
+			all[node.Index] = node.Value
+		}
+		node = node.Next
+	}
+	return all
+}
+
+func (n *Node) searchByIndex(index int32) (any, bool) {
+	if n.Index == index {
+		return n.Value, true
+	}
+	if n.Next == nil {
 		return nil, false
 	}
-	return ctx.scopeCtxs[name].search(key, NewRoutineUnsafeSet[string]())
+	return n.Next.searchByIndex(index)
+}
+
+func (n *Node) search(visible Status) (any, bool) {
+	if visible.contain(n.Visible) {
+		return n.Value, true
+	}
+	if n.Next == nil {
+		return nil, false
+	}
+	return n.Next.search(visible)
+}
+
+func (vc *VisibleContext) QueryName() string {
+	return vc.roster[vc.Index]
+}
+
+func (vc *VisibleContext) Get(key string) (value any, exist bool) {
+	if index, match := vc.priority[key]; match {
+		return vc.find(index, key)
+	}
+	if value, exist = vc.get(vc.Visible, key); exist {
+		return
+	}
+	if vc.parent != nil {
+		return vc.parent.Get(key)
+	}
+	return nil, false
+}
+
+func (vc *VisibleContext) GetAll(key string) map[string]any {
+	find := vc.getAll(vc.Visible, key)
+	result := make(map[string]any, len(find))
+	for num, value := range find {
+		name, ok := vc.roster[num]
+		if !ok {
+			continue
+		}
+		// if set a value more than once, only the last value will be returned
+		if _, exist := result[name]; exist {
+			continue
+		}
+		result[name] = value
+	}
+	if vc.parent != nil {
+		for k, v := range vc.parent.GetAll(key) {
+			if _, exist := result[k]; !exist {
+				result[k] = v
+			}
+		}
+	}
+	return result
+}
+
+func (vc *VisibleContext) GetResult(key string) (value any, exist bool) {
+	vc.lock.RLock()
+	defer vc.lock.RUnlock()
+	head, find := vc.nodes[key]
+	if !find {
+		return nil, false
+	}
+	return head.search(resultMark)
+}
+
+func (vc *VisibleContext) setResult(key string, value any) {
+	vc.lock.Lock()
+	defer vc.lock.Unlock()
+	// set num and path to -1, so Get method will skip result
+	node := &Node{
+		Index:   -1,
+		Value:   value,
+		Visible: resultMark,
+		Next:    vc.nodes[key],
+	}
+	vc.nodes[key] = node
+}
+
+func (vc *VisibleContext) Set(key string, value any) {
+	vc.set(vc.Index, vc.Visible, key, value)
 }
 
 // Done method waits for the corresponding process to complete.

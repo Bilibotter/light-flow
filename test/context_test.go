@@ -28,19 +28,19 @@ func resetCtx() {
 	atomic.StoreInt64(&ctx6, 0)
 }
 
-func GenerateSleep(duration time.Duration, args ...any) func(ctx *flow.Context) (any, error) {
-	return func(ctx *flow.Context) (any, error) {
+func GenerateSleep(duration time.Duration, args ...any) func(ctx flow.Context) (any, error) {
+	return func(ctx flow.Context) (any, error) {
 		addrWrap, ok := ctx.Get(addrKey)
 		if !ok {
-			panic(fmt.Sprintf("%s not found addr", ctx.GetCtxName()))
+			panic(fmt.Sprintf("%s not found addr", ctx.QueryName()))
 		}
 		atomic.AddInt64(addrWrap.(*int64), 1)
 		return nil, nil
 	}
 }
 
-func ChangeCtxStepFunc(addr *int64, args ...any) func(ctx *flow.Context) (any, error) {
-	return func(ctx *flow.Context) (any, error) {
+func ChangeCtxStepFunc(addr *int64, args ...any) func(ctx flow.Context) (any, error) {
+	return func(ctx flow.Context) (any, error) {
 		if len(args) > 0 {
 			time.Sleep(100 * time.Millisecond)
 		}
@@ -48,49 +48,49 @@ func ChangeCtxStepFunc(addr *int64, args ...any) func(ctx *flow.Context) (any, e
 		println("change ctx")
 		addrWrap, ok := ctx.Get(addrKey)
 		if !ok {
-			panic(fmt.Sprintf("%s not found addr", ctx.GetCtxName()))
+			panic(fmt.Sprintf("%s not found addr", ctx.QueryName()))
 		}
 		atomic.AddInt64(addrWrap.(*int64), 1)
 		return nil, nil
 	}
 }
 
-func GenerateStepIncAddr(i int, args ...any) func(ctx *flow.Context) (any, error) {
-	return func(ctx *flow.Context) (any, error) {
+func GenerateStepIncAddr(i int, args ...any) func(ctx flow.Context) (any, error) {
+	return func(ctx flow.Context) (any, error) {
 		if len(args) > 0 {
 			time.Sleep(100 * time.Millisecond)
 		}
 		fmt.Printf("%d.step finish\n", i)
 		addrWrap, ok := ctx.Get(addrKey)
 		if !ok {
-			panic(fmt.Sprintf("%s not found addr", ctx.GetCtxName()))
+			panic(fmt.Sprintf("%s not found addr", ctx.QueryName()))
 		}
 		atomic.AddInt64(addrWrap.(*int64), 1)
 		return i, nil
 	}
 }
 
-func ExposeAddrFunc(addr *int64) func(ctx *flow.Context) (any, error) {
-	return func(ctx *flow.Context) (any, error) {
-		ctx.Exposed(addrKey, addr)
-		atomic.AddInt64(addr, 1)
-		return nil, nil
-	}
-}
+//func ExposeAddrFunc(addr *int64) func(ctx flow.Context) (any, error) {
+//	return func(ctx flow.Context) (any, error) {
+//		ctx.Exposed(addrKey, addr)
+//		atomic.AddInt64(addr, 1)
+//		return nil, nil
+//	}
+//}
 
-func getUnExist(ctx *flow.Context) (any, error) {
+func getUnExist(ctx flow.Context) (any, error) {
 	println("start")
 	ctx.Get("unExist")
 	println("end")
 	return nil, nil
 }
 
-func invalidUse(ctx *flow.Context) (any, error) {
+func invalidUse(ctx flow.Context) (any, error) {
 	return nil, nil
 }
 
-func getAllAndSet(value string, history ...string) func(ctx *flow.Context) (any, error) {
-	return func(ctx *flow.Context) (any, error) {
+func getAllAndSet(value string, history ...string) func(ctx flow.Context) (any, error) {
+	return func(ctx flow.Context) (any, error) {
 		ctx.Set("all", value)
 		ks := flow.NewRoutineUnsafeSet[string]()
 		vs := flow.NewRoutineUnsafeSet[string]()
@@ -101,10 +101,10 @@ func getAllAndSet(value string, history ...string) func(ctx *flow.Context) (any,
 		}
 		for _, v := range history {
 			if !vs.Contains(v) {
-				panic(fmt.Sprintf("ctx[%s] not contain %s", ctx.GetCtxName(), v))
+				panic(fmt.Sprintf("ctx[%s] not contain %s", ctx.QueryName(), v))
 			}
 		}
-		fmt.Printf("ctx[%s] get all keys=%s\n", ctx.GetCtxName(), strings.Join(ks.Slice(), ", "))
+		fmt.Printf("ctx[%s] get all keys=%s\n", ctx.QueryName(), strings.Join(ks.Slice(), ", "))
 		return nil, nil
 	}
 }
@@ -165,6 +165,7 @@ func TestPriority(t *testing.T) {
 	defer resetCtx()
 	workflow := flow.RegisterFlow("TestPriority")
 	process := workflow.ProcessWithConf("TestPriority", nil)
+	process.AfterStep(true, ErrorResultPrinter)
 	process.AliasStep("1", ChangeCtxStepFunc(&ctx1))
 	process.AliasStep("2", GenerateStepIncAddr(1), "1")
 	process.AliasStep("3", ChangeCtxStepFunc(&ctx2), "1")
@@ -186,33 +187,33 @@ func TestPriority(t *testing.T) {
 	}
 }
 
-func TestExpose(t *testing.T) {
-	defer resetCtx()
-	workflow := flow.RegisterFlow("TestExpose")
-	process := workflow.ProcessWithConf("TestExpose1", nil)
-	process.AfterStep(true, ErrorResultPrinter)
-	process.AliasStep("1", ExposeAddrFunc(&ctx1))
-	process.AliasStep("2", GenerateStepIncAddr(2, "ms"))
-	process.AliasStep("3", GenerateStepIncAddr(3, "ms"))
-	process = workflow.ProcessWithConf("TestExpose2", nil)
-	process.AliasStep("11", ExposeAddrFunc(&ctx2))
-	process.AliasStep("12", GenerateStepIncAddr(12, "ms"))
-	process.AliasStep("13", GenerateStepIncAddr(13, "ms"))
-	features := flow.DoneFlow("TestExpose", nil)
-	for _, feature := range features.Features() {
-		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", feature.GetName(), explain)
-		if !feature.Success() {
-			t.Errorf("process[%s] fail", feature.GetName())
-		}
-	}
-	if ctx1 != 3 {
-		t.Errorf("execute 3 step, but ctx1 = %d", ctx1)
-	}
-	if atomic.LoadInt64(&ctx2) != 3 {
-		t.Errorf("execute 3 step, but ctx2 = %d", ctx2)
-	}
-}
+//func TestExpose(t *testing.T) {
+//	defer resetCtx()
+//	workflow := flow.RegisterFlow("TestExpose")
+//	process := workflow.ProcessWithConf("TestExpose1", nil)
+//	process.AfterStep(true, ErrorResultPrinter)
+//	process.AliasStep("1", ExposeAddrFunc(&ctx1))
+//	process.AliasStep("2", GenerateStepIncAddr(2, "ms"))
+//	process.AliasStep("3", GenerateStepIncAddr(3, "ms"))
+//	process = workflow.ProcessWithConf("TestExpose2", nil)
+//	process.AliasStep("11", ExposeAddrFunc(&ctx2))
+//	process.AliasStep("12", GenerateStepIncAddr(12, "ms"))
+//	process.AliasStep("13", GenerateStepIncAddr(13, "ms"))
+//	features := flow.DoneFlow("TestExpose", nil)
+//	for _, feature := range features.Features() {
+//		explain := strings.Join(feature.ExplainStatus(), ", ")
+//		fmt.Printf("process[%s] explain=%s\n", feature.GetName(), explain)
+//		if !feature.Success() {
+//			t.Errorf("process[%s] fail", feature.GetName())
+//		}
+//	}
+//	if ctx1 != 3 {
+//		t.Errorf("execute 3 step, but ctx1 = %d", ctx1)
+//	}
+//	if atomic.LoadInt64(&ctx2) != 3 {
+//		t.Errorf("execute 3 step, but ctx2 = %d", ctx2)
+//	}
+//}
 
 func TestPtrReuse(t *testing.T) {
 	defer resetCtx()

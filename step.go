@@ -6,20 +6,21 @@ import (
 )
 
 type StepMeta struct {
-	*Status
+	*Status // used to record the position of the step
 	*StepConfig
-	belong      *ProcessMeta
-	stepName    string
-	layer       int
-	depends     []*StepMeta // prev
-	waiters     []*StepMeta // next
-	ctxPriority map[string]string
-	run         func(ctx *Context) (any, error)
+	*Visitor
+	belong   *ProcessMeta
+	stepName string
+	layer    int
+	depends  []*StepMeta // prev
+	waiters  []*StepMeta // next
+	priority map[string]int32
+	run      func(ctx Context) (any, error)
 }
 
 type RunStep struct {
 	*StepMeta
-	*Context
+	*VisibleContext
 	*Status
 	id        string
 	flowId    string
@@ -34,7 +35,7 @@ type RunStep struct {
 
 type StepInfo struct {
 	*BasicInfo
-	*Context
+	*VisibleContext
 	ProcessId string
 	FlowId    string
 	Prev      map[string]string // prev step stepName to step id
@@ -53,7 +54,7 @@ func (si *StepInfo) Error() error {
 	return si.Err
 }
 
-func (meta *StepMeta) Next(run func(ctx *Context) (any, error), alias ...string) *StepMeta {
+func (meta *StepMeta) Next(run func(ctx Context) (any, error), alias ...string) *StepMeta {
 	if len(alias) == 1 {
 		return meta.belong.AliasStep(alias[0], run, meta.stepName)
 
@@ -61,7 +62,7 @@ func (meta *StepMeta) Next(run func(ctx *Context) (any, error), alias ...string)
 	return meta.belong.Step(run, meta.stepName)
 }
 
-func (meta *StepMeta) Same(run func(ctx *Context) (any, error), alias ...string) *StepMeta {
+func (meta *StepMeta) Same(run func(ctx Context) (any, error), alias ...string) *StepMeta {
 	depends := make([]any, 0, len(meta.depends))
 	for i := 0; i < len(meta.depends); i++ {
 		depends = append(depends, meta.depends[i].stepName)
@@ -73,11 +74,15 @@ func (meta *StepMeta) Same(run func(ctx *Context) (any, error), alias ...string)
 }
 
 func (meta *StepMeta) Priority(priority map[string]any) {
-	if meta.ctxPriority == nil {
-		meta.ctxPriority = make(map[string]string)
+	if meta.priority == nil {
+		meta.priority = make(map[string]int32, len(priority))
 	}
 	for key, stepName := range priority {
-		meta.ctxPriority[key] = toStepName(stepName)
+		step, exist := meta.belong.steps[toStepName(stepName)]
+		if !exist {
+			panic(fmt.Sprintf("can't find step[%s]", stepName))
+		}
+		meta.priority[key] = step.Index
 	}
 	meta.checkPriority()
 }
@@ -88,10 +93,9 @@ func (meta *StepMeta) wireDepends() {
 	}
 
 	for _, depend := range meta.depends {
-		for _, waiter := range depend.waiters {
-			if waiter.stepName == meta.stepName {
-				continue
-			}
+		wired := CreateSetBySliceFunc(depend.waiters, func(waiter *StepMeta) string { return waiter.stepName })
+		if wired.Contains(meta.stepName) {
+			continue
 		}
 		depend.waiters = append(depend.waiters, meta)
 		if depend.Contain(End) {
@@ -113,7 +117,8 @@ func (meta *StepMeta) wireDepends() {
 // checkPriority checks if the priority key corresponds to an existing step.
 // If not it will panic.
 func (meta *StepMeta) checkPriority() {
-	for _, stepName := range meta.ctxPriority {
+	for _, index := range meta.priority {
+		stepName := meta.roster[index]
 		if meta.backSearch(stepName) {
 			continue
 		}
