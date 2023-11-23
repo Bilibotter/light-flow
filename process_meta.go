@@ -13,8 +13,8 @@ const (
 )
 
 type ProcessMeta struct {
-	*ProcessConfig
-	*Visitor
+	processConfig
+	visitor
 	init        sync.Once
 	processName string
 	steps       map[string]*StepMeta
@@ -23,79 +23,77 @@ type ProcessMeta struct {
 }
 
 type ProcessInfo struct {
-	*BasicInfo
-	*VisibleContext
+	basicInfo
+	visibleContext
 	FlowId string
 }
 
-type ProcessConfig struct {
-	*StepConfig
-	ProcTimeout   time.Duration
+type processConfig struct {
+	stepConfig
+	procTimeout   time.Duration
 	notUseDefault bool
-	stepChain     *CallbackChain[*StepInfo]
-	procChain     *CallbackChain[*ProcessInfo]
+	stepChain     *callbackChain[*StepInfo]
+	procChain     *callbackChain[*ProcessInfo]
 }
 
-func NewProcessConfig() *ProcessConfig {
-	stepChain := &CallbackChain[*StepInfo]{}
-	procChain := &CallbackChain[*ProcessInfo]{}
-	config := &ProcessConfig{
-		StepConfig: &StepConfig{},
-		stepChain:  stepChain,
-		procChain:  procChain,
+func newProcessConfig() processConfig {
+	stepChain := &callbackChain[*StepInfo]{}
+	procChain := &callbackChain[*ProcessInfo]{}
+	config := processConfig{
+		stepChain: stepChain,
+		procChain: procChain,
 	}
 	return config
 }
 
-func (pc *ProcessConfig) merge(merged *ProcessConfig) *ProcessConfig {
+func (pc *processConfig) merge(merged *processConfig) *processConfig {
 	CopyPropertiesSkipNotEmpty(merged, pc)
 	if pc.stepChain == nil {
-		pc.stepChain = &CallbackChain[*StepInfo]{}
+		pc.stepChain = &callbackChain[*StepInfo]{}
 	}
 	if merged.stepChain != nil {
-		pc.stepChain.filters = append(merged.stepChain.CopyChain(), pc.stepChain.filters...)
+		pc.stepChain.filters = append(merged.stepChain.copyChain(), pc.stepChain.filters...)
 		pc.stepChain.maintain()
 	}
 	if pc.procChain == nil {
-		pc.procChain = &CallbackChain[*ProcessInfo]{}
+		pc.procChain = &callbackChain[*ProcessInfo]{}
 	}
 	if merged.procChain != nil {
-		pc.procChain.filters = append(merged.procChain.CopyChain(), pc.procChain.filters...)
+		pc.procChain.filters = append(merged.procChain.copyChain(), pc.procChain.filters...)
 		pc.procChain.maintain()
 	}
 	return pc
 }
 
-func (pc *ProcessConfig) StepsRetry(retry int) *ProcessConfig {
-	if pc.StepConfig == nil {
-		pc.StepConfig = &StepConfig{}
-	}
-	pc.StepConfig.StepRetry = retry
+func (pc *processConfig) ProcessTimeout(timeout time.Duration) *processConfig {
+	pc.procTimeout = timeout
 	return pc
 }
 
-func (pc *ProcessConfig) StepsTimeout(timeout time.Duration) *ProcessConfig {
-	if pc.StepConfig == nil {
-		pc.StepConfig = &StepConfig{}
-	}
-	pc.StepConfig.StepTimeout = timeout
+func (pc *processConfig) StepsRetry(retry int) *processConfig {
+	pc.stepConfig.stepRetry = retry
 	return pc
 }
 
-func (pc *ProcessConfig) BeforeStep(must bool, callback func(*StepInfo) (keepOn bool, err error)) *Callback[*StepInfo] {
-	return pc.stepChain.AddCallback(Before, must, callback)
+func (pc *processConfig) StepsTimeout(timeout time.Duration) *processConfig {
+	pc.stepConfig.stepTimeout = timeout
+	return pc
 }
 
-func (pc *ProcessConfig) AfterStep(must bool, callback func(*StepInfo) (keepOn bool, err error)) *Callback[*StepInfo] {
-	return pc.stepChain.AddCallback(After, must, callback)
+func (pc *processConfig) BeforeStep(must bool, callback func(*StepInfo) (keepOn bool, err error)) *callback[*StepInfo] {
+	return pc.stepChain.addCallback(Before, must, callback)
 }
 
-func (pc *ProcessConfig) BeforeProcess(must bool, callback func(*ProcessInfo) (keepOn bool, err error)) *Callback[*ProcessInfo] {
-	return pc.procChain.AddCallback(Before, must, callback)
+func (pc *processConfig) AfterStep(must bool, callback func(*StepInfo) (keepOn bool, err error)) *callback[*StepInfo] {
+	return pc.stepChain.addCallback(After, must, callback)
 }
 
-func (pc *ProcessConfig) AfterProcess(must bool, callback func(*ProcessInfo) (keepOn bool, err error)) *Callback[*ProcessInfo] {
-	return pc.procChain.AddCallback(After, must, callback)
+func (pc *processConfig) BeforeProcess(must bool, callback func(*ProcessInfo) (keepOn bool, err error)) *callback[*ProcessInfo] {
+	return pc.procChain.addCallback(Before, must, callback)
+}
+
+func (pc *processConfig) AfterProcess(must bool, callback func(*ProcessInfo) (keepOn bool, err error)) *callback[*ProcessInfo] {
+	return pc.procChain.addCallback(After, must, callback)
 }
 
 func (pm *ProcessMeta) register() {
@@ -111,21 +109,17 @@ func (pm *ProcessMeta) initialize() {
 		if pm.notUseDefault {
 			return
 		}
-		if defaultConfig == nil || defaultConfig.ProcessConfig == nil {
+		if defaultConfig == nil {
 			return
 		}
-		if pm.ProcessConfig == nil {
-			pm.ProcessConfig = defaultConfig.ProcessConfig
-			return
-		}
-		pm.ProcessConfig.merge(defaultConfig.ProcessConfig)
+		pm.processConfig.merge(&defaultConfig.processConfig)
 	})
 }
 
 func (pm *ProcessMeta) completeVisitorInfo() {
 	for _, step := range pm.sortedStep() {
 		for _, waiter := range step.waiters {
-			waiter.Visible = step.Visible | waiter.Visible
+			waiter.visible = step.visible | waiter.visible
 		}
 	}
 	return
@@ -147,7 +141,7 @@ func (pm *ProcessMeta) Merge(name string) {
 			depends = append(depends, depend.stepName)
 		}
 		step := pm.AliasStep(merge.stepName, merge.run, depends...)
-		step.Append(Merged)
+		step.position.Append(Merged)
 	}
 }
 
@@ -210,7 +204,7 @@ func (pm *ProcessMeta) Step(run func(ctx Context) (any, error), depends ...any) 
 func (pm *ProcessMeta) Tail(alias string, run func(ctx Context) (any, error)) *StepMeta {
 	depends := make([]any, 0)
 	for name, step := range pm.steps {
-		if step.Contain(End) {
+		if step.position.Contain(End) {
 			depends = append(depends, name)
 		}
 	}
@@ -219,7 +213,9 @@ func (pm *ProcessMeta) Tail(alias string, run func(ctx Context) (any, error)) *S
 }
 
 func (pm *ProcessMeta) AliasStep(alias string, run func(ctx Context) (any, error), depends ...any) *StepMeta {
-	meta := &StepMeta{stepName: alias}
+	meta := &StepMeta{
+		stepName: alias,
+	}
 	for _, wrap := range depends {
 		name := toStepName(wrap)
 		depend, exist := pm.steps[name]
@@ -230,7 +226,7 @@ func (pm *ProcessMeta) AliasStep(alias string, run func(ctx Context) (any, error
 	}
 
 	if old, exist := pm.steps[alias]; exist {
-		if !old.Contain(Merged) {
+		if !old.position.Contain(Merged) {
 			panic(fmt.Sprintf("step named [%s] already exist, can used %s to avoid stepName duplicate",
 				alias, GetFuncName(pm.AliasStep)))
 		}
@@ -255,15 +251,15 @@ func (pm *ProcessMeta) NotUseDefault() {
 }
 
 func (pm *ProcessMeta) addVisitorInfo(step *StepMeta) {
-	if pm.nodeNum == 63 {
-		panic(fmt.Sprintf("step[%s] exceeds max nodes num, max node num is 63", step.stepName))
+	if pm.nodeNum == 62 {
+		panic(fmt.Sprintf("step[%s] exceeds max nodes num, max node num is 62", step.stepName))
 	}
-	step.Visitor = &Visitor{
-		Visible: 1 << pm.nodeNum,
-		Index:   int32(pm.nodeNum),
+	step.visitor = visitor{
+		visible: 1 << pm.nodeNum,
+		index:   int32(pm.nodeNum),
 		roster:  pm.roster,
 	}
-	pm.roster[step.Index] = step.stepName
+	pm.roster[step.index] = step.stepName
 	pm.nodeNum++
 }
 

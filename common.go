@@ -10,7 +10,7 @@ import (
 
 var (
 	visibleAll = Status(0)
-	resultMark = Status(-1)
+	resultMark = Status(1 << 62)
 )
 
 // these constants are used to indicate the position of the process
@@ -71,17 +71,17 @@ type StatusEnum struct {
 	msg  string
 }
 
-type BasicInfo struct {
+type basicInfo struct {
 	*Status
 	Id   string
 	Name string
 }
 
-type CallbackChain[T BasicInfoI] struct {
-	filters []*Callback[T]
+type callbackChain[T BasicInfoI] struct {
+	filters []*callback[T]
 }
 
-type Callback[T BasicInfoI] struct {
+type callback[T BasicInfoI] struct {
 	// If must is false, the process will continue to execute
 	// even if the processor fails
 	must bool
@@ -91,34 +91,34 @@ type Callback[T BasicInfoI] struct {
 	run func(info T) (keepOn bool, err error)
 }
 
-type VisibleContext struct {
-	*AdjacencyTable
-	*Visitor
-	parent *VisibleContext
+type visibleContext struct {
+	adjacencyTable
+	*visitor // step visitor will update when initialize, so using pointer
+	parent   *visibleContext
 }
 
-type Visitor struct {
-	roster   map[int32]string // Index to name
-	priority map[string]int32 // specify the  key to Index
-	Index    int32
-	Visible  Status
+type visitor struct {
+	roster   map[int32]string // index to name
+	priority map[string]int32 // specify the  key to index
+	index    int32
+	visible  Status
 }
 
-type AdjacencyTable struct {
+type adjacencyTable struct {
 	lock  *sync.RWMutex
-	nodes map[string]*Node
+	nodes map[string]*node
 }
 
-type Node struct {
+type node struct {
 	Index   int32  // used to identify a node
 	Visible Status // combine current node connected node's index, corresponding bit will be set to 1
 	Value   any
-	Next    *Node
+	Next    *node
 }
 
-type Feature struct {
+type Future struct {
 	*Status
-	*BasicInfo
+	*basicInfo
 	finish *sync.WaitGroup
 }
 
@@ -262,39 +262,39 @@ func (s *StatusEnum) Message() string {
 	return s.msg
 }
 
-func (bi *BasicInfo) GetName() string {
+func (bi *basicInfo) GetName() string {
 	return bi.Name
 }
 
-func (bi *BasicInfo) addr() *Status {
+func (bi *basicInfo) addr() *Status {
 	return bi.Status
 }
 
-func (bi *BasicInfo) GetId() string {
+func (bi *basicInfo) GetId() string {
 	return bi.Id
 }
 
-func (cc *CallbackChain[T]) CopyChain() []*Callback[T] {
-	result := make([]*Callback[T], 0, len(cc.filters))
+func (cc *callbackChain[T]) copyChain() []*callback[T] {
+	result := make([]*callback[T], 0, len(cc.filters))
 	for _, filter := range cc.filters {
 		result = append(result, filter)
 	}
 	return result
 }
 
-func (cc *CallbackChain[T]) AddCallback(flag string, must bool, run func(info T) (bool, error)) *Callback[T] {
-	callback := &Callback[T]{
+func (cc *callbackChain[T]) addCallback(flag string, must bool, run func(info T) (bool, error)) *callback[T] {
+	filter := &callback[T]{
 		must: must,
 		flag: flag,
 		run:  run,
 	}
 
-	cc.filters = append(cc.filters, callback)
+	cc.filters = append(cc.filters, filter)
 	cc.maintain()
-	return callback
+	return filter
 }
 
-func (cc *CallbackChain[T]) maintain() {
+func (cc *callbackChain[T]) maintain() {
 	sort.SliceStable(cc.filters, func(i, j int) bool {
 		if cc.filters[i].must == cc.filters[j].must {
 			return i < j
@@ -304,7 +304,7 @@ func (cc *CallbackChain[T]) maintain() {
 }
 
 // don't want to raise error not deal hint, so return string
-func (cc *CallbackChain[T]) process(flag string, info T) string {
+func (cc *callbackChain[T]) process(flag string, info T) string {
 	for _, filter := range cc.filters {
 		keepOn, err, panicStack := filter.call(flag, info)
 		if keepOn {
@@ -325,7 +325,7 @@ func (cc *CallbackChain[T]) process(flag string, info T) string {
 	return ""
 }
 
-func (c *Callback[T]) NotFor(name ...string) *Callback[T] {
+func (c *callback[T]) NotFor(name ...string) *callback[T] {
 	s := CreateSetBySliceFunc(name, func(value string) string { return value })
 	old := c.run
 	f := func(info T) (bool, error) {
@@ -339,7 +339,7 @@ func (c *Callback[T]) NotFor(name ...string) *Callback[T] {
 	return c
 }
 
-func (c *Callback[T]) OnlyFor(name ...string) *Callback[T] {
+func (c *callback[T]) OnlyFor(name ...string) *callback[T] {
 	s := CreateSetBySliceFunc(name, func(value string) string { return value })
 	old := c.run
 	f := func(info T) (bool, error) {
@@ -353,7 +353,7 @@ func (c *Callback[T]) OnlyFor(name ...string) *Callback[T] {
 	return c
 }
 
-func (c *Callback[T]) When(status ...*StatusEnum) *Callback[T] {
+func (c *callback[T]) When(status ...*StatusEnum) *callback[T] {
 	old := c.run
 	f := func(info T) (bool, error) {
 		for _, match := range status {
@@ -367,7 +367,7 @@ func (c *Callback[T]) When(status ...*StatusEnum) *Callback[T] {
 	return c
 }
 
-func (c *Callback[T]) Exclude(status ...*StatusEnum) *Callback[T] {
+func (c *callback[T]) Exclude(status ...*StatusEnum) *callback[T] {
 	old := c.run
 	f := func(info T) (bool, error) {
 		for _, match := range status {
@@ -381,7 +381,7 @@ func (c *Callback[T]) Exclude(status ...*StatusEnum) *Callback[T] {
 	return c
 }
 
-func (c *Callback[T]) call(flag string, info T) (keepOn bool, err error, panicStack string) {
+func (c *callback[T]) call(flag string, info T) (keepOn bool, err error, panicStack string) {
 	if c.flag != flag {
 		return true, nil, ""
 	}
@@ -400,60 +400,60 @@ func (c *Callback[T]) call(flag string, info T) (keepOn bool, err error, panicSt
 }
 
 // Set method sets the value associated with the given key in own context.
-func (t *AdjacencyTable) set(num int32, visible Status, key string, value any) {
+func (t *adjacencyTable) set(num int32, visible Status, key string, value any) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
-	node := &Node{
+	n := &node{
 		Index:   num,
 		Value:   value,
 		Visible: visible.load(),
 		Next:    t.nodes[key],
 	}
-	t.nodes[key] = node
+	t.nodes[key] = n
 }
 
-func (t *AdjacencyTable) find(num int32, key string) (any, bool) {
+func (t *adjacencyTable) find(num int32, key string) (any, bool) {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
-	node, exist := t.nodes[key]
+	head, exist := t.nodes[key]
 	if !exist {
 		return nil, false
 	}
-	return node.searchByIndex(num)
+	return head.searchByIndex(num)
 }
 
 // Get method retrieves the value associated with the given key from the context path.
 // The method first checks the priority context, then own context, finally parents context.
 // Returns the value associated with the key (if found) and a boolean indicating its presence.
-func (t *AdjacencyTable) get(visible Status, key string) (any, bool) {
+func (t *adjacencyTable) get(visible Status, key string) (any, bool) {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
-	if node, exist := t.nodes[key]; exist {
-		if value, find := node.search(visible); find {
+	if head, exist := t.nodes[key]; exist {
+		if value, find := head.search(visible); find {
 			return value, find
 		}
 	}
 	return nil, false
 }
 
-func (t *AdjacencyTable) getAll(visible Status, key string) map[int32]any {
+func (t *adjacencyTable) getAll(visible Status, key string) map[int32]any {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
-	node, exist := t.nodes[key]
+	head, exist := t.nodes[key]
 	if !exist {
 		return nil
 	}
 	all := make(map[int32]any)
-	for node != nil {
-		if visible.contain(node.Visible) {
-			all[node.Index] = node.Value
+	for head != nil {
+		if visible.contain(head.Visible) {
+			all[head.Index] = head.Value
 		}
-		node = node.Next
+		head = head.Next
 	}
 	return all
 }
 
-func (n *Node) searchByIndex(index int32) (any, bool) {
+func (n *node) searchByIndex(index int32) (any, bool) {
 	if n.Index == index {
 		return n.Value, true
 	}
@@ -463,7 +463,7 @@ func (n *Node) searchByIndex(index int32) (any, bool) {
 	return n.Next.searchByIndex(index)
 }
 
-func (n *Node) search(visible Status) (any, bool) {
+func (n *node) search(visible Status) (any, bool) {
 	if visible.contain(n.Visible) {
 		return n.Value, true
 	}
@@ -473,15 +473,15 @@ func (n *Node) search(visible Status) (any, bool) {
 	return n.Next.search(visible)
 }
 
-func (vc *VisibleContext) QueryName() string {
-	return vc.roster[vc.Index]
+func (vc *visibleContext) QueryName() string {
+	return vc.roster[vc.index]
 }
 
-func (vc *VisibleContext) Get(key string) (value any, exist bool) {
+func (vc *visibleContext) Get(key string) (value any, exist bool) {
 	if index, match := vc.priority[key]; match {
 		return vc.find(index, key)
 	}
-	if value, exist = vc.get(vc.Visible, key); exist {
+	if value, exist = vc.get(vc.visible, key); exist {
 		return
 	}
 	if vc.parent != nil {
@@ -490,8 +490,8 @@ func (vc *VisibleContext) Get(key string) (value any, exist bool) {
 	return nil, false
 }
 
-func (vc *VisibleContext) GetAll(key string) map[string]any {
-	find := vc.getAll(vc.Visible, key)
+func (vc *visibleContext) GetAll(key string) map[string]any {
+	find := vc.getAll(vc.visible, key)
 	result := make(map[string]any, len(find))
 	for num, value := range find {
 		name, ok := vc.roster[num]
@@ -514,7 +514,7 @@ func (vc *VisibleContext) GetAll(key string) map[string]any {
 	return result
 }
 
-func (vc *VisibleContext) GetResult(key string) (value any, exist bool) {
+func (vc *visibleContext) GetResult(key string) (value any, exist bool) {
 	vc.lock.RLock()
 	defer vc.lock.RUnlock()
 	head, find := vc.nodes[key]
@@ -524,24 +524,24 @@ func (vc *VisibleContext) GetResult(key string) (value any, exist bool) {
 	return head.search(resultMark)
 }
 
-func (vc *VisibleContext) setResult(key string, value any) {
+func (vc *visibleContext) setResult(key string, value any) {
 	vc.lock.Lock()
 	defer vc.lock.Unlock()
 	// set num and path to -1, so Get method will skip result
-	node := &Node{
+	head := &node{
 		Index:   -1,
 		Value:   value,
 		Visible: resultMark,
 		Next:    vc.nodes[key],
 	}
-	vc.nodes[key] = node
+	vc.nodes[key] = head
 }
 
-func (vc *VisibleContext) Set(key string, value any) {
-	vc.set(vc.Index, vc.Visible, key, value)
+func (vc *visibleContext) Set(key string, value any) {
+	vc.set(vc.index, vc.visible, key, value)
 }
 
 // Done method waits for the corresponding process to complete.
-func (f *Feature) Done() {
+func (f *Future) Done() {
 	f.finish.Wait()
 }

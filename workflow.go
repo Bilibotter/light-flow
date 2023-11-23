@@ -27,49 +27,49 @@ type Controller interface {
 
 type ResultI interface {
 	BasicInfoI
-	Features() []*Feature
-	Fails() []*Feature
+	Futures() []*Future
+	Fails() []*Future
 }
 
 type FlowController interface {
 	Controller
 	ResultI
-	Done() []*Feature
+	Done() []*Future
 	ListProcess() []string
 	ProcessController(name string) Controller
 }
 
 type Configuration struct {
-	*FlowConfig
-	*ProcessConfig
+	flowConfig
+	processConfig
 }
 
 type FlowMeta struct {
-	*FlowConfig
-	*Visitor
+	flowConfig
+	visitor
 	init         sync.Once
 	flowName     string
 	noUseDefault bool
 	processes    []*ProcessMeta
 }
 
-type FlowConfig struct {
-	*CallbackChain[*FlowInfo]
+type flowConfig struct {
+	*callbackChain[*FlowInfo]
 }
 
-type RunFlow struct {
+type runFlow struct {
 	*FlowMeta
-	*BasicInfo
-	*VisibleContext
-	processes []*RunProcess
-	features  []*Feature
+	*basicInfo
+	*visibleContext
+	processes []*runProcess
+	futures   []*Future
 	lock      sync.Mutex
 	finish    sync.WaitGroup
 }
 
 type FlowInfo struct {
-	*BasicInfo
-	*VisibleContext
+	*basicInfo
+	*visibleContext
 }
 
 func init() {
@@ -84,20 +84,20 @@ func SetIdGenerator(method func() string) {
 
 func CreateDefaultConfig() *Configuration {
 	defaultConfig = &Configuration{
-		FlowConfig:    &FlowConfig{},
-		ProcessConfig: NewProcessConfig(),
+		flowConfig:    flowConfig{},
+		processConfig: newProcessConfig(),
 	}
 	return defaultConfig
 }
 
 func RegisterFlow(name string) *FlowMeta {
 	flow := FlowMeta{
-		Visitor: &Visitor{
-			Index:   int32(visibleAll),
-			Visible: visibleAll,
+		visitor: visitor{
+			index:   int32(visibleAll),
+			visible: visibleAll,
 			roster:  map[int32]string{int32(visibleAll): name},
 		},
-		FlowConfig: &FlowConfig{&CallbackChain[*FlowInfo]{}},
+		flowConfig: flowConfig{&callbackChain[*FlowInfo]{}},
 		flowName:   name,
 		init:       sync.Once{},
 	}
@@ -118,7 +118,7 @@ func AsyncFlow(name string, input map[string]any) FlowController {
 	if !ok {
 		panic(fmt.Sprintf("flow factory [%s] not found", name))
 	}
-	flow := factory.(*FlowMeta).BuildRunFlow(input)
+	flow := factory.(*FlowMeta).buildRunFlow(input)
 	flow.Flow()
 	return flow
 }
@@ -136,37 +136,37 @@ func DoneFlow(name string, input map[string]any) ResultI {
 	if !ok {
 		panic(fmt.Sprintf("flow factory [%s] not found", name))
 	}
-	flow := factory.(*FlowMeta).BuildRunFlow(input)
+	flow := factory.(*FlowMeta).buildRunFlow(input)
 	flow.Done()
 	return flow
 }
 
-func BuildRunFlow(name string, input map[string]any) *RunFlow {
+func BuildRunFlow(name string, input map[string]any) *runFlow {
 	factory, ok := allFlows.Load(name)
 	if !ok {
 		panic(fmt.Sprintf("flow factory [%s] not found", name))
 	}
-	return factory.(*FlowMeta).BuildRunFlow(input)
+	return factory.(*FlowMeta).buildRunFlow(input)
 }
 
-func (fc *FlowConfig) BeforeFlow(must bool, callback func(*FlowInfo) (keepOn bool, err error)) *Callback[*FlowInfo] {
-	if fc.CallbackChain == nil {
-		fc.CallbackChain = &CallbackChain[*FlowInfo]{}
+func (fc *flowConfig) BeforeFlow(must bool, callback func(*FlowInfo) (keepOn bool, err error)) *callback[*FlowInfo] {
+	if fc.callbackChain == nil {
+		fc.callbackChain = &callbackChain[*FlowInfo]{}
 	}
-	return fc.AddCallback(Before, must, callback)
+	return fc.addCallback(Before, must, callback)
 }
 
-func (fc *FlowConfig) AfterFlow(must bool, callback func(*FlowInfo) (keepOn bool, err error)) *Callback[*FlowInfo] {
-	if fc.CallbackChain == nil {
-		fc.CallbackChain = &CallbackChain[*FlowInfo]{}
+func (fc *flowConfig) AfterFlow(must bool, callback func(*FlowInfo) (keepOn bool, err error)) *callback[*FlowInfo] {
+	if fc.callbackChain == nil {
+		fc.callbackChain = &callbackChain[*FlowInfo]{}
 	}
-	return fc.AddCallback(After, must, callback)
+	return fc.addCallback(After, must, callback)
 }
 
-func (fc *FlowConfig) merge(merged *FlowConfig) *FlowConfig {
+func (fc *flowConfig) merge(merged *flowConfig) *flowConfig {
 	CopyPropertiesSkipNotEmpty(merged, fc)
-	if merged.CallbackChain != nil {
-		fc.filters = append(merged.CopyChain(), fc.filters...)
+	if merged.callbackChain != nil {
+		fc.filters = append(merged.copyChain(), fc.filters...)
 		fc.maintain()
 	}
 	return fc
@@ -190,14 +190,10 @@ func (fm *FlowMeta) initialize() {
 		if fm.noUseDefault {
 			return
 		}
-		if defaultConfig == nil || defaultConfig.FlowConfig == nil {
+		if defaultConfig == nil {
 			return
 		}
-		if fm.FlowConfig == nil {
-			fm.FlowConfig = defaultConfig.FlowConfig
-			return
-		}
-		fm.FlowConfig.merge(defaultConfig.FlowConfig)
+		fm.flowConfig.merge(&defaultConfig.flowConfig)
 	})
 }
 
@@ -206,24 +202,24 @@ func (fm *FlowMeta) NotUseDefault() *FlowMeta {
 	return fm
 }
 
-func (fm *FlowMeta) BuildRunFlow(input map[string]any) *RunFlow {
-	table := &AdjacencyTable{
+func (fm *FlowMeta) buildRunFlow(input map[string]any) *runFlow {
+	table := adjacencyTable{
 		lock:  &sync.RWMutex{},
-		nodes: make(map[string]*Node, len(input)),
+		nodes: make(map[string]*node, len(input)),
 	}
-	rf := RunFlow{
-		VisibleContext: &VisibleContext{
-			AdjacencyTable: table,
-			Visitor:        fm.Visitor,
+	rf := runFlow{
+		visibleContext: &visibleContext{
+			adjacencyTable: table,
+			visitor:        &fm.visitor,
 		},
-		BasicInfo: &BasicInfo{
+		basicInfo: &basicInfo{
 			Status: emptyStatus(),
 			Name:   fm.flowName,
 			Id:     generateId(),
 		},
 		FlowMeta:  fm,
 		lock:      sync.Mutex{},
-		processes: make([]*RunProcess, 0, len(fm.processes)),
+		processes: make([]*runProcess, 0, len(fm.processes)),
 		finish:    sync.WaitGroup{},
 	}
 
@@ -248,64 +244,55 @@ func (fm *FlowMeta) TakeProcess(name string) {
 }
 
 func (fm *FlowMeta) Process(name string) *ProcessMeta {
-	return fm.ProcessWithConf(name, nil)
-}
-
-func (fm *FlowMeta) ProcessWithConf(name string, conf *ProcessConfig) *ProcessMeta {
-	if conf != nil {
-		conf.notUseDefault = true
-	}
-	if conf == nil {
-		conf = NewProcessConfig()
-	}
-
 	pm := ProcessMeta{
-		Visitor: &Visitor{
-			Visible: 0,
-			Index:   0,
+		visitor: visitor{
+			visible: 0,
+			index:   0,
 			roster:  map[int32]string{0: name},
 		},
-		ProcessConfig: conf,
-		processName:   name,
-		init:          sync.Once{},
-		steps:         make(map[string]*StepMeta),
+		processConfig: processConfig{
+			stepChain: &callbackChain[*StepInfo]{},
+			procChain: &callbackChain[*ProcessInfo]{},
+		},
+		processName: name,
+		init:        sync.Once{},
+		steps:       make(map[string]*StepMeta),
 	}
 
 	pm.register()
 	fm.processes = append(fm.processes, &pm)
-
 	return &pm
 }
 
-func (rf *RunFlow) buildRunProcess(meta *ProcessMeta) *RunProcess {
-	table := &AdjacencyTable{
+func (rf *runFlow) buildRunProcess(meta *ProcessMeta) *runProcess {
+	table := adjacencyTable{
 		lock:  &sync.RWMutex{},
-		nodes: map[string]*Node{},
+		nodes: map[string]*node{},
 	}
-	process := RunProcess{
-		VisibleContext: &VisibleContext{
-			parent:         rf.VisibleContext,
-			Visitor:        meta.Visitor,
-			AdjacencyTable: table,
+	process := runProcess{
+		visibleContext: visibleContext{
+			parent:         rf.visibleContext,
+			visitor:        &meta.visitor,
+			adjacencyTable: table,
 		},
 		Status:      emptyStatus(),
 		ProcessMeta: meta,
 		id:          generateId(),
 		flowId:      rf.Id,
-		flowSteps:   make(map[string]*RunStep),
+		flowSteps:   make(map[string]*runStep),
 		pause:       sync.WaitGroup{},
 		running:     sync.WaitGroup{},
 		finish:      sync.WaitGroup{},
 	}
 
-	stepTable := &AdjacencyTable{
+	stepTable := adjacencyTable{
 		lock:  &sync.RWMutex{},
-		nodes: map[string]*Node{},
+		nodes: map[string]*node{},
 	}
 	for _, stepMeta := range meta.sortedStep() {
-		runStep := process.buildRunStep(stepMeta)
-		runStep.AdjacencyTable = stepTable
-		process.flowSteps[stepMeta.stepName] = runStep
+		step := process.buildRunStep(stepMeta)
+		step.adjacencyTable = stepTable
+		process.flowSteps[stepMeta.stepName] = step
 	}
 	process.running.Add(len(process.flowSteps))
 
@@ -313,54 +300,54 @@ func (rf *RunFlow) buildRunProcess(meta *ProcessMeta) *RunProcess {
 }
 
 // Done function will block util all process done.
-func (rf *RunFlow) Done() []*Feature {
-	features := rf.Flow()
-	for _, feature := range features {
+func (rf *runFlow) Done() []*Future {
+	futures := rf.Flow()
+	for _, future := range futures {
 		// process finish running and callback
-		feature.Done()
+		future.Done()
 	}
 	// workflow finish running and callback
 	rf.finish.Wait()
-	return features
+	return futures
 }
 
 // Flow function asynchronous execute process of workflow and return immediately.
-func (rf *RunFlow) Flow() []*Feature {
-	if rf.features != nil {
-		return rf.features
+func (rf *runFlow) Flow() []*Future {
+	if rf.futures != nil {
+		return rf.futures
 	}
 	// avoid duplicate call
 	rf.lock.Lock()
 	defer rf.lock.Unlock()
 	// DCL
-	if rf.features != nil {
-		return rf.features
+	if rf.futures != nil {
+		return rf.futures
 	}
 	rf.initialize()
 	info := &FlowInfo{
-		BasicInfo: &BasicInfo{
+		basicInfo: &basicInfo{
 			Status: rf.Status,
 			Id:     rf.Id,
 			Name:   rf.flowName,
 		},
-		VisibleContext: rf.VisibleContext,
+		visibleContext: rf.visibleContext,
 	}
-	if rf.FlowConfig != nil && rf.FlowConfig.CallbackChain != nil {
+	if rf.flowConfig.callbackChain != nil {
 		rf.process(Before, info)
 	}
-	features := make([]*Feature, 0, len(rf.processes))
+	futures := make([]*Future, 0, len(rf.processes))
 	for _, process := range rf.processes {
-		features = append(features, process.flow())
+		futures = append(futures, process.flow())
 	}
-	rf.features = features
+	rf.futures = futures
 	rf.finish.Add(1)
-	if rf.FlowConfig == nil || rf.FlowConfig.CallbackChain == nil {
-		return features
+	if rf.flowConfig.callbackChain == nil {
+		return futures
 	}
 
 	go func() {
-		for _, feature := range features {
-			feature.Done()
+		for _, future := range futures {
+			future.Done()
 		}
 		for _, process := range rf.processes {
 			rf.combine(process.Status)
@@ -372,24 +359,24 @@ func (rf *RunFlow) Flow() []*Feature {
 		rf.finish.Done()
 	}()
 
-	return features
+	return futures
 }
 
-func (rf *RunFlow) Fails() []*Feature {
-	features := make([]*Feature, 0)
-	for _, feature := range rf.features {
-		if len(feature.Exceptions()) != 0 {
-			features = append(features, feature)
+func (rf *runFlow) Fails() []*Future {
+	futures := make([]*Future, 0)
+	for _, future := range rf.futures {
+		if len(future.Exceptions()) != 0 {
+			futures = append(futures, future)
 		}
 	}
-	return features
+	return futures
 }
 
-func (rf *RunFlow) Features() []*Feature {
-	return rf.features
+func (rf *runFlow) Futures() []*Future {
+	return rf.futures
 }
 
-func (rf *RunFlow) ListProcess() []string {
+func (rf *runFlow) ListProcess() []string {
 	processes := make([]string, 0, len(rf.processes))
 	for _, process := range rf.processes {
 		processes = append(processes, process.processName)
@@ -397,7 +384,7 @@ func (rf *RunFlow) ListProcess() []string {
 	return processes
 }
 
-func (rf *RunFlow) ProcessController(name string) Controller {
+func (rf *runFlow) ProcessController(name string) Controller {
 	for _, process := range rf.processes {
 		if process.processName == name {
 			return process
@@ -406,19 +393,19 @@ func (rf *RunFlow) ProcessController(name string) Controller {
 	return nil
 }
 
-func (rf *RunFlow) Pause() {
+func (rf *runFlow) Pause() {
 	for _, process := range rf.processes {
 		process.Pause()
 	}
 }
 
-func (rf *RunFlow) Resume() {
+func (rf *runFlow) Resume() {
 	for _, process := range rf.processes {
 		process.Resume()
 	}
 }
 
-func (rf *RunFlow) Stop() {
+func (rf *runFlow) Stop() {
 	for _, process := range rf.processes {
 		process.Stop()
 	}

@@ -6,21 +6,21 @@ import (
 )
 
 type StepMeta struct {
-	*Status // used to record the position of the step
-	*StepConfig
-	*Visitor
+	visitor
+	stepConfig
 	belong   *ProcessMeta
 	stepName string
 	layer    int
+	position *Status     // used to record the position of the step
 	depends  []*StepMeta // prev
 	waiters  []*StepMeta // next
 	priority map[string]int32
 	run      func(ctx Context) (any, error)
 }
 
-type RunStep struct {
+type runStep struct {
 	*StepMeta
-	*VisibleContext
+	*visibleContext
 	*Status
 	id        string
 	flowId    string
@@ -34,8 +34,8 @@ type RunStep struct {
 }
 
 type StepInfo struct {
-	*BasicInfo
-	*VisibleContext
+	*basicInfo
+	*visibleContext
 	ProcessId string
 	FlowId    string
 	Prev      map[string]string // prev step stepName to step id
@@ -45,9 +45,9 @@ type StepInfo struct {
 	Err       error
 }
 
-type StepConfig struct {
-	StepTimeout time.Duration
-	StepRetry   int
+type stepConfig struct {
+	stepTimeout time.Duration
+	stepRetry   int
 }
 
 func (si *StepInfo) Error() error {
@@ -82,14 +82,14 @@ func (meta *StepMeta) Priority(priority map[string]any) {
 		if !exist {
 			panic(fmt.Sprintf("can't find step[%s]", stepName))
 		}
-		meta.priority[key] = step.Index
+		meta.priority[key] = step.index
 	}
 	meta.checkPriority()
 }
 
 func (meta *StepMeta) wireDepends() {
-	if meta.Status == nil {
-		meta.Status = emptyStatus()
+	if meta.position == nil {
+		meta.position = emptyStatus()
 	}
 
 	for _, depend := range meta.depends {
@@ -98,9 +98,9 @@ func (meta *StepMeta) wireDepends() {
 			continue
 		}
 		depend.waiters = append(depend.waiters, meta)
-		if depend.Contain(End) {
-			depend.Append(HasNext)
-			depend.Pop(End)
+		if depend.position.Contain(End) {
+			depend.position.Append(HasNext)
+			depend.position.Pop(End)
 		}
 		if depend.layer+1 > meta.layer {
 			meta.layer = depend.layer + 1
@@ -108,10 +108,10 @@ func (meta *StepMeta) wireDepends() {
 	}
 
 	if len(meta.depends) == 0 {
-		meta.Append(Head)
+		meta.position.Append(Head)
 	}
 
-	meta.Append(End)
+	meta.position.Append(End)
 }
 
 // checkPriority checks if the priority key corresponds to an existing step.
@@ -152,12 +152,17 @@ func (meta *StepMeta) backSearch(searched string) bool {
 	return false
 }
 
-// Config allow step not using process's config
-func (meta *StepMeta) Config(config *StepConfig) {
-	meta.StepConfig = config
+func (meta *StepMeta) Timeout(timeout time.Duration) *StepMeta {
+	meta.stepConfig.stepTimeout = timeout
+	return meta
 }
 
-func (step *RunStep) syncInfo() {
+func (meta *StepMeta) Retry(retry int) *StepMeta {
+	meta.stepConfig.stepRetry = retry
+	return meta
+}
+
+func (step *runStep) syncInfo() {
 	if step.infoCache == nil {
 		return
 	}

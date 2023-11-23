@@ -14,9 +14,6 @@ func AfterFlowProcessor(info *flow.FlowInfo) (bool, error) {
 	if len(info.Id) == 0 {
 		panic("flow id is empty")
 	}
-	if info.VisibleContext == nil {
-		panic("flow context is nil")
-	}
 	atomic.AddInt64(&current, 1)
 	fmt.Printf("..process[%s] AfterFlowProcessor execute \n", info.Name)
 	return true, nil
@@ -28,9 +25,6 @@ func BeforeFlowProcessor(info *flow.FlowInfo) (bool, error) {
 	}
 	if len(info.Id) == 0 {
 		panic("flow id is empty")
-	}
-	if info.VisibleContext == nil {
-		panic("flow context is nil")
 	}
 	atomic.AddInt64(&current, 1)
 	fmt.Printf("..process[%s] BeforeFlowProcessor execute \n", info.Name)
@@ -53,13 +47,13 @@ func TestInfoCorrect(t *testing.T) {
 	config.AfterStep(true, StepInfoChecker("4", []string{"2", "3"}, []string{}))
 
 	workflow := flow.RegisterFlow("TestInfoCorrect")
-	process := workflow.ProcessWithConf("TestInfoCorrect", nil)
+	process := workflow.Process("TestInfoCorrect")
 	process.AliasStep("1", GenerateStep(1))
 	process.AliasStep("2", GenerateStep(2), "1")
 	process.AliasStep("3", GenerateStep(3), "1")
 	process.AliasStep("4", GenerateStep(4), "2", "3")
 	features := flow.DoneFlow("TestInfoCorrect", nil)
-	for _, feature := range features.Features() {
+	for _, feature := range features.Futures() {
 		if !feature.Success() {
 			t.Errorf("process[%s] fail, exception=%v", feature.GetName(), feature.Exceptions())
 		}
@@ -83,13 +77,13 @@ func TestDefaultProcessConfig(t *testing.T) {
 	config.AfterFlow(true, AfterFlowProcessor)
 
 	workflow := flow.RegisterFlow("TestDefaultProcessConfig")
-	process := workflow.ProcessWithConf("TestDefaultProcessConfig", nil)
+	process := workflow.Process("TestDefaultProcessConfig")
 	process.AliasStep("1", GenerateStep(1))
 	process.AliasStep("2", GenerateStep(2), "1")
 	process.AliasStep("3", GenerateStep(3), "2")
 	process.AliasStep("4", GenerateStep(4), "3")
 	features := flow.DoneFlow("TestDefaultProcessConfig", nil)
-	for _, feature := range features.Features() {
+	for _, feature := range features.Futures() {
 		if !feature.Success() {
 			t.Errorf("process[%s] fail, exception=%v", feature.GetName(), feature.ExplainStatus())
 		}
@@ -115,7 +109,7 @@ func TestMergeDefaultProcessConfig(t *testing.T) {
 	workflow := flow.RegisterFlow("TestMergeDefaultProcessConfig")
 	workflow.BeforeFlow(true, BeforeFlowProcessor)
 	workflow.AfterFlow(true, AfterFlowProcessor)
-	process := workflow.ProcessWithConf("TestMergeDefaultProcessConfig", nil)
+	process := workflow.Process("TestMergeDefaultProcessConfig")
 	process.AliasStep("1", GenerateStep(1))
 	process.AliasStep("2", GenerateStep(2), "1")
 	process.BeforeStep(true, PreProcessor)
@@ -123,7 +117,7 @@ func TestMergeDefaultProcessConfig(t *testing.T) {
 	process.BeforeProcess(true, ProcProcessor)
 	process.AfterProcess(true, ProcProcessor)
 	features := flow.DoneFlow("TestMergeDefaultProcessConfig", nil)
-	for _, feature := range features.Features() {
+	for _, feature := range features.Futures() {
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", feature.GetName())
 		}
@@ -153,11 +147,11 @@ func TestCallbackCond(t *testing.T) {
 	config.AfterStep(true, PostProcessor).OnlyFor("1").When(flow.Failed)
 
 	workflow := flow.RegisterFlow("TestCallbackCond")
-	process := workflow.ProcessWithConf("TestCallbackCond", nil)
+	process := workflow.Process("TestCallbackCond")
 	process.AliasStep("1", GenerateStep(1))
 	process.AliasStep("2", GenerateStep(2), "1")
 	features := flow.DoneFlow("TestCallbackCond", nil)
-	for _, feature := range features.Features() {
+	for _, feature := range features.Futures() {
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", feature.GetName())
 		}
@@ -186,11 +180,11 @@ func TestCallbackCond0(t *testing.T) {
 	config.AfterStep(true, PostProcessor).OnlyFor("1").Exclude(flow.Failed)
 
 	workflow := flow.RegisterFlow("TestCallbackCond0")
-	process := workflow.ProcessWithConf("TestCallbackCond0", nil)
+	process := workflow.Process("TestCallbackCond0")
 	process.AliasStep("1", GenerateStep(1))
 	process.AliasStep("2", GenerateStep(2), "1")
 	features := flow.DoneFlow("TestCallbackCond0", nil)
-	for _, feature := range features.Features() {
+	for _, feature := range features.Futures() {
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", feature.GetName())
 		}
@@ -215,14 +209,14 @@ func TestUnableDefaultProcessConfig(t *testing.T) {
 
 	workflow := flow.RegisterFlow("TestUnableDefaultProcessConfig")
 	workflow.NotUseDefault()
-	process := workflow.ProcessWithConf("TestUnableDefaultProcessConfig", nil)
+	process := workflow.Process("TestUnableDefaultProcessConfig")
 	process.AliasStep("1", GenerateStep(1))
 	process.AliasStep("2", GenerateStep(2), "1")
 	process.AliasStep("3", GenerateStep(3), "2")
 	process.AliasStep("4", GenerateStep(4), "3")
 	process.NotUseDefault()
 	features := flow.DoneFlow("TestUnableDefaultProcessConfig", nil)
-	for _, feature := range features.Features() {
+	for _, feature := range features.Futures() {
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", feature.GetName())
 		}

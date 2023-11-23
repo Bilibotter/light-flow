@@ -36,7 +36,7 @@ func TestQuickStepConcurrent(t *testing.T) {
 		p := workflow.Process("TestQuickStepConcurrent" + strconv.Itoa(i))
 		proc = append(proc, p)
 	}
-	for i := 0; i < 63; i++ {
+	for i := 0; i < 62; i++ {
 		for _, p := range proc {
 			p.AliasStep(strconv.Itoa(i), func(ctx flow.Context) (any, error) {
 				return nil, nil
@@ -52,13 +52,13 @@ func TestQuickStepConcurrent(t *testing.T) {
 func TestTestMultipleConcurrentDependContext(t *testing.T) {
 	defer resetCtx()
 	factory := flow.RegisterFlow("TestTestMultipleConcurrentDependContext")
-	process := factory.ProcessWithConf("TestTestMultipleConcurrentDependContext", nil)
+	process := factory.Process("TestTestMultipleConcurrentDependContext")
 	process.AliasStep("-1", ChangeCtxStepFunc(&ctx1))
-	for i := 0; i < 62; i++ {
+	for i := 0; i < 61; i++ {
 		process.AliasStep(strconv.Itoa(i), NoDelayContextStep, "-1")
 	}
 	features := flow.DoneFlow("TestTestMultipleConcurrentDependContext", map[string]any{addrKey: &current})
-	for _, feature := range features.Features() {
+	for _, feature := range features.Futures() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if !feature.Success() {
@@ -66,20 +66,20 @@ func TestTestMultipleConcurrentDependContext(t *testing.T) {
 		}
 	}
 
-	if atomic.LoadInt64(&ctx1) != 63 {
-		t.Errorf("execute 63 step, but current = %d", current)
+	if atomic.LoadInt64(&ctx1) != 62 {
+		t.Errorf("execute 62 step, but current = %d", current)
 	}
 }
 
 func TestMultipleConcurrentContext(t *testing.T) {
 	defer resetCurrent()
 	factory := flow.RegisterFlow("TestMultipleConcurrentContext")
-	process := factory.ProcessWithConf("TestMultipleConcurrentContext", nil)
-	for i := 0; i < 63; i++ {
+	process := factory.Process("TestMultipleConcurrentContext")
+	for i := 0; i < 62; i++ {
 		process.AliasStep(strconv.Itoa(i), NoDelayContextStep)
 	}
 	features := flow.DoneFlow("TestMultipleConcurrentContext", map[string]any{addrKey: &current})
-	for _, feature := range features.Features() {
+	for _, feature := range features.Futures() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if !feature.Success() {
@@ -87,8 +87,8 @@ func TestMultipleConcurrentContext(t *testing.T) {
 		}
 	}
 
-	if atomic.LoadInt64(&current) != 63 {
-		t.Errorf("execute 63 step, but current = %d", current)
+	if atomic.LoadInt64(&current) != 62 {
+		t.Errorf("execute 62 step, but current = %d", current)
 	}
 }
 
@@ -96,37 +96,37 @@ func TestMultipleConcurrentProcess(t *testing.T) {
 	defer resetCurrent()
 	factory := flow.RegisterFlow("TestMultipleConcurrentProcess")
 	for i := 0; i < 100; i++ {
-		process := factory.ProcessWithConf("TestMultipleConcurrentProcess"+strconv.Itoa(i), nil)
+		process := factory.Process("TestMultipleConcurrentProcess" + strconv.Itoa(i))
 		process.BeforeStep(true, GenerateNoDelayProcessor)
 		process.AfterStep(true, GenerateNoDelayProcessor)
-		for j := 0; j < 63; j++ {
+		for j := 0; j < 62; j++ {
 			key := strconv.Itoa(i) + "|" + strconv.Itoa(j)
 			process.AliasStep(key, GenerateNoDelayStep(i*1000+j))
 		}
 	}
 	features := flow.DoneFlow("TestMultipleConcurrentProcess", nil)
-	for _, feature := range features.Features() {
+	for _, feature := range features.Futures() {
 		if !feature.Success() {
 			t.Errorf("process[%s] run fail", feature.Name)
 		}
 	}
 
-	if atomic.LoadInt64(&current) != 63*100*3 {
-		t.Errorf("execute %d step, but current = %d", 63*100*3, current)
+	if atomic.LoadInt64(&current) != 62*100*3 {
+		t.Errorf("execute %d step, but current = %d", 62*100*3, current)
 	}
 }
 
 func TestMultipleConcurrentStepWithProcessor(t *testing.T) {
 	defer resetCurrent()
 	factory := flow.RegisterFlow("TestMultipleConcurrentStepWithProcessor")
-	process := factory.ProcessWithConf("TestMultipleConcurrentStepWithProcessor", nil)
+	process := factory.Process("TestMultipleConcurrentStepWithProcessor")
 	process.BeforeStep(true, GenerateNoDelayProcessor)
 	process.AfterStep(true, GenerateNoDelayProcessor)
-	for i := 0; i < 63; i++ {
+	for i := 0; i < 62; i++ {
 		process.AliasStep(strconv.Itoa(i), GenerateNoDelayStep(i))
 	}
 	features := flow.DoneFlow("TestMultipleConcurrentStepWithProcessor", nil)
-	for _, feature := range features.Features() {
+	for _, feature := range features.Futures() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if !feature.Success() {
@@ -134,20 +134,20 @@ func TestMultipleConcurrentStepWithProcessor(t *testing.T) {
 		}
 	}
 
-	if atomic.LoadInt64(&current) != 63*3 {
-		t.Errorf("execute %d step, but current = %d", 63*100*3, current)
+	if atomic.LoadInt64(&current) != 62*3 {
+		t.Errorf("execute %d step, but current = %d", 62*100*3, current)
 	}
 }
 
 func TestMultipleConcurrentStep(t *testing.T) {
 	defer resetCurrent()
 	factory := flow.RegisterFlow("TestMultipleConcurrentStep")
-	process := factory.ProcessWithConf("TestMultipleConcurrentStep", nil)
-	for i := 0; i < 63; i++ {
+	process := factory.Process("TestMultipleConcurrentStep")
+	for i := 0; i < 62; i++ {
 		process.AliasStep(strconv.Itoa(i), GenerateNoDelayStep(i))
 	}
 	features := flow.DoneFlow("TestMultipleConcurrentStep", nil)
-	for _, feature := range features.Features() {
+	for _, feature := range features.Futures() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if !feature.Success() {
@@ -155,15 +155,15 @@ func TestMultipleConcurrentStep(t *testing.T) {
 		}
 	}
 
-	if atomic.LoadInt64(&current) != 63 {
-		t.Errorf("execute 63 step, but current = %d", current)
+	if atomic.LoadInt64(&current) != 62 {
+		t.Errorf("execute 62 step, but current = %d", current)
 	}
 }
 
 func TestMultipleConcurrentDependStep(t *testing.T) {
 	defer resetCurrent()
 	factory := flow.RegisterFlow("TestMultipleConcurrentDependStep")
-	process := factory.ProcessWithConf("TestMultipleConcurrentDependStep", nil)
+	process := factory.Process("TestMultipleConcurrentDependStep")
 	for i := 0; i < 20; i++ {
 		prev := ""
 		for j := 0; j < 3; j++ {
@@ -177,7 +177,7 @@ func TestMultipleConcurrentDependStep(t *testing.T) {
 		}
 	}
 	features := flow.DoneFlow("TestMultipleConcurrentDependStep", nil)
-	for _, feature := range features.Features() {
+	for _, feature := range features.Futures() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
 		if !feature.Success() {
@@ -193,8 +193,8 @@ func TestMultipleConcurrentDependStep(t *testing.T) {
 func TestConcurrentSameFlow(t *testing.T) {
 	defer resetCurrent()
 	factory := flow.RegisterFlow("TestConcurrentSameFlow")
-	process := factory.ProcessWithConf("TestConcurrentSameFlow", nil)
-	for i := 0; i < 63; i++ {
+	process := factory.Process("TestConcurrentSameFlow")
+	for i := 0; i < 62; i++ {
 		process.AliasStep(strconv.Itoa(i), GenerateNoDelayStep(i))
 	}
 	flows := make([]flow.FlowController, 0, 1000)
@@ -210,7 +210,7 @@ func TestConcurrentSameFlow(t *testing.T) {
 		}
 	}
 
-	if atomic.LoadInt64(&current) != 63000 {
-		t.Errorf("execute 63000 step, but current = %d", current)
+	if atomic.LoadInt64(&current) != 62000 {
+		t.Errorf("execute 62000 step, but current = %d", current)
 	}
 }
