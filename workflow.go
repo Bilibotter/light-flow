@@ -270,7 +270,7 @@ func (rf *runFlow) buildRunProcess(meta *ProcessMeta) *runProcess {
 		nodes: map[string]*node{},
 	}
 	process := runProcess{
-		visibleContext: visibleContext{
+		visibleContext: &visibleContext{
 			parent:         rf.visibleContext,
 			visitor:        &meta.visitor,
 			adjacencyTable: table,

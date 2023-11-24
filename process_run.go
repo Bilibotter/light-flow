@@ -11,7 +11,7 @@ import (
 type runProcess struct {
 	*ProcessMeta
 	*Status
-	visibleContext
+	*visibleContext
 	id        string
 	flowId    string
 	flowSteps map[string]*runStep
@@ -23,7 +23,7 @@ type runProcess struct {
 func (rp *runProcess) buildRunStep(meta *StepMeta) *runStep {
 	step := runStep{
 		visibleContext: &visibleContext{
-			parent:  &rp.visibleContext,
+			parent:  rp.visibleContext,
 			visitor: &meta.visitor,
 		},
 		Status:    emptyStatus(),
@@ -269,15 +269,6 @@ func (rp *runProcess) summaryStepInfo(step *runStep) *StepInfo {
 		Start:          step.Start,
 		End:            step.End,
 		Err:            step.Err,
-		Prev:           make(map[string]string, len(step.depends)),
-		Next:           make(map[string]string, len(step.waiters)),
-	}
-	for _, prev := range step.depends {
-		info.Prev[prev.stepName] = rp.flowSteps[prev.stepName].id
-	}
-
-	for _, next := range step.waiters {
-		info.Next[next.stepName] = rp.flowSteps[next.stepName].id
 	}
 
 	step.infoCache = info

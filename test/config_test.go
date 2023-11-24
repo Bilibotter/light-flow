@@ -16,18 +16,6 @@ func StepInfoChecker(key string, prev, next []string) func(info *flow.StepInfo) 
 		}
 		println("matched", key)
 		atomic.AddInt64(&current, 1)
-		for name := range info.Prev {
-			s := flow.CreateSetBySliceFunc(prev, func(s string) string { return s })
-			if !s.Contains(name) {
-				panic(fmt.Sprintf("step[%s] prev not contains %s", key, name))
-			}
-		}
-		for name := range info.Next {
-			s := flow.CreateSetBySliceFunc(next, func(s string) string { return s })
-			if !s.Contains(name) {
-				panic(fmt.Sprintf("step[%s] next not contains %s", key, name))
-			}
-		}
 		return true, nil
 	}
 }

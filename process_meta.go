@@ -24,7 +24,7 @@ type ProcessMeta struct {
 
 type ProcessInfo struct {
 	basicInfo
-	visibleContext
+	*visibleContext
 	FlowId string
 }
 

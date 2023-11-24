@@ -38,8 +38,6 @@ type StepInfo struct {
 	*visibleContext
 	ProcessId string
 	FlowId    string
-	Prev      map[string]string // prev step stepName to step id
-	Next      map[string]string // next step stepName to step id
 	Start     time.Time
 	End       time.Time
 	Err       error
