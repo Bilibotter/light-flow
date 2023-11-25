@@ -16,7 +16,7 @@ var (
 )
 
 var (
-	defaultConfig *Configuration
+	defaultConfig *FlowConfig
 )
 
 type Controller interface {
@@ -39,22 +39,18 @@ type FlowController interface {
 	ProcessController(name string) Controller
 }
 
-type Configuration struct {
-	flowConfig
+type FlowConfig struct {
+	callbackChain[*FlowInfo]
 	processConfig
 }
 
 type FlowMeta struct {
-	flowConfig
+	FlowConfig
 	visitor
 	init         sync.Once
 	flowName     string
 	noUseDefault bool
 	processes    []*ProcessMeta
-}
-
-type flowConfig struct {
-	callbackChain[*FlowInfo]
 }
 
 type runFlow struct {
@@ -83,9 +79,8 @@ func SetIdGenerator(method func() string) {
 	generateId = method
 }
 
-func CreateDefaultConfig() *Configuration {
-	defaultConfig = &Configuration{
-		flowConfig:    flowConfig{},
+func CreateDefaultConfig() *FlowConfig {
+	defaultConfig = &FlowConfig{
 		processConfig: newProcessConfig(),
 	}
 	return defaultConfig
@@ -149,15 +144,15 @@ func BuildRunFlow(name string, input map[string]any) *runFlow {
 	return factory.(*FlowMeta).buildRunFlow(input)
 }
 
-func (fc *flowConfig) BeforeFlow(must bool, callback func(*FlowInfo) (keepOn bool, err error)) *callback[*FlowInfo] {
+func (fc *FlowConfig) BeforeFlow(must bool, callback func(*FlowInfo) (keepOn bool, err error)) *callback[*FlowInfo] {
 	return fc.addCallback(Before, must, callback)
 }
 
-func (fc *flowConfig) AfterFlow(must bool, callback func(*FlowInfo) (keepOn bool, err error)) *callback[*FlowInfo] {
+func (fc *FlowConfig) AfterFlow(must bool, callback func(*FlowInfo) (keepOn bool, err error)) *callback[*FlowInfo] {
 	return fc.addCallback(After, must, callback)
 }
 
-func (fc *flowConfig) merge(merged *flowConfig) *flowConfig {
+func (fc *FlowConfig) merge(merged *FlowConfig) *FlowConfig {
 	CopyPropertiesSkipNotEmpty(merged, fc)
 	if merged.callbackChain.filters != nil {
 		fc.filters = append(merged.copyChain(), fc.filters...)
@@ -187,7 +182,7 @@ func (fm *FlowMeta) combineConfig() {
 		if defaultConfig == nil {
 			return
 		}
-		fm.flowConfig.merge(&defaultConfig.flowConfig)
+		fm.merge(defaultConfig)
 	})
 }
 

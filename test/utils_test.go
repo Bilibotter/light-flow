@@ -30,6 +30,12 @@ type Dst struct {
 	UnExist  bool
 }
 
+type FConfig struct {
+}
+
+type PConfig struct {
+}
+
 func TestGetFuncName(t *testing.T) {
 	if light_flow.GetFuncName(TestGetFuncName) != "TestGetFuncName" {
 		t.Errorf("get TestGetFuncName name error")
@@ -47,24 +53,24 @@ func TestGetFuncName(t *testing.T) {
 	}
 }
 
-//func TestGetStructName(t *testing.T) {
-//	d := Dst{}
-//	dP := &Dst{}
-//	step := light_flow.runStep{}
-//	stepP := &light_flow.runStep{}
-//	if light_flow.GetStructName(d) != "Dst" {
-//		t.Errorf("get Dst struct name error")
-//	}
-//	if light_flow.GetStructName(dP) != "*Dst" {
-//		t.Errorf("get Dst pointer struct name error")
-//	}
-//	if light_flow.GetStructName(step) != "runStep" {
-//		t.Errorf("get runStep struct name error")
-//	}
-//	if light_flow.GetStructName(stepP) != "*runStep" {
-//		t.Errorf("get runStep pointer struct name error")
-//	}
-//}
+func TestGetStructName(t *testing.T) {
+	d := Dst{}
+	dP := &Dst{}
+	step := light_flow.FlowConfig{}
+	stepP := &light_flow.FlowConfig{}
+	if light_flow.GetStructName(d) != "Dst" {
+		t.Errorf("get Dst struct name error")
+	}
+	if light_flow.GetStructName(dP) != "*Dst" {
+		t.Errorf("get Dst pointer struct name error")
+	}
+	if light_flow.GetStructName(step) != "FlowConfig" {
+		t.Errorf("get runStep struct name error")
+	}
+	if light_flow.GetStructName(stepP) != "*FlowConfig" {
+		t.Errorf("get runStep pointer struct name error")
+	}
+}
 
 func TestSet(t *testing.T) {
 	s := light_flow.NewRoutineUnsafeSet[string]()
