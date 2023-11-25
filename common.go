@@ -93,7 +93,7 @@ type callback[T BasicInfoI] struct {
 
 type visibleContext struct {
 	adjacencyTable
-	*visitor // step visitor will update when initialize, so using pointer
+	*visitor // step visitor will update when combineConfig, so using pointer
 	parent   *visibleContext
 }
 

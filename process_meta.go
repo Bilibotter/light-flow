@@ -32,36 +32,21 @@ type processConfig struct {
 	stepConfig
 	procTimeout   time.Duration
 	notUseDefault bool
-	stepChain     *callbackChain[*StepInfo]
-	procChain     *callbackChain[*ProcessInfo]
+	stepChain     callbackChain[*StepInfo]
+	procChain     callbackChain[*ProcessInfo]
 }
 
 func newProcessConfig() processConfig {
-	stepChain := &callbackChain[*StepInfo]{}
-	procChain := &callbackChain[*ProcessInfo]{}
-	config := processConfig{
-		stepChain: stepChain,
-		procChain: procChain,
-	}
+	config := processConfig{}
 	return config
 }
 
 func (pc *processConfig) merge(merged *processConfig) *processConfig {
 	CopyPropertiesSkipNotEmpty(merged, pc)
-	if pc.stepChain == nil {
-		pc.stepChain = &callbackChain[*StepInfo]{}
-	}
-	if merged.stepChain != nil {
-		pc.stepChain.filters = append(merged.stepChain.copyChain(), pc.stepChain.filters...)
-		pc.stepChain.maintain()
-	}
-	if pc.procChain == nil {
-		pc.procChain = &callbackChain[*ProcessInfo]{}
-	}
-	if merged.procChain != nil {
-		pc.procChain.filters = append(merged.procChain.copyChain(), pc.procChain.filters...)
-		pc.procChain.maintain()
-	}
+	pc.stepChain.filters = append(merged.stepChain.copyChain(), pc.stepChain.filters...)
+	pc.stepChain.maintain()
+	pc.procChain.filters = append(merged.procChain.copyChain(), pc.procChain.filters...)
+	pc.procChain.maintain()
 	return pc
 }
 

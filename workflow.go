@@ -54,7 +54,7 @@ type FlowMeta struct {
 }
 
 type flowConfig struct {
-	*callbackChain[*FlowInfo]
+	callbackChain[*FlowInfo]
 }
 
 type runFlow struct {
@@ -65,6 +65,7 @@ type runFlow struct {
 	futures   []*Future
 	lock      sync.Mutex
 	finish    sync.WaitGroup
+	infoCache *FlowInfo
 }
 
 type FlowInfo struct {
@@ -97,9 +98,8 @@ func RegisterFlow(name string) *FlowMeta {
 			visible: visibleAll,
 			roster:  map[int32]string{int32(visibleAll): name},
 		},
-		flowConfig: flowConfig{&callbackChain[*FlowInfo]{}},
-		flowName:   name,
-		init:       sync.Once{},
+		flowName: name,
+		init:     sync.Once{},
 	}
 	flow.register()
 	return &flow
@@ -150,22 +150,16 @@ func BuildRunFlow(name string, input map[string]any) *runFlow {
 }
 
 func (fc *flowConfig) BeforeFlow(must bool, callback func(*FlowInfo) (keepOn bool, err error)) *callback[*FlowInfo] {
-	if fc.callbackChain == nil {
-		fc.callbackChain = &callbackChain[*FlowInfo]{}
-	}
 	return fc.addCallback(Before, must, callback)
 }
 
 func (fc *flowConfig) AfterFlow(must bool, callback func(*FlowInfo) (keepOn bool, err error)) *callback[*FlowInfo] {
-	if fc.callbackChain == nil {
-		fc.callbackChain = &callbackChain[*FlowInfo]{}
-	}
 	return fc.addCallback(After, must, callback)
 }
 
 func (fc *flowConfig) merge(merged *flowConfig) *flowConfig {
 	CopyPropertiesSkipNotEmpty(merged, fc)
-	if merged.callbackChain != nil {
+	if merged.callbackChain.filters != nil {
 		fc.filters = append(merged.copyChain(), fc.filters...)
 		fc.maintain()
 	}
@@ -185,7 +179,7 @@ func (fm *FlowMeta) register() *FlowMeta {
 	return fm
 }
 
-func (fm *FlowMeta) initialize() {
+func (fm *FlowMeta) combineConfig() {
 	fm.init.Do(func() {
 		if fm.noUseDefault {
 			return
@@ -250,10 +244,6 @@ func (fm *FlowMeta) Process(name string) *ProcessMeta {
 			index:   0,
 			roster:  map[int32]string{0: name},
 		},
-		processConfig: processConfig{
-			stepChain: &callbackChain[*StepInfo]{},
-			procChain: &callbackChain[*ProcessInfo]{},
-		},
 		processName: name,
 		init:        sync.Once{},
 		steps:       make(map[string]*StepMeta),
@@ -299,6 +289,20 @@ func (rf *runFlow) buildRunProcess(meta *ProcessMeta) *runProcess {
 	return &process
 }
 
+func (rf *runFlow) finalize() {
+	for _, future := range rf.futures {
+		future.Done()
+	}
+	for _, process := range rf.processes {
+		rf.combine(process.Status)
+	}
+	if rf.Normal() {
+		rf.Append(Success)
+	}
+	rf.process(After, rf.infoCache)
+	rf.finish.Done()
+}
+
 // Done function will block util all process done.
 func (rf *runFlow) Done() []*Future {
 	futures := rf.Flow()
@@ -323,8 +327,8 @@ func (rf *runFlow) Flow() []*Future {
 	if rf.futures != nil {
 		return rf.futures
 	}
-	rf.initialize()
-	info := &FlowInfo{
+	rf.combineConfig()
+	rf.infoCache = &FlowInfo{
 		basicInfo: &basicInfo{
 			Status: rf.Status,
 			Id:     rf.Id,
@@ -332,33 +336,14 @@ func (rf *runFlow) Flow() []*Future {
 		},
 		visibleContext: rf.visibleContext,
 	}
-	if rf.flowConfig.callbackChain != nil {
-		rf.process(Before, info)
-	}
+	rf.process(Before, rf.infoCache)
 	futures := make([]*Future, 0, len(rf.processes))
 	for _, process := range rf.processes {
 		futures = append(futures, process.flow())
 	}
 	rf.futures = futures
 	rf.finish.Add(1)
-	if rf.flowConfig.callbackChain == nil {
-		return futures
-	}
-
-	go func() {
-		for _, future := range futures {
-			future.Done()
-		}
-		for _, process := range rf.processes {
-			rf.combine(process.Status)
-		}
-		if rf.Normal() {
-			rf.Append(Success)
-		}
-		rf.process(After, info)
-		rf.finish.Done()
-	}()
-
+	go rf.finalize()
 	return futures
 }
 

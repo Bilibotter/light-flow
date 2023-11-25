@@ -153,7 +153,6 @@ func (rp *runProcess) finalize() {
 	}
 
 	rp.procCallback(After)
-
 	rp.finish.Done()
 }
 
@@ -225,7 +224,7 @@ func (rp *runProcess) runStep(step *runStep) {
 }
 
 func (rp *runProcess) stepCallback(step *runStep, flag string) {
-	if rp.stepChain == nil {
+	if rp.stepChain.filters == nil {
 		return
 	}
 	info := rp.summaryStepInfo(step)
@@ -235,10 +234,6 @@ func (rp *runProcess) stepCallback(step *runStep, flag string) {
 }
 
 func (rp *runProcess) procCallback(flag string) {
-	if rp.procChain == nil {
-		return
-	}
-
 	info := &ProcessInfo{
 		visibleContext: rp.visibleContext,
 		basicInfo: basicInfo{
