@@ -90,26 +90,6 @@ func CopyPropertiesSkipNotEmpty(src, dst interface{}) {
 
 func CopyProperties(src, dst interface{}) {
 	copyProperties(src, dst, false)
-	//srcValue := reflect.ValueOf(src)
-	//dstValue := reflect.ValueOf(dst)
-	//
-	//if srcValue.Kind() != reflect.Ptr || dstValue.Kind() != reflect.Ptr {
-	//	panic("Both src and dst must be pointers")
-	//}
-	//
-	//srcElem := srcValue.Elem()
-	//dstElem := dstValue.Elem()
-	//srcType := srcElem.Type()
-	//for i := 0; i < srcElem.NumField(); i++ {
-	//	srcField := srcElem.Field(i)
-	//	srcFieldName := srcType.Field(i).GetCtxName
-	//
-	//	if dstField := dstElem.FieldByName(srcFieldName); dstField.IsValid() && dstField.Type() == srcField.Type() {
-	//		if !srcField.IsZero() {
-	//			dstField.Set(srcField)
-	//		}
-	//	}
-	//}
 }
 
 func copyProperties(src, dst interface{}, skipNotEmpty bool) {
@@ -126,9 +106,22 @@ func copyProperties(src, dst interface{}, skipNotEmpty bool) {
 	for i := 0; i < srcElem.NumField(); i++ {
 		srcField := srcElem.Field(i)
 		srcFieldName := srcType.Field(i).Name
-
 		if len(srcType.Field(i).PkgPath) != 0 {
 			continue
+		}
+
+		if tag := srcType.Field(i).Tag.Get("flow"); len(tag) != 0 {
+			splits := strings.Split(tag, ";")
+			skip := false
+			for _, s := range splits {
+				skip = s == "skip"
+				if skip {
+					break
+				}
+			}
+			if skip {
+				continue
+			}
 		}
 
 		if dstField := dstElem.FieldByName(srcFieldName); dstField.IsValid() && dstField.Type() == srcField.Type() {

@@ -93,7 +93,7 @@ type callback[T BasicInfoI] struct {
 
 type visibleContext struct {
 	adjacencyTable
-	*visitor // step visitor will update when combineConfig, so using pointer
+	*visitor // step visitor will update when mergeConfig, so using pointer
 	parent   *visibleContext
 }
 
@@ -202,14 +202,6 @@ func (s *Status) ExplainStatus() []string {
 	return compress
 }
 
-func (s *Status) combine(status *Status) {
-	for current := s.load(); current|status.load() != current; current = s.load() {
-		if s.cas(current, current|status.load()) {
-			return
-		}
-	}
-}
-
 // Pop function pops a status bit from the specified address.
 // The function checks if the specified status bit exists in the current value.
 // If it exists, it removes the status bit, and returns true indicating successful removal of the status bit.
@@ -274,7 +266,13 @@ func (bi *basicInfo) GetId() string {
 	return bi.Id
 }
 
-func (cc *callbackChain[T]) copyChain() []*callback[T] {
+func (cc *callbackChain[T]) clone() callbackChain[T] {
+	config := callbackChain[T]{}
+	config.filters = cc.copyFilters()
+	return config
+}
+
+func (cc *callbackChain[T]) copyFilters() []*callback[T] {
 	result := make([]*callback[T], 0, len(cc.filters))
 	for _, filter := range cc.filters {
 		result = append(result, filter)
@@ -292,6 +290,13 @@ func (cc *callbackChain[T]) addCallback(flag string, must bool, run func(info T)
 	cc.filters = append(cc.filters, filter)
 	cc.maintain()
 	return filter
+}
+
+func (cc *callbackChain[T]) combine(chain *callbackChain[T]) {
+	for _, filter := range chain.filters {
+		cc.filters = append(cc.filters, filter)
+	}
+	cc.maintain()
 }
 
 func (cc *callbackChain[T]) maintain() {

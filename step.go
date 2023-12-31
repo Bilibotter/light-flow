@@ -169,3 +169,13 @@ func (step *runStep) syncInfo() {
 	step.infoCache.Start = step.Start
 	step.infoCache.End = step.End
 }
+
+func (sc *stepConfig) combine(config *stepConfig) {
+	CopyPropertiesSkipNotEmpty(sc, config)
+}
+
+func (sc *stepConfig) clone() stepConfig {
+	config := stepConfig{}
+	CopyPropertiesSkipNotEmpty(sc, config)
+	return config
+}

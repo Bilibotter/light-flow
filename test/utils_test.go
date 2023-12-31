@@ -56,19 +56,19 @@ func TestGetFuncName(t *testing.T) {
 func TestGetStructName(t *testing.T) {
 	d := Dst{}
 	dP := &Dst{}
-	step := light_flow.FlowConfig{}
-	stepP := &light_flow.FlowConfig{}
+	step := light_flow.FlowMeta{}
+	stepP := &light_flow.FlowMeta{}
 	if light_flow.GetStructName(d) != "Dst" {
 		t.Errorf("get Dst struct name error")
 	}
 	if light_flow.GetStructName(dP) != "*Dst" {
 		t.Errorf("get Dst pointer struct name error")
 	}
-	if light_flow.GetStructName(step) != "FlowConfig" {
-		t.Errorf("get runStep struct name error")
+	if light_flow.GetStructName(step) != "FlowMeta" {
+		t.Errorf("get FlowMeta struct name error")
 	}
-	if light_flow.GetStructName(stepP) != "*FlowConfig" {
-		t.Errorf("get runStep pointer struct name error")
+	if light_flow.GetStructName(stepP) != "*FlowMeta" {
+		t.Errorf("get FlowMeta pointer struct name error")
 	}
 }
 

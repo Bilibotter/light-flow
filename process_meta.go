@@ -15,6 +15,7 @@ const (
 type ProcessMeta struct {
 	processConfig
 	visitor
+	belong      *FlowMeta
 	init        sync.Once
 	processName string
 	steps       map[string]*StepMeta
@@ -30,10 +31,10 @@ type ProcessInfo struct {
 
 type processConfig struct {
 	stepConfig
-	procTimeout   time.Duration
-	notUseDefault bool
-	stepChain     callbackChain[*StepInfo]
-	procChain     callbackChain[*ProcessInfo]
+	procTimeout       time.Duration
+	procNotUseDefault bool
+	stepChain         callbackChain[*StepInfo]
+	procChain         callbackChain[*ProcessInfo]
 }
 
 func newProcessConfig() processConfig {
@@ -41,13 +42,20 @@ func newProcessConfig() processConfig {
 	return config
 }
 
-func (pc *processConfig) merge(merged *processConfig) *processConfig {
-	CopyPropertiesSkipNotEmpty(merged, pc)
-	pc.stepChain.filters = append(merged.stepChain.copyChain(), pc.stepChain.filters...)
-	pc.stepChain.maintain()
-	pc.procChain.filters = append(merged.procChain.copyChain(), pc.procChain.filters...)
-	pc.procChain.maintain()
-	return pc
+func (pc *processConfig) clone() processConfig {
+	config := processConfig{}
+	CopyPropertiesSkipNotEmpty(pc, config)
+	config.stepConfig = pc.stepConfig.clone()
+	config.stepChain = pc.stepChain.clone()
+	config.procChain = pc.procChain.clone()
+	return config
+}
+
+func (pc *processConfig) combine(config *processConfig) {
+	CopyPropertiesSkipNotEmpty(pc, config)
+	pc.stepConfig.combine(&config.stepConfig)
+	pc.stepChain.combine(&config.stepChain)
+	pc.procChain.combine(&config.procChain)
 }
 
 func (pc *processConfig) ProcessTimeout(timeout time.Duration) *processConfig {
@@ -88,16 +96,24 @@ func (pm *ProcessMeta) register() {
 	}
 }
 
+func (pm *ProcessMeta) clone() *ProcessMeta {
+	meta := &ProcessMeta{
+		processConfig: pm.processConfig.clone(),
+		init:          sync.Once{},
+		processName:   pm.processName,
+		tailStep:      pm.tailStep,
+		nodeNum:       pm.nodeNum,
+	}
+	meta.steps = make(map[string]*StepMeta, len(pm.steps))
+	for k, v := range pm.steps {
+		meta.steps[k] = v
+	}
+	return meta
+}
+
 func (pm *ProcessMeta) initialize() {
 	pm.init.Do(func() {
 		pm.completeVisitorInfo()
-		if pm.notUseDefault {
-			return
-		}
-		if defaultConfig == nil {
-			return
-		}
-		pm.processConfig.merge(&defaultConfig.processConfig)
 	})
 }
 
@@ -110,6 +126,8 @@ func (pm *ProcessMeta) completeVisitorInfo() {
 	return
 }
 
+// Merge will not merge config,
+// because has not effective design to not use merged config.
 func (pm *ProcessMeta) Merge(name string) {
 	wrap, exist := allProcess.Load(name)
 	if !exist {
@@ -232,7 +250,7 @@ func (pm *ProcessMeta) AliasStep(alias string, run func(ctx Context) (any, error
 }
 
 func (pm *ProcessMeta) NotUseDefault() {
-	pm.notUseDefault = true
+	pm.procNotUseDefault = true
 }
 
 func (pm *ProcessMeta) addVisitorInfo(step *StepMeta) {

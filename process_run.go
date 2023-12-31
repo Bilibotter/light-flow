@@ -145,7 +145,7 @@ func (rp *runProcess) finalize() {
 	}
 
 	for _, step := range rp.flowSteps {
-		rp.combine(step.Status)
+		rp.append(step.Status.load())
 	}
 
 	if rp.Normal() {
@@ -224,13 +224,24 @@ func (rp *runProcess) runStep(step *runStep) {
 }
 
 func (rp *runProcess) stepCallback(step *runStep, flag string) {
-	if rp.stepChain.filters == nil {
+	info := rp.summaryStepInfo(step)
+	panicStack := ""
+	defer func() {
+		if len(panicStack) > 0 && step.Err == nil {
+			step.Err = fmt.Errorf(panicStack)
+		}
+	}()
+	if !rp.belong.procNotUseDefault && !rp.procNotUseDefault && defaultConfig != nil {
+		panicStack = defaultConfig.stepChain.process(flag, info)
+	}
+	if len(panicStack) != 0 {
 		return
 	}
-	info := rp.summaryStepInfo(step)
-	if panicStack := rp.stepChain.process(flag, info); step.Err == nil && len(panicStack) != 0 {
-		step.Err = fmt.Errorf(panicStack)
+	panicStack = rp.belong.stepChain.process(flag, info)
+	if len(panicStack) != 0 {
+		return
 	}
+	panicStack = rp.stepChain.process(flag, info)
 }
 
 func (rp *runProcess) procCallback(flag string) {
@@ -243,7 +254,10 @@ func (rp *runProcess) procCallback(flag string) {
 		},
 		FlowId: rp.flowId,
 	}
-
+	if !rp.belong.procNotUseDefault && !rp.procNotUseDefault && defaultConfig != nil {
+		defaultConfig.procChain.process(flag, info)
+	}
+	rp.belong.procChain.process(flag, info)
 	rp.procChain.process(flag, info)
 }
 

@@ -208,7 +208,7 @@ func TestUnableDefaultProcessConfig(t *testing.T) {
 	config.AfterFlow(true, AfterFlowProcessor)
 
 	workflow := flow.RegisterFlow("TestUnableDefaultProcessConfig")
-	workflow.NotUseDefault()
+	workflow.NoUseDefault()
 	process := workflow.Process("TestUnableDefaultProcessConfig")
 	process.AliasStep("1", GenerateStep(1))
 	process.AliasStep("2", GenerateStep(2), "1")

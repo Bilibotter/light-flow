@@ -16,7 +16,7 @@ var (
 )
 
 var (
-	defaultConfig *FlowConfig
+	defaultConfig *flowConfig
 )
 
 type Controller interface {
@@ -39,18 +39,18 @@ type FlowController interface {
 	ProcessController(name string) Controller
 }
 
-type FlowConfig struct {
+type flowConfig struct {
 	callbackChain[*FlowInfo]
 	processConfig
 }
 
 type FlowMeta struct {
-	FlowConfig
+	flowConfig
 	visitor
-	init         sync.Once
-	flowName     string
-	noUseDefault bool
-	processes    []*ProcessMeta
+	init              sync.Once
+	flowName          string
+	flowNotUseDefault bool
+	processes         []*ProcessMeta
 }
 
 type runFlow struct {
@@ -79,8 +79,8 @@ func SetIdGenerator(method func() string) {
 	generateId = method
 }
 
-func CreateDefaultConfig() *FlowConfig {
-	defaultConfig = &FlowConfig{
+func CreateDefaultConfig() *flowConfig {
+	defaultConfig = &flowConfig{
 		processConfig: newProcessConfig(),
 	}
 	return defaultConfig
@@ -144,21 +144,27 @@ func BuildRunFlow(name string, input map[string]any) *runFlow {
 	return factory.(*FlowMeta).buildRunFlow(input)
 }
 
-func (fc *FlowConfig) BeforeFlow(must bool, callback func(*FlowInfo) (keepOn bool, err error)) *callback[*FlowInfo] {
+func (fc *flowConfig) BeforeFlow(must bool, callback func(*FlowInfo) (keepOn bool, err error)) *callback[*FlowInfo] {
 	return fc.addCallback(Before, must, callback)
 }
 
-func (fc *FlowConfig) AfterFlow(must bool, callback func(*FlowInfo) (keepOn bool, err error)) *callback[*FlowInfo] {
+func (fc *flowConfig) AfterFlow(must bool, callback func(*FlowInfo) (keepOn bool, err error)) *callback[*FlowInfo] {
 	return fc.addCallback(After, must, callback)
 }
 
-func (fc *FlowConfig) merge(merged *FlowConfig) *FlowConfig {
-	CopyPropertiesSkipNotEmpty(merged, fc)
-	if merged.callbackChain.filters != nil {
-		fc.filters = append(merged.copyChain(), fc.filters...)
-		fc.maintain()
-	}
+func (fc *flowConfig) combine(config *flowConfig) *flowConfig {
+	CopyPropertiesSkipNotEmpty(fc, config)
+	fc.callbackChain.combine(&config.callbackChain)
+	fc.processConfig.combine(&config.processConfig)
 	return fc
+}
+
+func (fc *flowConfig) clone() flowConfig {
+	config := flowConfig{}
+	CopyPropertiesSkipNotEmpty(fc, config)
+	config.callbackChain = fc.callbackChain.clone()
+	config.processConfig = fc.processConfig.clone()
+	return config
 }
 
 func (fm *FlowMeta) register() *FlowMeta {
@@ -174,20 +180,8 @@ func (fm *FlowMeta) register() *FlowMeta {
 	return fm
 }
 
-func (fm *FlowMeta) combineConfig() {
-	fm.init.Do(func() {
-		if fm.noUseDefault {
-			return
-		}
-		if defaultConfig == nil {
-			return
-		}
-		fm.merge(defaultConfig)
-	})
-}
-
-func (fm *FlowMeta) NotUseDefault() *FlowMeta {
-	fm.noUseDefault = true
+func (fm *FlowMeta) NoUseDefault() *FlowMeta {
+	fm.flowNotUseDefault = true
 	return fm
 }
 
@@ -224,12 +218,15 @@ func (fm *FlowMeta) buildRunFlow(input map[string]any) *runFlow {
 	return &rf
 }
 
-func (fm *FlowMeta) TakeProcess(name string) {
+func (fm *FlowMeta) CloneProcess(name string) *ProcessMeta {
 	pm, exist := allProcess.Load(name)
 	if !exist {
 		panic(fmt.Sprintf("process [%s] not registered", name))
 	}
-	fm.processes = append(fm.processes, pm.(*ProcessMeta))
+	meta := pm.(*ProcessMeta).clone()
+	meta.belong = fm
+	fm.processes = append(fm.processes, meta)
+	return meta
 }
 
 func (fm *FlowMeta) Process(name string) *ProcessMeta {
@@ -239,6 +236,7 @@ func (fm *FlowMeta) Process(name string) *ProcessMeta {
 			index:   0,
 			roster:  map[int32]string{0: name},
 		},
+		belong:      fm,
 		processName: name,
 		init:        sync.Once{},
 		steps:       make(map[string]*StepMeta),
@@ -289,10 +287,13 @@ func (rf *runFlow) finalize() {
 		future.Done()
 	}
 	for _, process := range rf.processes {
-		rf.combine(process.Status)
+		rf.append(process.Status.load())
 	}
 	if rf.Normal() {
 		rf.Append(Success)
+	}
+	if !rf.flowNotUseDefault && defaultConfig != nil {
+		defaultConfig.process(After, rf.infoCache)
 	}
 	rf.process(After, rf.infoCache)
 	rf.finish.Done()
@@ -322,7 +323,6 @@ func (rf *runFlow) Flow() []*Future {
 	if rf.futures != nil {
 		return rf.futures
 	}
-	rf.combineConfig()
 	rf.infoCache = &FlowInfo{
 		basicInfo: &basicInfo{
 			Status: rf.Status,
@@ -330,6 +330,9 @@ func (rf *runFlow) Flow() []*Future {
 			Name:   rf.flowName,
 		},
 		visibleContext: rf.visibleContext,
+	}
+	if !rf.flowNotUseDefault && defaultConfig != nil {
+		defaultConfig.process(Before, rf.infoCache)
 	}
 	rf.process(Before, rf.infoCache)
 	futures := make([]*Future, 0, len(rf.processes))
