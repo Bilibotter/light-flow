@@ -3,7 +3,6 @@ package light_flow
 import (
 	"fmt"
 	"runtime/debug"
-	"sort"
 	"sync"
 	"sync/atomic"
 )
@@ -60,7 +59,7 @@ type BasicInfoI interface {
 }
 
 type Context interface {
-	QueryName() string
+	ContextName() string
 	Get(key string) (value any, exist bool)
 	GetAll(key string) map[string]any
 	GetResult(key string) (value any, exist bool)
@@ -297,7 +296,6 @@ func (cc *Handler[T]) addCallback(flag string, must bool, run func(info T) (bool
 	}
 
 	cc.filter = append(cc.filter, filter)
-	cc.maintain()
 	return filter
 }
 
@@ -305,16 +303,6 @@ func (cc *Handler[T]) combine(chain *Handler[T]) {
 	for _, filter := range chain.filter {
 		cc.filter = append(cc.filter, filter)
 	}
-	cc.maintain()
-}
-
-func (cc *Handler[T]) maintain() {
-	sort.SliceStable(cc.filter, func(i, j int) bool {
-		if cc.filter[i].must == cc.filter[j].must {
-			return i < j
-		}
-		return cc.filter[i].must
-	})
 }
 
 // don't want to raise error not deal hint, so return string
@@ -485,7 +473,7 @@ func (n *node) search(visible Status) (any, bool) {
 	return n.Next.search(visible)
 }
 
-func (vc *visibleContext) QueryName() string {
+func (vc *visibleContext) ContextName() string {
 	return vc.roster[vc.index]
 }
 

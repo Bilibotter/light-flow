@@ -366,6 +366,8 @@ func (rf *runFlow) advertise(flag string) {
 	rf.handle(flag, rf.infoCache)
 }
 
+// Fails returns a slice of fail result Future pointers.
+// If all process success, return an empty slice.
 func (rf *runFlow) Fails() []*Future {
 	futures := make([]*Future, 0)
 	for _, future := range rf.futures {
@@ -376,6 +378,8 @@ func (rf *runFlow) Fails() []*Future {
 	return futures
 }
 
+// Futures returns the slice of future objects.
+// future can get the result and status of the process.
 func (rf *runFlow) Futures() []*Future {
 	return rf.futures
 }
@@ -388,6 +392,8 @@ func (rf *runFlow) ListProcess() []string {
 	return processes
 }
 
+// ProcessController returns the Controller of the specified process name.
+// Controller can stop and resume the process.
 func (rf *runFlow) ProcessController(processName string) Controller {
 	for _, process := range rf.processes {
 		if process.processName == processName {
@@ -403,12 +409,14 @@ func (rf *runFlow) Pause() {
 	}
 }
 
+// Resume resumes the execution of the workflow.
 func (rf *runFlow) Resume() {
 	for _, process := range rf.processes {
 		process.Resume()
 	}
 }
 
+// Stop stops the execution of the workflow.
 func (rf *runFlow) Stop() {
 	for _, process := range rf.processes {
 		process.Stop()
