@@ -16,7 +16,7 @@ var (
 )
 
 var (
-	defaultConfig *flowConfig
+	defaultConfig *FlowConfig
 )
 
 type Controller interface {
@@ -39,13 +39,13 @@ type FlowController interface {
 	ProcessController(name string) Controller
 }
 
-type flowConfig struct {
-	callbackChain[*FlowInfo]
-	processConfig
+type FlowConfig struct {
+	Handler[*FlowInfo] `flow:"skip"`
+	ProcessConfig      `flow:"skip"`
 }
 
 type FlowMeta struct {
-	flowConfig
+	FlowConfig
 	visitor
 	init              sync.Once
 	flowName          string
@@ -79,9 +79,9 @@ func SetIdGenerator(method func() string) {
 	generateId = method
 }
 
-func CreateDefaultConfig() *flowConfig {
-	defaultConfig = &flowConfig{
-		processConfig: newProcessConfig(),
+func CreateDefaultConfig() *FlowConfig {
+	defaultConfig = &FlowConfig{
+		ProcessConfig: newProcessConfig(),
 	}
 	return defaultConfig
 }
@@ -144,27 +144,43 @@ func BuildRunFlow(name string, input map[string]any) *runFlow {
 	return factory.(*FlowMeta).buildRunFlow(input)
 }
 
-func (fc *flowConfig) BeforeFlow(must bool, callback func(*FlowInfo) (keepOn bool, err error)) *callback[*FlowInfo] {
+func (fc *FlowConfig) BeforeFlow(must bool, callback func(*FlowInfo) (keepOn bool, err error)) *callback[*FlowInfo] {
 	return fc.addCallback(Before, must, callback)
 }
 
-func (fc *flowConfig) AfterFlow(must bool, callback func(*FlowInfo) (keepOn bool, err error)) *callback[*FlowInfo] {
+func (fc *FlowConfig) AfterFlow(must bool, callback func(*FlowInfo) (keepOn bool, err error)) *callback[*FlowInfo] {
 	return fc.addCallback(After, must, callback)
 }
 
-func (fc *flowConfig) combine(config *flowConfig) *flowConfig {
+func (fc *FlowConfig) combine(config *FlowConfig) *FlowConfig {
 	CopyPropertiesSkipNotEmpty(fc, config)
-	fc.callbackChain.combine(&config.callbackChain)
-	fc.processConfig.combine(&config.processConfig)
+	fc.Handler.combine(&config.Handler)
+	fc.ProcessConfig.combine(&config.ProcessConfig)
 	return fc
 }
 
-func (fc *flowConfig) clone() flowConfig {
-	config := flowConfig{}
+func (fc *FlowConfig) clone() FlowConfig {
+	config := FlowConfig{}
 	CopyPropertiesSkipNotEmpty(fc, config)
-	config.callbackChain = fc.callbackChain.clone()
-	config.processConfig = fc.processConfig.clone()
+	config.Handler = fc.Handler.clone()
+	config.ProcessConfig = fc.ProcessConfig.clone()
 	return config
+}
+
+func (fm *FlowMeta) initialize() {
+	fm.init.Do(func() {
+		if fm.flowNotUseDefault || defaultConfig == nil {
+			return
+		}
+		CopyPropertiesSkipNotEmpty(defaultConfig, &fm.FlowConfig)
+		CopyPropertiesSkipNotEmpty(&defaultConfig.ProcessConfig, &fm.FlowConfig.ProcessConfig)
+		for _, meta := range fm.processes {
+			if meta.ProcNotUseDefault {
+				continue
+			}
+			CopyPropertiesSkipNotEmpty(&fm.ProcessConfig, &meta.ProcessConfig)
+		}
+	})
 }
 
 func (fm *FlowMeta) register() *FlowMeta {
@@ -272,7 +288,7 @@ func (rf *runFlow) buildRunProcess(meta *ProcessMeta) *runProcess {
 		lock:  &sync.RWMutex{},
 		nodes: map[string]*node{},
 	}
-	for _, stepMeta := range meta.sortedStep() {
+	for _, stepMeta := range meta.sortedSteps() {
 		step := process.buildRunStep(stepMeta)
 		step.adjacencyTable = stepTable
 		process.flowSteps[stepMeta.stepName] = step
@@ -292,10 +308,7 @@ func (rf *runFlow) finalize() {
 	if rf.Normal() {
 		rf.Append(Success)
 	}
-	if !rf.flowNotUseDefault && defaultConfig != nil {
-		defaultConfig.process(After, rf.infoCache)
-	}
-	rf.process(After, rf.infoCache)
+	rf.advertise(After)
 	rf.finish.Done()
 }
 
@@ -323,6 +336,7 @@ func (rf *runFlow) Flow() []*Future {
 	if rf.futures != nil {
 		return rf.futures
 	}
+	rf.initialize()
 	rf.infoCache = &FlowInfo{
 		basicInfo: &basicInfo{
 			Status: rf.Status,
@@ -331,18 +345,25 @@ func (rf *runFlow) Flow() []*Future {
 		},
 		visibleContext: rf.visibleContext,
 	}
-	if !rf.flowNotUseDefault && defaultConfig != nil {
-		defaultConfig.process(Before, rf.infoCache)
-	}
-	rf.process(Before, rf.infoCache)
+	rf.advertise(Before)
 	futures := make([]*Future, 0, len(rf.processes))
 	for _, process := range rf.processes {
-		futures = append(futures, process.flow())
+		if rf.Contain(CallbackFail) {
+			process.Append(CallbackFail)
+		}
+		futures = append(futures, process.schedule())
 	}
 	rf.futures = futures
 	rf.finish.Add(1)
 	go rf.finalize()
 	return futures
+}
+
+func (rf *runFlow) advertise(flag string) {
+	if !rf.flowNotUseDefault && defaultConfig != nil {
+		defaultConfig.handle(flag, rf.infoCache)
+	}
+	rf.handle(flag, rf.infoCache)
 }
 
 func (rf *runFlow) Fails() []*Future {
@@ -367,9 +388,9 @@ func (rf *runFlow) ListProcess() []string {
 	return processes
 }
 
-func (rf *runFlow) ProcessController(name string) Controller {
+func (rf *runFlow) ProcessController(processName string) Controller {
 	for _, process := range rf.processes {
-		if process.processName == name {
+		if process.processName == processName {
 			return process
 		}
 	}

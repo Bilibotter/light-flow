@@ -176,42 +176,42 @@ func TestExplainStatus1(t *testing.T) {
 	if status := light_flow.Status(0); !status.Append(light_flow.Cancel) {
 		t.Errorf("cancel status append error")
 	} else if !status.Contain(light_flow.Cancel) {
-		t.Errorf("cancel status not cotain after append")
+		t.Errorf("cancel status not contain after append")
 	}
 	if status := light_flow.Status(0); !status.Append(light_flow.Pause) {
 		t.Errorf("panic status append error")
 	} else if !status.Contain(light_flow.Pause) {
-		t.Errorf("pause status not cotain after append")
+		t.Errorf("pause status not contain after append")
 	}
 	if status := light_flow.Status(0); !status.Append(light_flow.Running) {
 		t.Errorf("running status append error")
 	} else if !status.Contain(light_flow.Running) {
-		t.Errorf("running status not cotain after append")
+		t.Errorf("running status not contain after append")
 	}
 	if status := light_flow.Status(0); !status.Append(light_flow.Success) {
 		t.Errorf("success status append error")
 	} else if !status.Contain(light_flow.Success) {
-		t.Errorf("success status not cotain after append")
+		t.Errorf("success status not contain after append")
 	}
 	if status := light_flow.Status(0); !status.Append(light_flow.Failed) {
 		t.Errorf("failed status append error")
 	} else if !status.Contain(light_flow.Failed) {
-		t.Errorf("failed status not cotain after append")
+		t.Errorf("failed status not contain after append")
 	}
 	if status := light_flow.Status(0); !status.Append(light_flow.Timeout) {
 		t.Errorf("timeout status append error")
 	} else if !status.Contain(light_flow.Timeout) {
-		t.Errorf("timeout status not cotain after append")
+		t.Errorf("timeout status not contain after append")
 	}
 	if status := light_flow.Status(0); !status.Append(light_flow.Panic) {
 		t.Errorf("panic status append error")
 	} else if !status.Contain(light_flow.Panic) {
-		t.Errorf("panic status not cotain after append")
+		t.Errorf("panic status not contain after append")
 	}
 	if status := light_flow.Status(0); !status.Append(light_flow.Error) {
 		t.Errorf("error status append error")
 	} else if !status.Contain(light_flow.Error) {
-		t.Errorf("error status not cotain after append")
+		t.Errorf("error status not contain after append")
 	}
 }
 

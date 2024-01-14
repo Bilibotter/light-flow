@@ -115,59 +115,18 @@ func PanicStepProcessor(info *flow.StepInfo) (bool, error) {
 	return true, nil
 }
 
-func TestProcessorRandomOrder(t *testing.T) {
+func TestProcessorWrongOrder(t *testing.T) {
 	defer resetCurrent()
-	workflow := flow.RegisterFlow("TestProcessorRandomOrder")
-	process := workflow.Process("TestProcessorRandomOrder")
+	workflow := flow.RegisterFlow("TestProcessorWrongOrder")
+	process := workflow.Process("TestProcessorWrongOrder")
 	process.AliasStep("1", GenerateStep(1))
 	process.BeforeStep(false, CheckStepCurrent(3))
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("process not panic with false callback order")
+		}
+	}()
 	process.BeforeStep(true, CheckStepCurrent(0))
-	process.BeforeStep(true, CheckStepCurrent(1))
-	process.BeforeStep(false, CheckStepCurrent(4))
-	process.BeforeStep(false, CheckStepCurrent(5))
-	process.BeforeStep(true, CheckStepCurrent(2))
-	process.BeforeStep(false, CheckStepCurrent(6))
-	features := flow.DoneFlow("TestProcessorRandomOrder", nil)
-	for _, feature := range features.Futures() {
-		explain := feature.ExplainStatus()
-		if !feature.Success() {
-			t.Errorf("process[%s] failed,explian=%v", feature.Name, explain)
-		}
-		if feature.Contain(flow.Panic) {
-			t.Errorf("process[%s] not panic, but explain contain, but explain=%v", feature.Name, explain)
-		}
-	}
-	if atomic.LoadInt64(&current) != 8 {
-		t.Errorf("execute 8 step, but current = %d", current)
-	}
-}
-
-func TestProcessorOrder2(t *testing.T) {
-	defer resetCurrent()
-	workflow := flow.RegisterFlow("TestProcessorOrder2")
-	process := workflow.Process("TestProcessorOrder2")
-	process.AliasStep("1", GenerateStep(1))
-	process.BeforeProcess(false, CheckProcCurrent(1))
-	process.BeforeProcess(true, CheckProcCurrent(0))
-	process.BeforeStep(false, CheckStepCurrent(3))
-	process.BeforeStep(true, CheckStepCurrent(2))
-	process.AfterStep(false, CheckStepCurrent(6))
-	process.AfterStep(true, CheckStepCurrent(5))
-	process.AfterProcess(false, CheckProcCurrent(8))
-	process.AfterProcess(true, CheckProcCurrent(7))
-	features := flow.DoneFlow("TestProcessorOrder2", nil)
-	for _, feature := range features.Futures() {
-		explain := feature.ExplainStatus()
-		if !feature.Success() {
-			t.Errorf("process[%s] failed,explian=%v", feature.Name, explain)
-		}
-		if feature.Contain(flow.Panic) {
-			t.Errorf("process[%s] not panic, but explain contain, but explain=%v", feature.Name, explain)
-		}
-	}
-	if atomic.LoadInt64(&current) != 9 {
-		t.Errorf("execute 9 step, but current = %d", current)
-	}
 }
 
 func TestProcessorOrder1(t *testing.T) {
@@ -249,8 +208,8 @@ func TestEssentialProcProcessorPanic(t *testing.T) {
 			t.Errorf("process[%s] success, but expected failed", feature.Name)
 		}
 		explain := feature.ExplainStatus()
-		if !feature.Contain(flow.Panic) {
-			t.Errorf("process[%s] panic, but explain not cotain, but explain=%v", feature.Name, explain)
+		if !feature.Contain(flow.CallbackFail) {
+			t.Errorf("process[%s] callback fail, but explain not contain, but explain=%v", feature.Name, explain)
 		}
 	}
 	if atomic.LoadInt64(&current) != 1 {
@@ -267,8 +226,8 @@ func TestEssentialProcProcessorPanic(t *testing.T) {
 			t.Errorf("process[%s] success, but expected failed", feature.Name)
 		}
 		explain := feature.ExplainStatus()
-		if !feature.Contain(flow.Panic) {
-			t.Errorf("process[%s] panic, but explain not cotain, but explain=%v", feature.Name, explain)
+		if !feature.Contain(flow.CallbackFail) {
+			t.Errorf("process[%s] callback fail, but explain not contain, but explain=%v", feature.Name, explain)
 		}
 	}
 	if atomic.LoadInt64(&current) != 2 {
@@ -327,8 +286,8 @@ func TestEssentialStepProcessorPanic(t *testing.T) {
 			t.Errorf("process[%s] success, but expected failed", feature.Name)
 		}
 		explain := feature.ExplainStatus()
-		if !feature.Contain(flow.Panic) {
-			t.Errorf("process[%s] panic, but explain not cotain, but explain=%v", feature.Name, explain)
+		if !feature.Contain(flow.CallbackFail) {
+			t.Errorf("process[%s] callbackfail, but explain not contain, but explain=%v", feature.Name, explain)
 		}
 	}
 	if atomic.LoadInt64(&current) != 1 {
@@ -345,8 +304,8 @@ func TestEssentialStepProcessorPanic(t *testing.T) {
 			t.Errorf("process[%s] success, but expected failed", feature.Name)
 		}
 		explain := feature.ExplainStatus()
-		if !feature.Contain(flow.Panic) {
-			t.Errorf("process[%s] panic, but explain not cotain, but explain=%v", feature.Name, explain)
+		if !feature.Contain(flow.CallbackFail) {
+			t.Errorf("process[%s] callback fail, but explain not contain, but explain=%v", feature.Name, explain)
 		}
 	}
 	if atomic.LoadInt64(&current) != 2 {
@@ -367,19 +326,21 @@ func TestProcessorWhenExceptionOccur(t *testing.T) {
 	step := process.AliasStep("3", GenerateErrorStep(3, "ms"))
 	step.Timeout(time.Millisecond)
 	features := flow.DoneFlow("TestProcessorWhenExceptionOccur", nil)
+	// DoneFlow return due to timeout, but step not complete
+	time.Sleep(100 * time.Millisecond)
 	for _, feature := range features.Futures() {
 		if feature.Success() {
 			t.Errorf("process[%s] success, but expected failed", feature.Name)
 		}
 		explain := feature.ExplainStatus()
 		if !feature.Contain(flow.Timeout) {
-			t.Errorf("process[%s] timeout, but explain not cotain, explain=%v", feature.Name, explain)
+			t.Errorf("process[%s] timeout, but explain not contain, explain=%v", feature.Name, explain)
 		}
 		if !feature.Contain(flow.Error) {
-			t.Errorf("process[%s] error, but explain not cotain, but explain=%v", feature.Name, explain)
+			t.Errorf("process[%s] error, but explain not contain, but explain=%v", feature.Name, explain)
 		}
 		if !feature.Contain(flow.Panic) {
-			t.Errorf("process[%s] panic, but explain not cotain, but explain=%v", feature.Name, explain)
+			t.Errorf("process[%s] panic, but explain not contain, but explain=%v", feature.Name, explain)
 		}
 	}
 	if atomic.LoadInt64(&current) != 11 {

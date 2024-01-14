@@ -100,6 +100,8 @@ func TestMultipleExceptionStatus(t *testing.T) {
 	step := process.AliasStep("3", GenerateErrorStep(3, "ms"))
 	step.Timeout(time.Millisecond)
 	result := flow.DoneFlow("TestMultipleExceptionStatus", nil)
+	// DoneFlow return due to timeout, but process not complete
+	time.Sleep(100 * time.Millisecond)
 	if result.Success() {
 		t.Errorf("process[%s] success, but expected failed", result.GetName())
 	} else {
@@ -118,19 +120,18 @@ func TestMultipleExceptionStatus(t *testing.T) {
 		}
 		explain := feature.ExplainStatus()
 		if !feature.Contain(flow.Timeout) {
-			t.Errorf("process[%s] timeout, but explain not cotain, explain=%v", feature.GetName(), explain)
+			t.Errorf("process[%s] timeout, but explain not contain, explain=%v", feature.GetName(), explain)
 		}
 		if !feature.Contain(flow.Error) {
-			t.Errorf("process[%s] error, but explain not cotain, but explain=%v", feature.GetName(), explain)
+			t.Errorf("process[%s] error, but explain not contain, but explain=%v", feature.GetName(), explain)
 		}
 		if !feature.Contain(flow.Panic) {
-			t.Errorf("process[%s] panic, but explain not cotain, but explain=%v", feature.GetName(), explain)
+			t.Errorf("process[%s] panic, but explain not contain, but explain=%v", feature.GetName(), explain)
 		}
 	}
 	if atomic.LoadInt64(&current) != 3 {
 		t.Errorf("execute 3 step, but current = %d", current)
 	}
-	time.Sleep(100 * time.Millisecond)
 }
 
 func TestSinglePanicStep(t *testing.T) {

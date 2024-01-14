@@ -13,7 +13,7 @@ const (
 )
 
 type ProcessMeta struct {
-	processConfig
+	ProcessConfig
 	visitor
 	belong      *FlowMeta
 	init        sync.Once
@@ -29,63 +29,67 @@ type ProcessInfo struct {
 	FlowId string
 }
 
-type processConfig struct {
-	stepConfig
-	procTimeout       time.Duration
-	procNotUseDefault bool
-	stepChain         callbackChain[*StepInfo]
-	procChain         callbackChain[*ProcessInfo]
+type ProcessConfig struct {
+	StepConfig
+	ProcTimeout       time.Duration
+	ProcNotUseDefault bool
+	stepChain         Handler[*StepInfo]    `flow:"skip"`
+	procChain         Handler[*ProcessInfo] `flow:"skip"`
 }
 
-func newProcessConfig() processConfig {
-	config := processConfig{}
+func newProcessConfig() ProcessConfig {
+	config := ProcessConfig{}
 	return config
 }
 
-func (pc *processConfig) clone() processConfig {
-	config := processConfig{}
+func (pc *ProcessConfig) clone() ProcessConfig {
+	config := ProcessConfig{}
 	CopyPropertiesSkipNotEmpty(pc, config)
-	config.stepConfig = pc.stepConfig.clone()
+	config.StepConfig = pc.StepConfig.clone()
 	config.stepChain = pc.stepChain.clone()
 	config.procChain = pc.procChain.clone()
 	return config
 }
 
-func (pc *processConfig) combine(config *processConfig) {
+func (pc *ProcessConfig) combine(config *ProcessConfig) {
 	CopyPropertiesSkipNotEmpty(pc, config)
-	pc.stepConfig.combine(&config.stepConfig)
+	pc.StepConfig.combine(&config.StepConfig)
 	pc.stepChain.combine(&config.stepChain)
 	pc.procChain.combine(&config.procChain)
 }
 
-func (pc *processConfig) ProcessTimeout(timeout time.Duration) *processConfig {
-	pc.procTimeout = timeout
+func (pc *ProcessConfig) ProcessTimeout(timeout time.Duration) *ProcessConfig {
+	pc.ProcTimeout = timeout
 	return pc
 }
 
-func (pc *processConfig) StepsRetry(retry int) *processConfig {
-	pc.stepConfig.stepRetry = retry
+func (pc *ProcessConfig) NotUseDefault() {
+	pc.ProcNotUseDefault = true
+}
+
+func (pc *ProcessConfig) StepsRetry(retry int) *ProcessConfig {
+	pc.StepConfig.StepRetry = retry
 	return pc
 }
 
-func (pc *processConfig) StepsTimeout(timeout time.Duration) *processConfig {
-	pc.stepConfig.stepTimeout = timeout
+func (pc *ProcessConfig) StepsTimeout(timeout time.Duration) *ProcessConfig {
+	pc.StepConfig.StepTimeout = timeout
 	return pc
 }
 
-func (pc *processConfig) BeforeStep(must bool, callback func(*StepInfo) (keepOn bool, err error)) *callback[*StepInfo] {
+func (pc *ProcessConfig) BeforeStep(must bool, callback func(*StepInfo) (keepOn bool, err error)) *callback[*StepInfo] {
 	return pc.stepChain.addCallback(Before, must, callback)
 }
 
-func (pc *processConfig) AfterStep(must bool, callback func(*StepInfo) (keepOn bool, err error)) *callback[*StepInfo] {
+func (pc *ProcessConfig) AfterStep(must bool, callback func(*StepInfo) (keepOn bool, err error)) *callback[*StepInfo] {
 	return pc.stepChain.addCallback(After, must, callback)
 }
 
-func (pc *processConfig) BeforeProcess(must bool, callback func(*ProcessInfo) (keepOn bool, err error)) *callback[*ProcessInfo] {
+func (pc *ProcessConfig) BeforeProcess(must bool, callback func(*ProcessInfo) (keepOn bool, err error)) *callback[*ProcessInfo] {
 	return pc.procChain.addCallback(Before, must, callback)
 }
 
-func (pc *processConfig) AfterProcess(must bool, callback func(*ProcessInfo) (keepOn bool, err error)) *callback[*ProcessInfo] {
+func (pc *ProcessConfig) AfterProcess(must bool, callback func(*ProcessInfo) (keepOn bool, err error)) *callback[*ProcessInfo] {
 	return pc.procChain.addCallback(After, must, callback)
 }
 
@@ -98,7 +102,7 @@ func (pm *ProcessMeta) register() {
 
 func (pm *ProcessMeta) clone() *ProcessMeta {
 	meta := &ProcessMeta{
-		processConfig: pm.processConfig.clone(),
+		ProcessConfig: pm.ProcessConfig.clone(),
 		init:          sync.Once{},
 		processName:   pm.processName,
 		tailStep:      pm.tailStep,
@@ -111,14 +115,15 @@ func (pm *ProcessMeta) clone() *ProcessMeta {
 	return meta
 }
 
+// todo:delete it
 func (pm *ProcessMeta) initialize() {
 	pm.init.Do(func() {
-		pm.completeVisitorInfo()
+		pm.constructVisible()
 	})
 }
 
-func (pm *ProcessMeta) completeVisitorInfo() {
-	for _, step := range pm.sortedStep() {
+func (pm *ProcessMeta) constructVisible() {
+	for _, step := range pm.sortedSteps() {
 		for _, waiter := range step.waiters {
 			waiter.visible = step.visible | waiter.visible
 		}
@@ -134,7 +139,7 @@ func (pm *ProcessMeta) Merge(name string) {
 		panic(fmt.Sprintf("can't merge not exist process[%s]", name))
 	}
 	mergedProcess := wrap.(*ProcessMeta)
-	for _, merge := range mergedProcess.sortedStep() {
+	for _, merge := range mergedProcess.sortedSteps() {
 		if _, exist = pm.steps[merge.stepName]; exist {
 			pm.mergeStep(merge)
 			continue
@@ -249,10 +254,6 @@ func (pm *ProcessMeta) AliasStep(alias string, run func(ctx Context) (any, error
 	return meta
 }
 
-func (pm *ProcessMeta) NotUseDefault() {
-	pm.procNotUseDefault = true
-}
-
 func (pm *ProcessMeta) addVisitorInfo(step *StepMeta) {
 	if pm.nodeNum == 62 {
 		panic(fmt.Sprintf("step[%s] exceeds max nodes num, max node num is 62", step.stepName))
@@ -266,7 +267,7 @@ func (pm *ProcessMeta) addVisitorInfo(step *StepMeta) {
 	pm.nodeNum++
 }
 
-func (pm *ProcessMeta) sortedStep() []*StepMeta {
+func (pm *ProcessMeta) sortedSteps() []*StepMeta {
 	steps := make([]*StepMeta, 0, len(pm.steps))
 	for _, step := range pm.steps {
 		steps = append(steps, step)

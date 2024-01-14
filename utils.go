@@ -84,6 +84,7 @@ func GetFuncName(f interface{}) string {
 	return absoluteName
 }
 
+// CopyPropertiesSkipNotEmpty will skip field contain`skip` tag value
 func CopyPropertiesSkipNotEmpty(src, dst interface{}) {
 	copyProperties(src, dst, true)
 }
@@ -106,6 +107,7 @@ func copyProperties(src, dst interface{}, skipNotEmpty bool) {
 	for i := 0; i < srcElem.NumField(); i++ {
 		srcField := srcElem.Field(i)
 		srcFieldName := srcType.Field(i).Name
+		// private field can't copy, skip it
 		if len(srcType.Field(i).PkgPath) != 0 {
 			continue
 		}
@@ -113,11 +115,8 @@ func copyProperties(src, dst interface{}, skipNotEmpty bool) {
 		if tag := srcType.Field(i).Tag.Get("flow"); len(tag) != 0 {
 			splits := strings.Split(tag, ";")
 			skip := false
-			for _, s := range splits {
-				skip = s == "skip"
-				if skip {
-					break
-				}
+			for j := 0; j < len(splits) && !skip; j++ {
+				skip = splits[j] == "skip"
 			}
 			if skip {
 				continue

@@ -7,7 +7,7 @@ import (
 
 type StepMeta struct {
 	visitor
-	stepConfig
+	StepConfig
 	belong   *ProcessMeta
 	stepName string
 	layer    int
@@ -43,9 +43,9 @@ type StepInfo struct {
 	Err       error
 }
 
-type stepConfig struct {
-	stepTimeout time.Duration
-	stepRetry   int
+type StepConfig struct {
+	StepTimeout time.Duration
+	StepRetry   int
 }
 
 func (si *StepInfo) Error() error {
@@ -151,12 +151,12 @@ func (meta *StepMeta) backSearch(searched string) bool {
 }
 
 func (meta *StepMeta) Timeout(timeout time.Duration) *StepMeta {
-	meta.stepConfig.stepTimeout = timeout
+	meta.StepConfig.StepTimeout = timeout
 	return meta
 }
 
 func (meta *StepMeta) Retry(retry int) *StepMeta {
-	meta.stepConfig.stepRetry = retry
+	meta.StepConfig.StepRetry = retry
 	return meta
 }
 
@@ -170,12 +170,12 @@ func (step *runStep) syncInfo() {
 	step.infoCache.End = step.End
 }
 
-func (sc *stepConfig) combine(config *stepConfig) {
+func (sc *StepConfig) combine(config *StepConfig) {
 	CopyPropertiesSkipNotEmpty(sc, config)
 }
 
-func (sc *stepConfig) clone() stepConfig {
-	config := stepConfig{}
+func (sc *StepConfig) clone() StepConfig {
+	config := StepConfig{}
 	CopyPropertiesSkipNotEmpty(sc, config)
 	return config
 }

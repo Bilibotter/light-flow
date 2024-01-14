@@ -23,24 +23,25 @@ var (
 
 // these variable are used to indicate the status of the unit
 var (
-	Pending    = &StatusEnum{0, "Pending"}
-	Running    = &StatusEnum{0b1, "Running"}
-	Pause      = &StatusEnum{0b1 << 1, "Pause"}
-	Success    = &StatusEnum{0b1 << 15, "Success"}
-	NormalMask = &StatusEnum{0b1<<16 - 1, "NormalMask"}
-	Cancel     = &StatusEnum{0b1 << 16, "Cancel"}
-	Timeout    = &StatusEnum{0b1 << 17, "Timeout"}
-	Panic      = &StatusEnum{0b1 << 18, "Panic"}
-	Error      = &StatusEnum{0b1 << 19, "Error"}
-	Stop       = &StatusEnum{0b1 << 20, "Stop"}
-	Failed     = &StatusEnum{0b1 << 31, "Failed"}
+	Pending      = &StatusEnum{0, "Pending"}
+	Running      = &StatusEnum{0b1, "Running"}
+	Pause        = &StatusEnum{0b1 << 1, "Pause"}
+	Success      = &StatusEnum{0b1 << 15, "Success"}
+	NormalMask   = &StatusEnum{0b1<<16 - 1, "NormalMask"}
+	Cancel       = &StatusEnum{0b1 << 16, "Cancel"}
+	Timeout      = &StatusEnum{0b1 << 17, "Timeout"}
+	Panic        = &StatusEnum{0b1 << 18, "Panic"}
+	Error        = &StatusEnum{0b1 << 19, "Error"}
+	Stop         = &StatusEnum{0b1 << 20, "Stop"}
+	CallbackFail = &StatusEnum{0b1 << 21, "CallbackFail"}
+	Failed       = &StatusEnum{0b1 << 31, "Failed"}
 	// AbnormalMask An abnormal step status will cause the cancellation of dependent unexecuted steps.
 	AbnormalMask = &StatusEnum{NormalMask.flag << 16, "AbnormalMask"}
 )
 
 var (
 	normal   = []*StatusEnum{Pending, Running, Pause, Success}
-	abnormal = []*StatusEnum{Cancel, Timeout, Panic, Error, Stop, Failed}
+	abnormal = []*StatusEnum{Cancel, Timeout, Panic, Error, Stop, CallbackFail, Failed}
 )
 
 type Status int64
@@ -77,8 +78,8 @@ type basicInfo struct {
 	Name string
 }
 
-type callbackChain[T BasicInfoI] struct {
-	filters []*callback[T]
+type Handler[T BasicInfoI] struct {
+	filter []*callback[T]
 }
 
 type callback[T BasicInfoI] struct {
@@ -266,65 +267,71 @@ func (bi *basicInfo) GetId() string {
 	return bi.Id
 }
 
-func (cc *callbackChain[T]) clone() callbackChain[T] {
-	config := callbackChain[T]{}
-	config.filters = cc.copyFilters()
+func (cc *Handler[T]) clone() Handler[T] {
+	config := Handler[T]{}
+	config.filter = cc.copyFilters()
 	return config
 }
 
-func (cc *callbackChain[T]) copyFilters() []*callback[T] {
-	result := make([]*callback[T], 0, len(cc.filters))
-	for _, filter := range cc.filters {
+func (cc *Handler[T]) copyFilters() []*callback[T] {
+	result := make([]*callback[T], 0, len(cc.filter))
+	for _, filter := range cc.filter {
 		result = append(result, filter)
 	}
 	return result
 }
 
-func (cc *callbackChain[T]) addCallback(flag string, must bool, run func(info T) (bool, error)) *callback[T] {
+func (cc *Handler[T]) addCallback(flag string, must bool, run func(info T) (bool, error)) *callback[T] {
+	if len(cc.filter) > 0 {
+		last := cc.filter[len(cc.filter)-1]
+		// essential callback depend on non-essential callback is against Dependency Inversion Principle
+		if last.flag == flag && last.must != must && last.must != true {
+			panic("essential callback should before non-essential callback")
+		}
+	}
+
 	filter := &callback[T]{
 		must: must,
 		flag: flag,
 		run:  run,
 	}
 
-	cc.filters = append(cc.filters, filter)
+	cc.filter = append(cc.filter, filter)
 	cc.maintain()
 	return filter
 }
 
-func (cc *callbackChain[T]) combine(chain *callbackChain[T]) {
-	for _, filter := range chain.filters {
-		cc.filters = append(cc.filters, filter)
+func (cc *Handler[T]) combine(chain *Handler[T]) {
+	for _, filter := range chain.filter {
+		cc.filter = append(cc.filter, filter)
 	}
 	cc.maintain()
 }
 
-func (cc *callbackChain[T]) maintain() {
-	sort.SliceStable(cc.filters, func(i, j int) bool {
-		if cc.filters[i].must == cc.filters[j].must {
+func (cc *Handler[T]) maintain() {
+	sort.SliceStable(cc.filter, func(i, j int) bool {
+		if cc.filter[i].must == cc.filter[j].must {
 			return i < j
 		}
-		return cc.filters[i].must
+		return cc.filter[i].must
 	})
 }
 
 // don't want to raise error not deal hint, so return string
-func (cc *callbackChain[T]) process(flag string, info T) string {
-	for _, filter := range cc.filters {
+func (cc *Handler[T]) handle(flag string, info T) string {
+	for _, filter := range cc.filter {
 		keepOn, err, panicStack := filter.call(flag, info)
-		if keepOn {
-			if filter.must && err != nil {
-				info.addr().Append(Error)
+		if filter.must {
+			if len(panicStack) != 0 || err != nil {
+				info.addr().Append(CallbackFail)
 				info.addr().Append(Failed)
+				return panicStack
 			}
-			continue
-		}
-		if filter.must && len(panicStack) != 0 {
-			info.addr().Append(Panic)
-			info.addr().Append(Failed)
 		}
 
-		return panicStack
+		if !keepOn {
+			return panicStack
+		}
 	}
 
 	return ""

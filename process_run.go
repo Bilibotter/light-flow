@@ -57,20 +57,9 @@ func (rp *runProcess) Stop() {
 	rp.Append(Failed)
 }
 
-func (rp *runProcess) flow() *Future {
+func (rp *runProcess) schedule() (future *Future) {
 	rp.initialize()
-	rp.Append(Running)
-	rp.procCallback(Before)
-	for _, step := range rp.flowSteps {
-		if step.layer == 1 {
-			go rp.scheduleStep(step)
-		}
-	}
-
-	rp.finish.Add(1)
-	go rp.finalize()
-
-	future := Future{
+	future = &Future{
 		basicInfo: &basicInfo{
 			Id:     rp.id,
 			Name:   rp.processName,
@@ -80,11 +69,27 @@ func (rp *runProcess) flow() *Future {
 		finish: &rp.finish,
 	}
 
-	return &future
+	// CallbackFail from Flow
+	if rp.Contain(CallbackFail) {
+		rp.Append(Cancel)
+		return
+	}
+
+	rp.Append(Running)
+	rp.procCallback(Before)
+	for _, step := range rp.flowSteps {
+		if step.layer == 1 {
+			go rp.startStep(step)
+		}
+	}
+
+	rp.finish.Add(1)
+	go rp.finalize()
+	return
 }
 
-func (rp *runProcess) scheduleStep(step *runStep) {
-	defer rp.scheduleNextSteps(step)
+func (rp *runProcess) startStep(step *runStep) {
+	defer rp.startNextSteps(step)
 
 	if _, finish := step.GetResult(step.stepName); finish {
 		step.Append(Success)
@@ -107,11 +112,11 @@ func (rp *runProcess) scheduleStep(step *runStep) {
 	}
 
 	timeout := 3 * time.Hour
-	if rp.stepTimeout != 0 {
-		timeout = rp.stepTimeout
+	if rp.StepTimeout != 0 {
+		timeout = rp.StepTimeout
 	}
-	if step.stepTimeout != 0 {
-		timeout = step.stepTimeout
+	if step.StepTimeout != 0 {
+		timeout = step.StepTimeout
 	}
 
 	timer := time.NewTimer(timeout)
@@ -127,8 +132,8 @@ func (rp *runProcess) scheduleStep(step *runStep) {
 
 func (rp *runProcess) finalize() {
 	timeout := 3 * time.Hour
-	if rp.procTimeout != 0 {
-		timeout = rp.procTimeout
+	if rp.ProcTimeout != 0 {
+		timeout = rp.ProcTimeout
 	}
 
 	timer := time.NewTimer(timeout)
@@ -156,7 +161,7 @@ func (rp *runProcess) finalize() {
 	rp.finish.Done()
 }
 
-func (rp *runProcess) scheduleNextSteps(step *runStep) {
+func (rp *runProcess) startNextSteps(step *runStep) {
 	// all step not execute should cancel while process is timeout
 	cancel := !step.Normal() || !rp.Normal()
 	for _, waiter := range step.waiters {
@@ -171,7 +176,7 @@ func (rp *runProcess) scheduleNextSteps(step *runStep) {
 		if step.Success() {
 			next.Append(Running)
 		}
-		go rp.scheduleStep(next)
+		go rp.startStep(next)
 	}
 
 	rp.running.Done()
@@ -188,11 +193,11 @@ func (rp *runProcess) runStep(step *runStep) {
 	}
 
 	retry := 1
-	if rp.stepRetry > 0 {
-		retry = rp.stepRetry
+	if rp.StepRetry > 0 {
+		retry = rp.StepRetry
 	}
-	if step.stepRetry > 0 {
-		retry = step.stepRetry
+	if step.StepRetry > 0 {
+		retry = step.StepRetry
 	}
 
 	defer func() {
@@ -231,17 +236,17 @@ func (rp *runProcess) stepCallback(step *runStep, flag string) {
 			step.Err = fmt.Errorf(panicStack)
 		}
 	}()
-	if !rp.belong.procNotUseDefault && !rp.procNotUseDefault && defaultConfig != nil {
-		panicStack = defaultConfig.stepChain.process(flag, info)
+	if !rp.belong.ProcNotUseDefault && !rp.ProcNotUseDefault && defaultConfig != nil {
+		panicStack = defaultConfig.stepChain.handle(flag, info)
 	}
 	if len(panicStack) != 0 {
 		return
 	}
-	panicStack = rp.belong.stepChain.process(flag, info)
+	panicStack = rp.belong.stepChain.handle(flag, info)
 	if len(panicStack) != 0 {
 		return
 	}
-	panicStack = rp.stepChain.process(flag, info)
+	panicStack = rp.stepChain.handle(flag, info)
 }
 
 func (rp *runProcess) procCallback(flag string) {
@@ -254,11 +259,11 @@ func (rp *runProcess) procCallback(flag string) {
 		},
 		FlowId: rp.flowId,
 	}
-	if !rp.belong.procNotUseDefault && !rp.procNotUseDefault && defaultConfig != nil {
-		defaultConfig.procChain.process(flag, info)
+	if !rp.belong.ProcNotUseDefault && !rp.ProcNotUseDefault && defaultConfig != nil {
+		defaultConfig.procChain.handle(flag, info)
 	}
-	rp.belong.procChain.process(flag, info)
-	rp.procChain.process(flag, info)
+	rp.belong.procChain.handle(flag, info)
+	rp.procChain.handle(flag, info)
 }
 
 func (rp *runProcess) summaryStepInfo(step *runStep) *StepInfo {
