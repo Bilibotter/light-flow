@@ -18,7 +18,7 @@ func NewRoutineUnsafeSet[T comparable]() *Set[T] {
 	return s
 }
 
-func CreateFromSliceFunc[T any, K comparable](src []T, transfer func(T) K) *Set[K] {
+func CreateSetBySliceFunc[T any, K comparable](src []T, transfer func(T) K) *Set[K] {
 	result := NewRoutineUnsafeSet[K]()
 	for _, ele := range src {
 		result.Add(transfer(ele))
@@ -84,32 +84,13 @@ func GetFuncName(f interface{}) string {
 	return absoluteName
 }
 
+// CopyPropertiesSkipNotEmpty will skip field contain`skip` tag value
 func CopyPropertiesSkipNotEmpty(src, dst interface{}) {
 	copyProperties(src, dst, true)
 }
 
 func CopyProperties(src, dst interface{}) {
 	copyProperties(src, dst, false)
-	//srcValue := reflect.ValueOf(src)
-	//dstValue := reflect.ValueOf(dst)
-	//
-	//if srcValue.Kind() != reflect.Ptr || dstValue.Kind() != reflect.Ptr {
-	//	panic("Both src and dst must be pointers")
-	//}
-	//
-	//srcElem := srcValue.Elem()
-	//dstElem := dstValue.Elem()
-	//srcType := srcElem.Type()
-	//for i := 0; i < srcElem.NumField(); i++ {
-	//	srcField := srcElem.Field(i)
-	//	srcFieldName := srcType.Field(i).GetCtxName
-	//
-	//	if dstField := dstElem.FieldByName(srcFieldName); dstField.IsValid() && dstField.Type() == srcField.Type() {
-	//		if !srcField.IsZero() {
-	//			dstField.Set(srcField)
-	//		}
-	//	}
-	//}
 }
 
 func copyProperties(src, dst interface{}, skipNotEmpty bool) {
@@ -126,9 +107,20 @@ func copyProperties(src, dst interface{}, skipNotEmpty bool) {
 	for i := 0; i < srcElem.NumField(); i++ {
 		srcField := srcElem.Field(i)
 		srcFieldName := srcType.Field(i).Name
-
+		// private field can't copy, skip it
 		if len(srcType.Field(i).PkgPath) != 0 {
 			continue
+		}
+
+		if tag := srcType.Field(i).Tag.Get("flow"); len(tag) != 0 {
+			splits := strings.Split(tag, ";")
+			skip := false
+			for j := 0; j < len(splits) && !skip; j++ {
+				skip = splits[j] == "skip"
+			}
+			if skip {
+				continue
+			}
 		}
 
 		if dstField := dstElem.FieldByName(srcFieldName); dstField.IsValid() && dstField.Type() == srcField.Type() {

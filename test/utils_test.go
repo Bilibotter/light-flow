@@ -30,6 +30,12 @@ type Dst struct {
 	UnExist  bool
 }
 
+type FConfig struct {
+}
+
+type PConfig struct {
+}
+
 func TestGetFuncName(t *testing.T) {
 	if light_flow.GetFuncName(TestGetFuncName) != "TestGetFuncName" {
 		t.Errorf("get TestGetFuncName name error")
@@ -50,19 +56,19 @@ func TestGetFuncName(t *testing.T) {
 func TestGetStructName(t *testing.T) {
 	d := Dst{}
 	dP := &Dst{}
-	step := light_flow.RunStep{}
-	stepP := &light_flow.RunStep{}
+	step := light_flow.FlowMeta{}
+	stepP := &light_flow.FlowMeta{}
 	if light_flow.GetStructName(d) != "Dst" {
 		t.Errorf("get Dst struct name error")
 	}
 	if light_flow.GetStructName(dP) != "*Dst" {
 		t.Errorf("get Dst pointer struct name error")
 	}
-	if light_flow.GetStructName(step) != "RunStep" {
-		t.Errorf("get RunStep struct name error")
+	if light_flow.GetStructName(step) != "FlowMeta" {
+		t.Errorf("get FlowMeta struct name error")
 	}
-	if light_flow.GetStructName(stepP) != "*RunStep" {
-		t.Errorf("get RunStep pointer struct name error")
+	if light_flow.GetStructName(stepP) != "*FlowMeta" {
+		t.Errorf("get FlowMeta pointer struct name error")
 	}
 }
 
@@ -170,42 +176,42 @@ func TestExplainStatus1(t *testing.T) {
 	if status := light_flow.Status(0); !status.Append(light_flow.Cancel) {
 		t.Errorf("cancel status append error")
 	} else if !status.Contain(light_flow.Cancel) {
-		t.Errorf("cancel status not cotain after append")
+		t.Errorf("cancel status not contain after append")
 	}
 	if status := light_flow.Status(0); !status.Append(light_flow.Pause) {
 		t.Errorf("panic status append error")
 	} else if !status.Contain(light_flow.Pause) {
-		t.Errorf("pause status not cotain after append")
+		t.Errorf("pause status not contain after append")
 	}
 	if status := light_flow.Status(0); !status.Append(light_flow.Running) {
 		t.Errorf("running status append error")
 	} else if !status.Contain(light_flow.Running) {
-		t.Errorf("running status not cotain after append")
+		t.Errorf("running status not contain after append")
 	}
 	if status := light_flow.Status(0); !status.Append(light_flow.Success) {
 		t.Errorf("success status append error")
 	} else if !status.Contain(light_flow.Success) {
-		t.Errorf("success status not cotain after append")
+		t.Errorf("success status not contain after append")
 	}
 	if status := light_flow.Status(0); !status.Append(light_flow.Failed) {
 		t.Errorf("failed status append error")
 	} else if !status.Contain(light_flow.Failed) {
-		t.Errorf("failed status not cotain after append")
+		t.Errorf("failed status not contain after append")
 	}
 	if status := light_flow.Status(0); !status.Append(light_flow.Timeout) {
 		t.Errorf("timeout status append error")
 	} else if !status.Contain(light_flow.Timeout) {
-		t.Errorf("timeout status not cotain after append")
+		t.Errorf("timeout status not contain after append")
 	}
 	if status := light_flow.Status(0); !status.Append(light_flow.Panic) {
 		t.Errorf("panic status append error")
 	} else if !status.Contain(light_flow.Panic) {
-		t.Errorf("panic status not cotain after append")
+		t.Errorf("panic status not contain after append")
 	}
 	if status := light_flow.Status(0); !status.Append(light_flow.Error) {
 		t.Errorf("error status append error")
 	} else if !status.Contain(light_flow.Error) {
-		t.Errorf("error status not cotain after append")
+		t.Errorf("error status not contain after append")
 	}
 }
 

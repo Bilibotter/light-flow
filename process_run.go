@@ -8,21 +8,24 @@ import (
 	"time"
 )
 
-type RunProcess struct {
+type runProcess struct {
 	*ProcessMeta
-	*Context
 	*Status
+	*visibleContext
 	id        string
 	flowId    string
-	flowSteps map[string]*RunStep
-	pcsScope  map[string]*Context
+	flowSteps map[string]*runStep
 	pause     sync.WaitGroup
 	running   sync.WaitGroup
 	finish    sync.WaitGroup
 }
 
-func (rp *RunProcess) buildRunStep(meta *StepMeta) *RunStep {
-	step := RunStep{
+func (rp *runProcess) buildRunStep(meta *StepMeta) *runStep {
+	step := runStep{
+		visibleContext: &visibleContext{
+			parent:  rp.visibleContext,
+			visitor: &meta.visitor,
+		},
 		Status:    emptyStatus(),
 		StepMeta:  meta,
 		id:        generateId(),
@@ -30,57 +33,34 @@ func (rp *RunProcess) buildRunStep(meta *StepMeta) *RunStep {
 		flowId:    rp.flowId,
 		waiting:   int64(len(meta.depends)),
 		finish:    make(chan bool, 1),
-		Context: &Context{
-			name:      meta.stepName,
-			scopes:    []string{ProcessCtx},
-			scopeCtxs: rp.pcsScope,
-			priority:  meta.ctxPriority,
-		},
 	}
 
 	rp.flowSteps[meta.stepName] = &step
-	rp.pcsScope[meta.stepName] = step.Context
 
-	for _, depend := range meta.depends {
-		parent := step.scopeCtxs[depend.stepName]
-		step.parents = append(step.parents, parent)
-	}
-	step.parents = append(step.parents, rp.Context)
 	return &step
 }
 
-func (rp *RunProcess) Resume() {
+func (rp *runProcess) Resume() {
 	if rp.Pop(Pause) {
 		rp.pause.Done()
 	}
 }
 
-func (rp *RunProcess) Pause() {
+func (rp *runProcess) Pause() {
 	if rp.Append(Pause) {
 		rp.pause.Add(1)
 	}
 }
 
-func (rp *RunProcess) Stop() {
+func (rp *runProcess) Stop() {
 	rp.Append(Stop)
 	rp.Append(Failed)
 }
 
-func (rp *RunProcess) flow() *Feature {
+func (rp *runProcess) schedule() (future *Future) {
 	rp.initialize()
-	rp.Append(Running)
-	rp.procCallback(Before)
-	for _, step := range rp.flowSteps {
-		if step.layer == 1 {
-			go rp.scheduleStep(step)
-		}
-	}
-
-	rp.finish.Add(1)
-	go rp.finalize()
-
-	feature := Feature{
-		BasicInfo: &BasicInfo{
+	future = &Future{
+		basicInfo: &basicInfo{
 			Id:     rp.id,
 			Name:   rp.processName,
 			Status: rp.Status,
@@ -89,13 +69,29 @@ func (rp *RunProcess) flow() *Feature {
 		finish: &rp.finish,
 	}
 
-	return &feature
+	// CallbackFail from Flow
+	if rp.Contain(CallbackFail) {
+		rp.Append(Cancel)
+		return
+	}
+
+	rp.Append(Running)
+	rp.procCallback(Before)
+	for _, step := range rp.flowSteps {
+		if step.layer == 1 {
+			go rp.startStep(step)
+		}
+	}
+
+	rp.finish.Add(1)
+	go rp.finalize()
+	return
 }
 
-func (rp *RunProcess) scheduleStep(step *RunStep) {
-	defer rp.scheduleNextSteps(step)
+func (rp *runProcess) startStep(step *runStep) {
+	defer rp.startNextSteps(step)
 
-	if _, finish := step.GetStepResult(step.stepName); finish {
+	if _, finish := step.GetResult(step.stepName); finish {
 		step.Append(Success)
 		return
 	}
@@ -116,10 +112,10 @@ func (rp *RunProcess) scheduleStep(step *RunStep) {
 	}
 
 	timeout := 3 * time.Hour
-	if rp.ProcessConfig != nil && rp.StepConfig != nil && rp.StepTimeout != 0 {
+	if rp.StepTimeout != 0 {
 		timeout = rp.StepTimeout
 	}
-	if step.StepConfig != nil && step.StepTimeout != 0 {
+	if step.StepTimeout != 0 {
 		timeout = step.StepTimeout
 	}
 
@@ -134,9 +130,9 @@ func (rp *RunProcess) scheduleStep(step *RunStep) {
 	}
 }
 
-func (rp *RunProcess) finalize() {
+func (rp *runProcess) finalize() {
 	timeout := 3 * time.Hour
-	if rp.ProcessConfig != nil && rp.ProcTimeout != 0 {
+	if rp.ProcTimeout != 0 {
 		timeout = rp.ProcTimeout
 	}
 
@@ -154,7 +150,7 @@ func (rp *RunProcess) finalize() {
 	}
 
 	for _, step := range rp.flowSteps {
-		rp.combine(step.Status)
+		rp.append(step.Status.load())
 	}
 
 	if rp.Normal() {
@@ -162,11 +158,10 @@ func (rp *RunProcess) finalize() {
 	}
 
 	rp.procCallback(After)
-
 	rp.finish.Done()
 }
 
-func (rp *RunProcess) scheduleNextSteps(step *RunStep) {
+func (rp *runProcess) startNextSteps(step *runStep) {
 	// all step not execute should cancel while process is timeout
 	cancel := !step.Normal() || !rp.Normal()
 	for _, waiter := range step.waiters {
@@ -181,13 +176,13 @@ func (rp *RunProcess) scheduleNextSteps(step *RunStep) {
 		if step.Success() {
 			next.Append(Running)
 		}
-		go rp.scheduleStep(next)
+		go rp.startStep(next)
 	}
 
 	rp.running.Done()
 }
 
-func (rp *RunProcess) runStep(step *RunStep) {
+func (rp *runProcess) runStep(step *runStep) {
 	defer func() { step.finish <- true }()
 
 	step.Start = time.Now().UTC()
@@ -198,10 +193,10 @@ func (rp *RunProcess) runStep(step *RunStep) {
 	}
 
 	retry := 1
-	if rp.ProcessConfig != nil && rp.StepConfig != nil && rp.StepRetry > 0 {
+	if rp.StepRetry > 0 {
 		retry = rp.StepRetry
 	}
-	if step.StepConfig != nil && step.StepRetry > 0 {
+	if step.StepRetry > 0 {
 		retry = step.StepRetry
 	}
 
@@ -217,7 +212,7 @@ func (rp *RunProcess) runStep(step *RunStep) {
 	}()
 
 	for i := 0; i < retry; i++ {
-		result, err := step.run(step.Context)
+		result, err := step.run(step)
 		step.End = time.Now().UTC()
 		step.Err = err
 		if err != nil {
@@ -226,78 +221,70 @@ func (rp *RunProcess) runStep(step *RunStep) {
 			continue
 		}
 		if result != nil {
-			rp.setStepResult(step.stepName, result)
+			step.setResult(step.stepName, result)
 		}
 		step.Append(Success)
 		break
 	}
 }
 
-func (rp *RunProcess) stepCallback(step *RunStep, flag string) {
-	if rp.ProcessConfig == nil || rp.stepChain == nil {
+func (rp *runProcess) stepCallback(step *runStep, flag string) {
+	info := rp.summaryStepInfo(step)
+	panicStack := ""
+	defer func() {
+		if len(panicStack) > 0 && step.Err == nil {
+			step.Err = fmt.Errorf(panicStack)
+		}
+	}()
+	if !rp.belong.ProcNotUseDefault && !rp.ProcNotUseDefault && defaultConfig != nil {
+		panicStack = defaultConfig.stepChain.handle(flag, info)
+	}
+	if len(panicStack) != 0 {
 		return
 	}
-	info := rp.summaryStepInfo(step)
-	if panicStack := rp.stepChain.process(flag, info); step.Err == nil && len(panicStack) != 0 {
-		step.Err = fmt.Errorf(panicStack)
+	panicStack = rp.belong.stepChain.handle(flag, info)
+	if len(panicStack) != 0 {
+		return
 	}
+	panicStack = rp.stepChain.handle(flag, info)
 }
 
-func (rp *RunProcess) procCallback(flag string) {
-	if rp.ProcessConfig == nil || rp.procChain == nil {
-		return
-	}
-
+func (rp *runProcess) procCallback(flag string) {
 	info := &ProcessInfo{
-		Context: rp.Context,
-		BasicInfo: &BasicInfo{
+		visibleContext: rp.visibleContext,
+		basicInfo: basicInfo{
 			Status: rp.Status,
 			Id:     rp.id,
 			Name:   rp.processName,
 		},
 		FlowId: rp.flowId,
 	}
-
-	rp.procChain.process(flag, info)
+	if !rp.belong.ProcNotUseDefault && !rp.ProcNotUseDefault && defaultConfig != nil {
+		defaultConfig.procChain.handle(flag, info)
+	}
+	rp.belong.procChain.handle(flag, info)
+	rp.procChain.handle(flag, info)
 }
 
-func (rp *RunProcess) summaryStepInfo(step *RunStep) *StepInfo {
+func (rp *runProcess) summaryStepInfo(step *runStep) *StepInfo {
 	if step.infoCache != nil {
 		step.syncInfo()
 		return step.infoCache
 	}
 	info := &StepInfo{
-		BasicInfo: &BasicInfo{
+		basicInfo: &basicInfo{
 			Status: step.Status,
 			Id:     step.id,
 			Name:   step.stepName,
 		},
-		Context:   step.Context,
-		ProcessId: step.processId,
-		FlowId:    step.flowId,
-		Start:     step.Start,
-		End:       step.End,
-		Err:       step.Err,
-		Prev:      make(map[string]string, len(step.depends)),
-		Next:      make(map[string]string, len(step.waiters)),
-	}
-	for _, prev := range step.depends {
-		info.Prev[prev.stepName] = rp.flowSteps[prev.stepName].id
-	}
-
-	for _, next := range step.waiters {
-		info.Next[next.stepName] = rp.flowSteps[next.stepName].id
+		visibleContext: step.visibleContext,
+		ProcessId:      step.processId,
+		FlowId:         step.flowId,
+		Start:          step.Start,
+		End:            step.End,
+		Err:            step.Err,
 	}
 
 	step.infoCache = info
 	return info
-}
-
-func (rp *RunProcess) SkipFinishedStep(name string, result any) bool {
-	if _, exist := rp.flowSteps[name]; !exist {
-		return false
-	}
-
-	rp.setStepResult(name, result)
-	return true
 }

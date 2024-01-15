@@ -6,20 +6,21 @@ import (
 )
 
 type StepMeta struct {
-	*Status
-	*StepConfig
-	belong      *ProcessMeta
-	stepName    string
-	layer       int
-	depends     []*StepMeta // prev
-	waiters     []*StepMeta // next
-	ctxPriority map[string]string
-	run         func(ctx *Context) (any, error)
+	visitor
+	StepConfig
+	belong   *ProcessMeta
+	stepName string
+	layer    int
+	position *Status     // used to record the position of the step
+	depends  []*StepMeta // prev
+	waiters  []*StepMeta // next
+	priority map[string]int32
+	run      func(ctx Context) (any, error)
 }
 
-type RunStep struct {
+type runStep struct {
 	*StepMeta
-	*Context
+	*visibleContext
 	*Status
 	id        string
 	flowId    string
@@ -33,12 +34,10 @@ type RunStep struct {
 }
 
 type StepInfo struct {
-	*BasicInfo
-	*Context
+	*basicInfo
+	*visibleContext
 	ProcessId string
 	FlowId    string
-	Prev      map[string]string // prev step stepName to step id
-	Next      map[string]string // next step stepName to step id
 	Start     time.Time
 	End       time.Time
 	Err       error
@@ -53,7 +52,7 @@ func (si *StepInfo) Error() error {
 	return si.Err
 }
 
-func (meta *StepMeta) Next(run func(ctx *Context) (any, error), alias ...string) *StepMeta {
+func (meta *StepMeta) Next(run func(ctx Context) (any, error), alias ...string) *StepMeta {
 	if len(alias) == 1 {
 		return meta.belong.AliasStep(alias[0], run, meta.stepName)
 
@@ -61,7 +60,7 @@ func (meta *StepMeta) Next(run func(ctx *Context) (any, error), alias ...string)
 	return meta.belong.Step(run, meta.stepName)
 }
 
-func (meta *StepMeta) Same(run func(ctx *Context) (any, error), alias ...string) *StepMeta {
+func (meta *StepMeta) Same(run func(ctx Context) (any, error), alias ...string) *StepMeta {
 	depends := make([]any, 0, len(meta.depends))
 	for i := 0; i < len(meta.depends); i++ {
 		depends = append(depends, meta.depends[i].stepName)
@@ -73,30 +72,33 @@ func (meta *StepMeta) Same(run func(ctx *Context) (any, error), alias ...string)
 }
 
 func (meta *StepMeta) Priority(priority map[string]any) {
-	if meta.ctxPriority == nil {
-		meta.ctxPriority = make(map[string]string)
+	if meta.priority == nil {
+		meta.priority = make(map[string]int32, len(priority))
 	}
 	for key, stepName := range priority {
-		meta.ctxPriority[key] = toStepName(stepName)
+		step, exist := meta.belong.steps[toStepName(stepName)]
+		if !exist {
+			panic(fmt.Sprintf("can't find step[%s]", stepName))
+		}
+		meta.priority[key] = step.index
 	}
 	meta.checkPriority()
 }
 
 func (meta *StepMeta) wireDepends() {
-	if meta.Status == nil {
-		meta.Status = emptyStatus()
+	if meta.position == nil {
+		meta.position = emptyStatus()
 	}
 
 	for _, depend := range meta.depends {
-		for _, waiter := range depend.waiters {
-			if waiter.stepName == meta.stepName {
-				continue
-			}
+		wired := CreateSetBySliceFunc(depend.waiters, func(waiter *StepMeta) string { return waiter.stepName })
+		if wired.Contains(meta.stepName) {
+			continue
 		}
 		depend.waiters = append(depend.waiters, meta)
-		if depend.Contain(End) {
-			depend.Append(HasNext)
-			depend.Pop(End)
+		if depend.position.Contain(End) {
+			depend.position.Append(HasNext)
+			depend.position.Pop(End)
 		}
 		if depend.layer+1 > meta.layer {
 			meta.layer = depend.layer + 1
@@ -104,16 +106,17 @@ func (meta *StepMeta) wireDepends() {
 	}
 
 	if len(meta.depends) == 0 {
-		meta.Append(Head)
+		meta.position.Append(Head)
 	}
 
-	meta.Append(End)
+	meta.position.Append(End)
 }
 
 // checkPriority checks if the priority key corresponds to an existing step.
 // If not it will panic.
 func (meta *StepMeta) checkPriority() {
-	for _, stepName := range meta.ctxPriority {
+	for _, index := range meta.priority {
+		stepName := meta.roster[index]
 		if meta.backSearch(stepName) {
 			continue
 		}
@@ -147,12 +150,17 @@ func (meta *StepMeta) backSearch(searched string) bool {
 	return false
 }
 
-// Config allow step not using process's config
-func (meta *StepMeta) Config(config *StepConfig) {
-	meta.StepConfig = config
+func (meta *StepMeta) Timeout(timeout time.Duration) *StepMeta {
+	meta.StepConfig.StepTimeout = timeout
+	return meta
 }
 
-func (step *RunStep) syncInfo() {
+func (meta *StepMeta) Retry(retry int) *StepMeta {
+	meta.StepConfig.StepRetry = retry
+	return meta
+}
+
+func (step *runStep) syncInfo() {
 	if step.infoCache == nil {
 		return
 	}
@@ -160,4 +168,14 @@ func (step *RunStep) syncInfo() {
 	step.infoCache.Err = step.Err
 	step.infoCache.Start = step.Start
 	step.infoCache.End = step.End
+}
+
+func (sc *StepConfig) combine(config *StepConfig) {
+	CopyPropertiesSkipNotEmpty(sc, config)
+}
+
+func (sc *StepConfig) clone() StepConfig {
+	config := StepConfig{}
+	CopyPropertiesSkipNotEmpty(sc, config)
+	return config
 }
