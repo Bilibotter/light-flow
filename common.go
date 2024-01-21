@@ -354,6 +354,11 @@ func (c *callback[T]) OnlyFor(name ...string) *callback[T] {
 }
 
 func (c *callback[T]) When(status ...*StatusEnum) *callback[T] {
+	if c.flag == Before {
+		if len(status) > 1 || status[0] != CallbackFail {
+			panic("CallbackFail is only valid StatusEnum for Before")
+		}
+	}
 	old := c.run
 	f := func(info T) (bool, error) {
 		for _, match := range status {
