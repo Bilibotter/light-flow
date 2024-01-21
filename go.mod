@@ -1,4 +1,4 @@
-module gitee.com/MetaphysicCoding/light-flow
+module  github.com/Bilibotter/light-flow
 
 go 1.18.0
 
