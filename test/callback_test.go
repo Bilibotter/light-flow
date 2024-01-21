@@ -2,7 +2,7 @@ package test
 
 import (
 	"fmt"
-	flow "gitee.com/MetaphysicCoding/light-flow"
+	flow "github.com/Bilibotter/light-flow"
 	"sync/atomic"
 	"testing"
 )
