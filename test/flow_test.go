@@ -95,9 +95,9 @@ func TestMultipleExceptionStatus(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestMultipleExceptionStatus")
 	process := workflow.Process("TestMultipleExceptionStatus")
-	process.AliasStep("1", GenerateErrorStep(1, "ms"))
-	process.AliasStep("2", GeneratePanicStep(2, "ms"))
-	step := process.AliasStep("3", GenerateErrorStep(3, "ms"))
+	process.AliasStep(GenerateErrorStep(1, "ms"), "1")
+	process.AliasStep(GeneratePanicStep(2, "ms"), "2")
+	step := process.AliasStep(GenerateErrorStep(3, "ms"), "3")
 	step.Timeout(time.Millisecond)
 	result := flow.DoneFlow("TestMultipleExceptionStatus", nil)
 	// DoneFlow return due to timeout, but process not complete
@@ -139,7 +139,7 @@ func TestSinglePanicStep(t *testing.T) {
 	t.Parallel()
 	workflow := flow.RegisterFlow("TestSinglePanicStep")
 	process := workflow.Process("TestSinglePanicStep")
-	process.AliasStep("1", GeneratePanicStep(1))
+	process.AliasStep(GeneratePanicStep(1), "1")
 	features := flow.DoneFlow("TestSinglePanicStep", nil)
 	for _, feature := range features.Futures() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
@@ -157,13 +157,13 @@ func TestGoAheadWithoutDependPanicStep(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestGoAheadWithoutDependPanicStep")
 	process := workflow.Process("TestGoAheadWithoutDependPanicStep")
-	process.AliasStep("1", GeneratePanicStep(1))
-	process.AliasStep("-1", GenerateStep(-1), "1")
-	process.AliasStep("-2", GenerateStep(-2), "-1")
-	process.AliasStep("11", GenerateStep(11))
-	process.AliasStep("12", GenerateStep(12), "11")
-	process.AliasStep("13", GenerateStep(13), "12")
-	process.AliasStep("14", GenerateStep(14), "13")
+	process.AliasStep(GeneratePanicStep(1), "1")
+	process.AliasStep(GenerateStep(-1), "-1", "1")
+	process.AliasStep(GenerateStep(-2), "-2", "-1")
+	process.AliasStep(GenerateStep(11), "11")
+	process.AliasStep(GenerateStep(12), "12", "11")
+	process.AliasStep(GenerateStep(13), "13", "12")
+	process.AliasStep(GenerateStep(14), "14", "13")
 	features := flow.DoneFlow("TestGoAheadWithoutDependPanicStep", nil)
 	for _, feature := range features.Futures() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
@@ -182,7 +182,7 @@ func TestSingleErrorStep(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestSingleErrorStep")
 	process := workflow.Process("TestSingleErrorStep")
-	process.AliasStep("1", GenerateErrorStep(1))
+	process.AliasStep(GenerateErrorStep(1), "1")
 	features := flow.DoneFlow("TestSingleErrorStep", nil)
 	for _, feature := range features.Futures() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
@@ -200,13 +200,13 @@ func TestGoAheadWithoutDependErrorStep(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestGoAheadWithoutDependErrorStep")
 	process := workflow.Process("TestGoAheadWithoutDependErrorStep")
-	process.AliasStep("1", GenerateErrorStep(1))
-	process.AliasStep("-1", GenerateStep(-1), "1")
-	process.AliasStep("-2", GenerateStep(-2), "-1")
-	process.AliasStep("11", GenerateStep(11))
-	process.AliasStep("12", GenerateStep(12), "11")
-	process.AliasStep("13", GenerateStep(13), "12")
-	process.AliasStep("14", GenerateStep(14), "13")
+	process.AliasStep(GenerateErrorStep(1), "1")
+	process.AliasStep(GenerateStep(-1), "-1", "1")
+	process.AliasStep(GenerateStep(-2), "-2", "-1")
+	process.AliasStep(GenerateStep(11), "11")
+	process.AliasStep(GenerateStep(12), "12", "11")
+	process.AliasStep(GenerateStep(13), "13", "12")
+	process.AliasStep(GenerateStep(14), "14", "13")
 	features := flow.DoneFlow("TestGoAheadWithoutDependErrorStep", nil)
 	for _, feature := range features.Futures() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
@@ -224,7 +224,7 @@ func TestSingleNormalStep(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestSingleNormalStep")
 	process := workflow.Process("TestSingleNormalStep")
-	process.AliasStep("1", GenerateStep(1))
+	process.AliasStep(GenerateStep(1), "1")
 	features := flow.DoneFlow("TestSingleNormalStep", nil)
 	for _, feature := range features.Futures() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
@@ -244,8 +244,8 @@ func TestTestMultipleNormalStepWithoutAlias(t *testing.T) {
 	process.Step(NormalStep1)
 	process.Step(NormalStep2)
 	process.Step(NormalStep3)
-	process.AliasStep("4", NormalStep1, NormalStep1)
-	process.AliasStep("5", NormalStep1, "NormalStep1")
+	process.AliasStep(NormalStep1, "4", NormalStep1)
+	process.AliasStep(NormalStep1, "5", "NormalStep1")
 	features := flow.DoneFlow("TestTestMultipleNormalStepWithoutAlias", nil)
 	for _, feature := range features.Futures() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
@@ -263,12 +263,12 @@ func TestMultipleNormalStepWithMultipleBranches(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestMultipleNormalStepWithMultipleBranches")
 	process := workflow.Process("TestMultipleNormalStepWithMultipleBranches")
-	process.AliasStep("1", GenerateStep(1))
-	process.AliasStep("2", GenerateStep(2), "1")
-	process.AliasStep("3", GenerateStep(3), "2")
-	process.AliasStep("4", GenerateStep(4), "2")
-	process.AliasStep("5", GenerateStep(5), "2")
-	process.Tail("6", GenerateStep(6))
+	process.AliasStep(GenerateStep(1), "1")
+	process.AliasStep(GenerateStep(2), "2", "1")
+	process.AliasStep(GenerateStep(3), "3", "2")
+	process.AliasStep(GenerateStep(4), "4", "2")
+	process.AliasStep(GenerateStep(5), "5", "2")
+	process.Tail(GenerateStep(6), "6")
 	features := flow.DoneFlow("TestMultipleNormalStepWithMultipleBranches", nil)
 	for _, feature := range features.Futures() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
@@ -286,10 +286,10 @@ func TestMultipleNormalStepsWithWaitBefore(t *testing.T) {
 	defer resetCurrent()
 	factory := flow.RegisterFlow("TestMultipleNormalStepsWithWaitBefore")
 	process := factory.Process("TestMultipleNormalStepsWithWaitBefore")
-	process.AliasStep("1", GenerateStep(1)).
+	process.AliasStep(GenerateStep(1), "1").
 		Next(GenerateStep(2), "2").
 		Next(GenerateStep(3), "3")
-	process.AliasStep("11", GenerateStep(11)).
+	process.AliasStep(GenerateStep(11), "11").
 		Next(GenerateStep(12), "12").
 		Next(GenerateStep(13), "13")
 	features := flow.DoneFlow("TestMultipleNormalStepsWithWaitBefore", nil)
@@ -309,12 +309,12 @@ func TestMultipleNormalSteps(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestMultipleNormalSteps")
 	process := workflow.Process("TestMultipleNormalSteps")
-	process.AliasStep("1", GenerateStep(1))
-	process.AliasStep("2", GenerateStep(2), "1")
-	process.AliasStep("3", GenerateStep(3), "2")
-	process.AliasStep("11", GenerateStep(11))
-	process.AliasStep("12", GenerateStep(12), "11")
-	process.AliasStep("13", GenerateStep(13), "12")
+	process.AliasStep(GenerateStep(1), "1")
+	process.AliasStep(GenerateStep(2), "2", "1")
+	process.AliasStep(GenerateStep(3), "3", "2")
+	process.AliasStep(GenerateStep(11), "11")
+	process.AliasStep(GenerateStep(12), "12", "11")
+	process.AliasStep(GenerateStep(13), "13", "12")
 	features := flow.DoneFlow("TestMultipleNormalSteps", nil)
 	for _, feature := range features.Futures() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
@@ -332,12 +332,12 @@ func TestWorkFlowPause(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestWorkFlowPause")
 	process := workflow.Process("TestWorkFlowPause")
-	process.AliasStep("1", GenerateStep(1, "ms"))
-	process.AliasStep("2", GenerateStep(2, "ms"), "1")
-	process.AliasStep("3", GenerateStep(3, "ms"), "2")
-	process.AliasStep("11", GenerateStep(11, "ms"))
-	process.AliasStep("12", GenerateStep(12, "ms"), "11")
-	process.AliasStep("13", GenerateStep(13, "ms"), "12")
+	process.AliasStep(GenerateStep(1, "ms"), "1")
+	process.AliasStep(GenerateStep(2, "ms"), "2", "1")
+	process.AliasStep(GenerateStep(3, "ms"), "3", "2")
+	process.AliasStep(GenerateStep(11, "ms"), "11")
+	process.AliasStep(GenerateStep(12, "ms"), "12", "11")
+	process.AliasStep(GenerateStep(13, "ms"), "13", "12")
 	wf := flow.AsyncFlow("TestWorkFlowPause", nil)
 	time.Sleep(10 * time.Millisecond)
 	wf.Pause()
@@ -370,7 +370,7 @@ func TestArgs(t *testing.T) {
 	factory := flow.RegisterFlow("TestArgs")
 	process := factory.Process("TestArgs")
 	process.AfterStep(true, ErrorResultPrinter)
-	process.AliasStep("1", func(ctx flow.Context) (any, error) {
+	process.AliasStep(func(ctx flow.Context) (any, error) {
 		a, ok := ctx.Get("InputA")
 		if !ok {
 			panic("InputA not found")
@@ -395,7 +395,7 @@ func TestArgs(t *testing.T) {
 			panic("InputB value error")
 		}
 		return nil, nil
-	})
+	}, "1")
 
 	features := flow.DoneArgs("TestArgs", InputA{Name: "a"}, &InputB{Name: "b"})
 	for _, feature := range features.Futures() {
@@ -409,12 +409,12 @@ func TestProcessPause(t *testing.T) {
 	defer resetCurrent()
 	factory := flow.RegisterFlow("TestProcessPause")
 	process := factory.Process("TestProcessPause")
-	process.AliasStep("1", GenerateStep(1, "ms"))
-	process.AliasStep("2", GenerateStep(2, "ms"), "1")
-	process.AliasStep("3", GenerateStep(3, "ms"), "2")
-	process.AliasStep("11", GenerateStep(11, "ms"))
-	process.AliasStep("12", GenerateStep(12, "ms"), "11")
-	process.AliasStep("13", GenerateStep(13, "ms"), "12")
+	process.AliasStep(GenerateStep(1, "ms"), "1")
+	process.AliasStep(GenerateStep(2, "ms"), "2", "1")
+	process.AliasStep(GenerateStep(3, "ms"), "3", "2")
+	process.AliasStep(GenerateStep(11, "ms"), "11")
+	process.AliasStep(GenerateStep(12, "ms"), "12", "11")
+	process.AliasStep(GenerateStep(13, "ms"), "13", "12")
 	workflow := flow.AsyncFlow("TestProcessPause", nil)
 	time.Sleep(10 * time.Millisecond)
 	workflow.ProcessController("TestProcessPause").Pause()
@@ -447,10 +447,10 @@ func TestCopyDepend(t *testing.T) {
 	defer resetCurrent()
 	factory := flow.RegisterFlow("TestCopyDepend")
 	process := factory.Process("TestCopyDepend")
-	process.AliasStep("1", GenerateStep(1)).
+	process.AliasStep(GenerateStep(1), "1").
 		Next(GenerateStep(2), "2").
 		Same(GenerateStep(3), "3")
-	process.AliasStep("11", GenerateStep(11)).
+	process.AliasStep(GenerateStep(11), "11").
 		Next(GenerateStep(12), "12").
 		Same(GenerateStep(13), "13")
 	features := flow.DoneFlow("TestCopyDepend", nil)
@@ -470,7 +470,7 @@ func TestNewFlowReturn(t *testing.T) {
 	defer resetCurrent()
 	factory := flow.RegisterFlow("TestNewFlowReturn")
 	process := factory.Process("TestNewFlowReturn")
-	process.AliasStep("1", GenerateStep(1))
+	process.AliasStep(GenerateStep(1), "1")
 	result := flow.DoneFlow("TestNewFlowReturn", nil)
 	if !result.Success() {
 		t.Errorf("flow fail")

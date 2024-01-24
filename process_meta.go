@@ -148,7 +148,7 @@ func (pm *ProcessMeta) Merge(name string) {
 		for _, depend := range merge.depends {
 			depends = append(depends, depend.stepName)
 		}
-		step := pm.AliasStep(merge.stepName, merge.run, depends...)
+		step := pm.AliasStep(merge.run, merge.stepName, depends...)
 		step.position.Append(Merged)
 	}
 }
@@ -206,10 +206,10 @@ func (pm *ProcessMeta) updateWaitersLayer(step *StepMeta) {
 }
 
 func (pm *ProcessMeta) Step(run func(ctx Context) (any, error), depends ...any) *StepMeta {
-	return pm.AliasStep(GetFuncName(run), run, depends...)
+	return pm.AliasStep(run, GetFuncName(run), depends...)
 }
 
-func (pm *ProcessMeta) Tail(alias string, run func(ctx Context) (any, error)) *StepMeta {
+func (pm *ProcessMeta) Tail(run func(ctx Context) (any, error), alias string) *StepMeta {
 	depends := make([]any, 0)
 	for name, step := range pm.steps {
 		if step.position.Contain(End) {
@@ -217,10 +217,10 @@ func (pm *ProcessMeta) Tail(alias string, run func(ctx Context) (any, error)) *S
 		}
 	}
 
-	return pm.AliasStep(alias, run, depends...)
+	return pm.AliasStep(run, alias, depends...)
 }
 
-func (pm *ProcessMeta) AliasStep(alias string, run func(ctx Context) (any, error), depends ...any) *StepMeta {
+func (pm *ProcessMeta) AliasStep(run func(ctx Context) (any, error), alias string, depends ...any) *StepMeta {
 	meta := &StepMeta{
 		stepName: alias,
 	}
