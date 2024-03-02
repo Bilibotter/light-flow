@@ -483,6 +483,22 @@ func TestContextNameCorrect(t *testing.T) {
 		}
 		return true, nil
 	})
+	workflow.BeforeStep(false, func(info *flow.StepInfo) (keepOn bool, err error) {
+		if info.ContextName() != "Step1" {
+			fmt.Printf("before step context name incorrect, step's name = %s\n", info.ContextName())
+		} else {
+			fmt.Printf("step's context name='%s' before step\n", info.ContextName())
+		}
+		return true, nil
+	})
+	workflow.AfterStep(false, func(info *flow.StepInfo) (keepOn bool, err error) {
+		if info.ContextName() != "Step1" {
+			fmt.Printf("afterstep step context name incorrect, step's name = %s\n", info.ContextName())
+		} else {
+			fmt.Printf("step's context name='%s' after step\n", info.ContextName())
+		}
+		return true, nil
+	})
 	process := workflow.Process("TestContextNameCorrect-Process")
 	process.AliasStep(func(ctx flow.Context) (any, error) {
 		if ctx.ContextName() != "Step1" {
