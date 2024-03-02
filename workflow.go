@@ -91,7 +91,7 @@ func RegisterFlow(name string) *FlowMeta {
 		visitor: visitor{
 			index:   int32(visibleAll),
 			visible: visibleAll,
-			roster:  map[int32]string{int32(visibleAll): name},
+			names:   map[int32]string{int32(visibleAll): name},
 		},
 		flowName: name,
 		init:     sync.Once{},
@@ -250,7 +250,7 @@ func (fm *FlowMeta) Process(name string) *ProcessMeta {
 		visitor: visitor{
 			visible: 0,
 			index:   0,
-			roster:  map[int32]string{0: name},
+			names:   map[int32]string{0: name},
 		},
 		belong:      fm,
 		processName: name,

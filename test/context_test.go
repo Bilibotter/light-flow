@@ -448,3 +448,52 @@ func TestGetAll(t *testing.T) {
 		}
 	}
 }
+
+func TestContextNameCorrect(t *testing.T) {
+	workflow := flow.RegisterFlow("TestContextNameCorrect")
+	workflow.BeforeFlow(false, func(info *flow.FlowInfo) (keepOn bool, err error) {
+		if info.ContextName() != "TestContextNameCorrect" {
+			fmt.Printf("beforeflow workflow context name incorrect, workflow's name = %s\n", info.ContextName())
+		} else {
+			fmt.Printf("workflow's context name='%s' before flow\n", info.ContextName())
+		}
+		return true, nil
+	})
+	workflow.AfterFlow(false, func(info *flow.FlowInfo) (keepOn bool, err error) {
+		if info.ContextName() != "TestContextNameCorrect" {
+			fmt.Printf("afterflow workflow context name incorrect, workflow's name = %s\n", info.ContextName())
+		} else {
+			fmt.Printf("workflow's context name='%s' after flow\n", info.ContextName())
+		}
+		return true, nil
+	})
+	workflow.BeforeProcess(false, func(info *flow.ProcessInfo) (keepOn bool, err error) {
+		if info.ContextName() != "TestContextNameCorrect-Process" {
+			fmt.Printf("beforeprocess process context name incorrect, workflow's name = %s\n", info.ContextName())
+		} else {
+			fmt.Printf("process's context name='%s' before process\n", info.ContextName())
+		}
+		return true, nil
+	})
+	workflow.AfterProcess(false, func(info *flow.ProcessInfo) (keepOn bool, err error) {
+		if info.ContextName() != "TestContextNameCorrect-Process" {
+			fmt.Printf("afterprocess process context name incorrect, workflow's name = %s\n", info.ContextName())
+		} else {
+			fmt.Printf("process's context name='%s' after process\n", info.ContextName())
+		}
+		return true, nil
+	})
+	process := workflow.Process("TestContextNameCorrect-Process")
+	process.AliasStep(func(ctx flow.Context) (any, error) {
+		if ctx.ContextName() != "Step1" {
+			fmt.Printf("run step's context name is incorrect, step's name = %s\n", ctx.ContextName())
+			return nil, fmt.Errorf("step context name incorrect")
+		}
+		fmt.Printf("step name = '%s', while step running\n", ctx.ContextName())
+		return nil, nil
+	}, "Step1")
+	result := flow.DoneFlow("TestContextNameCorrect", nil)
+	if !result.Success() {
+		t.Errorf("flow[%s] failed, explain=%v", result.GetName(), result.Exceptions())
+	}
+}

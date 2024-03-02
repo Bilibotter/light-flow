@@ -98,7 +98,7 @@ type visibleContext struct {
 }
 
 type visitor struct {
-	roster   map[int32]string // index to name
+	names    map[int32]string // index to name
 	priority map[string]int32 // specify the  key to index
 	index    int32
 	visible  Status
@@ -479,7 +479,7 @@ func (n *node) search(visible Status) (any, bool) {
 }
 
 func (vc *visibleContext) ContextName() string {
-	return vc.roster[vc.index]
+	return vc.names[vc.index]
 }
 
 func (vc *visibleContext) Get(key string) (value any, exist bool) {
@@ -499,7 +499,7 @@ func (vc *visibleContext) GetAll(key string) map[string]any {
 	find := vc.getAll(vc.visible, key)
 	result := make(map[string]any, len(find))
 	for num, value := range find {
-		name, ok := vc.roster[num]
+		name, ok := vc.names[num]
 		if !ok {
 			continue
 		}

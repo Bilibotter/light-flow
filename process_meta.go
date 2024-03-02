@@ -42,6 +42,11 @@ func newProcessConfig() ProcessConfig {
 	return config
 }
 
+// Fix ContextName return first step name
+func (pi *ProcessInfo) ContextName() string {
+	return pi.Name
+}
+
 func (pc *ProcessConfig) clone() ProcessConfig {
 	config := ProcessConfig{}
 	CopyPropertiesSkipNotEmpty(pc, config)
@@ -261,9 +266,9 @@ func (pm *ProcessMeta) addVisitorInfo(step *StepMeta) {
 	step.visitor = visitor{
 		visible: 1 << pm.nodeNum,
 		index:   int32(pm.nodeNum),
-		roster:  pm.roster,
+		names:   pm.names,
 	}
-	pm.roster[step.index] = step.stepName
+	pm.names[step.index] = step.stepName
 	pm.nodeNum++
 }
 

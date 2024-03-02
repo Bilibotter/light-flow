@@ -116,7 +116,7 @@ func (meta *StepMeta) wireDepends() {
 // If not it will panic.
 func (meta *StepMeta) checkPriority() {
 	for _, index := range meta.priority {
-		stepName := meta.roster[index]
+		stepName := meta.names[index]
 		if meta.backSearch(stepName) {
 			continue
 		}
