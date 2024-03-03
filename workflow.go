@@ -66,7 +66,6 @@ type runFlow struct {
 
 type FlowInfo struct {
 	*basicInfo
-	*visibleContext
 }
 
 func init() {
@@ -343,7 +342,6 @@ func (rf *runFlow) Flow() []*Future {
 			Id:     rf.Id,
 			Name:   rf.flowName,
 		},
-		visibleContext: rf.visibleContext,
 	}
 	rf.advertise(Before)
 	futures := make([]*Future, 0, len(rf.processes))

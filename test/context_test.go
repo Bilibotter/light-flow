@@ -452,18 +452,18 @@ func TestGetAll(t *testing.T) {
 func TestContextNameCorrect(t *testing.T) {
 	workflow := flow.RegisterFlow("TestContextNameCorrect")
 	workflow.BeforeFlow(false, func(info *flow.FlowInfo) (keepOn bool, err error) {
-		if info.ContextName() != "TestContextNameCorrect" {
-			fmt.Printf("beforeflow workflow context name incorrect, workflow's name = %s\n", info.ContextName())
+		if info.GetName() != "TestContextNameCorrect" {
+			fmt.Printf("beforeflow workflow context name incorrect, workflow's name = %s\n", info.GetName())
 		} else {
-			fmt.Printf("workflow's context name='%s' before flow\n", info.ContextName())
+			fmt.Printf("workflow's context name='%s' before flow\n", info.GetName())
 		}
 		return true, nil
 	})
 	workflow.AfterFlow(false, func(info *flow.FlowInfo) (keepOn bool, err error) {
-		if info.ContextName() != "TestContextNameCorrect" {
-			fmt.Printf("afterflow workflow context name incorrect, workflow's name = %s\n", info.ContextName())
+		if info.GetName() != "TestContextNameCorrect" {
+			fmt.Printf("afterflow workflow context name incorrect, workflow's name = %s\n", info.GetName())
 		} else {
-			fmt.Printf("workflow's context name='%s' after flow\n", info.ContextName())
+			fmt.Printf("workflow's context name='%s' after flow\n", info.GetName())
 		}
 		return true, nil
 	})
@@ -509,6 +509,10 @@ func TestContextNameCorrect(t *testing.T) {
 		return nil, nil
 	}, "Step1")
 	result := flow.DoneFlow("TestContextNameCorrect", nil)
+	if !result.Success() {
+		t.Errorf("flow[%s] failed, explain=%v", result.GetName(), result.Exceptions())
+	}
+	result = flow.DoneFlow("TestContextNameCorrect", nil)
 	if !result.Success() {
 		t.Errorf("flow[%s] failed, explain=%v", result.GetName(), result.Exceptions())
 	}
