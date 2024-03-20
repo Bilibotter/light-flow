@@ -2,14 +2,17 @@ package light_flow
 
 import (
 	"fmt"
+	"math/bits"
 	"runtime/debug"
 	"sync"
 	"sync/atomic"
 )
 
-var (
-	visibleAll = Status(0)
-	resultMark = Status(1 << 62)
+const (
+	publicKey   int64 = 0
+	resultIndex int64 = 62
+	visibleAll  int64 = 1<<62 - 1
+	resultMark  int64 = 1 << resultIndex
 )
 
 // these constants are used to indicate the position of the process
@@ -61,9 +64,20 @@ type BasicInfoI interface {
 type Context interface {
 	ContextName() string
 	Get(key string) (value any, exist bool)
-	GetAll(key string) map[string]any
-	GetResult(key string) (value any, exist bool)
+	getByName(name, key string)
 	Set(key string, value any)
+}
+
+type StepCtx interface {
+	Context
+	GetEndValues(key string) map[string]any
+	GetResult(key string) (value any, exist bool)
+	setResult(key string, value any)
+}
+
+type ProcCtx interface {
+	Context
+	GetByStepName(stepName, key string) (value any, exist bool)
 }
 
 type StatusEnum struct {
@@ -91,27 +105,33 @@ type callback[T BasicInfoI] struct {
 	run func(info T) (keepOn bool, err error)
 }
 
+type simpleContext struct {
+	m    map[string]any
+	name string
+}
+
 type visibleContext struct {
-	adjacencyTable
-	*visitor // step visitor will update when mergeConfig, so using pointer
-	parent   *visibleContext
+	*linkedTable
+	*accessInfo // step accessInfo will update when mergeConfig, so using pointer
+	prev        Context
+	next        Context
 }
 
-type visitor struct {
-	names    map[int32]string // index to name
-	priority map[string]int32 // specify the  key to index
-	index    int32
-	visible  Status
+type accessInfo struct {
+	names    map[int64]string // index to name
+	indexes  map[string]int64 // name to indexes
+	priority map[string]int64 // specify the  key to index
+	index    int64
+	passing  int64
 }
 
-type adjacencyTable struct {
-	lock  *sync.RWMutex
+type linkedTable struct {
+	lock  sync.RWMutex
 	nodes map[string]*node
 }
 
 type node struct {
-	Index   int32  // used to identify a node
-	Visible Status // combine current node connected node's index, corresponding bit will be set to 1
+	Passing int64 // combine current node connected node's index, corresponding bit will be set to 1
 	Value   any
 	Next    *node
 }
@@ -405,32 +425,31 @@ func (c *callback[T]) call(flag string, info T) (keepOn bool, err error, panicSt
 }
 
 // Set method sets the value associated with the given key in own context.
-func (t *adjacencyTable) set(num int32, visible Status, key string, value any) {
+func (t *linkedTable) set(passing int64, key string, value any) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	n := &node{
-		Index:   num,
 		Value:   value,
-		Visible: visible.load(),
+		Passing: passing,
 		Next:    t.nodes[key],
 	}
 	t.nodes[key] = n
 }
 
-func (t *adjacencyTable) find(num int32, key string) (any, bool) {
+func (t *linkedTable) matchByIndex(index int64, key string) (any, bool) {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 	head, exist := t.nodes[key]
 	if !exist {
 		return nil, false
 	}
-	return head.searchByIndex(num)
+	return head.matchByHighest(1 << index)
 }
 
 // Get method retrieves the value associated with the given key from the context path.
 // The method first checks the priority context, then own context, finally parents context.
 // Returns the value associated with the key (if found) and a boolean indicating its presence.
-func (t *adjacencyTable) get(visible Status, key string) (any, bool) {
+func (t *linkedTable) get(visible int64, key string) (any, bool) {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 	if head, exist := t.nodes[key]; exist {
@@ -441,41 +460,26 @@ func (t *adjacencyTable) get(visible Status, key string) (any, bool) {
 	return nil, false
 }
 
-func (t *adjacencyTable) getAll(visible Status, key string) map[int32]any {
-	t.lock.RLock()
-	defer t.lock.RUnlock()
-	head, exist := t.nodes[key]
-	if !exist {
-		return nil
-	}
-	all := make(map[int32]any)
-	for head != nil {
-		if visible.contain(head.Visible) {
-			all[head.Index] = head.Value
-		}
-		head = head.Next
-	}
-	return all
-}
-
-func (n *node) searchByIndex(index int32) (any, bool) {
-	if n.Index == index {
+func (n *node) matchByHighest(highest int64) (any, bool) {
+	// Check if the highest set bit in "highest" is equal to the highest set bit in "n.Passing".
+	// If the condition is true, the value of node is set by the step corresponding to highest.
+	if bits.Len64(uint64(highest)) == bits.Len64(uint64(n.Passing)) {
 		return n.Value, true
 	}
 	if n.Next == nil {
 		return nil, false
 	}
-	return n.Next.searchByIndex(index)
+	return n.Next.matchByHighest(highest)
 }
 
-func (n *node) search(visible Status) (any, bool) {
-	if visible.contain(n.Visible) {
+func (n *node) search(passing int64) (any, bool) {
+	if passing&n.Passing == n.Passing {
 		return n.Value, true
 	}
 	if n.Next == nil {
 		return nil, false
 	}
-	return n.Next.search(visible)
+	return n.Next.search(passing)
 }
 
 func (vc *visibleContext) ContextName() string {
@@ -484,39 +488,26 @@ func (vc *visibleContext) ContextName() string {
 
 func (vc *visibleContext) Get(key string) (value any, exist bool) {
 	if index, match := vc.priority[key]; match {
-		return vc.find(index, key)
+		return vc.matchByIndex(index, key)
 	}
-	if value, exist = vc.get(vc.visible, key); exist {
+	if value, exist = vc.get(vc.passing, key); exist {
 		return
 	}
-	if vc.parent != nil {
-		return vc.parent.Get(key)
+	if vc.prev != nil {
+		return vc.prev.Get(key)
 	}
 	return nil, false
 }
 
-func (vc *visibleContext) GetAll(key string) map[string]any {
-	find := vc.getAll(vc.visible, key)
-	result := make(map[string]any, len(find))
-	for num, value := range find {
-		name, ok := vc.names[num]
-		if !ok {
-			continue
-		}
-		// if set a value more than once, only the last value will be returned
-		if _, exist := result[name]; exist {
-			continue
-		}
-		result[name] = value
+func (vc *visibleContext) getByName(name, key string) {
+	if vc.indexes == nil {
+		panic("This method is not supported.")
 	}
-	if vc.parent != nil {
-		for k, v := range vc.parent.GetAll(key) {
-			if _, exist := result[k]; !exist {
-				result[k] = v
-			}
-		}
+	index, ok := vc.indexes[name]
+	if !ok {
+		panic("Invalid node name.")
 	}
-	return result
+	vc.matchByIndex(index, key)
 }
 
 func (vc *visibleContext) GetResult(key string) (value any, exist bool) {
@@ -526,24 +517,83 @@ func (vc *visibleContext) GetResult(key string) (value any, exist bool) {
 	if !find {
 		return nil, false
 	}
-	return head.search(resultMark)
+	// head.search may find process set value
+	return head.matchByHighest(resultMark)
+}
+
+func (vc *visibleContext) GetEndValues(key string) map[string]any {
+	if vc.names == nil {
+		panic("This method is not supported.")
+	}
+	vc.lock.RLock()
+	defer vc.lock.RUnlock()
+	current, find := vc.nodes[key]
+	if !find {
+		return nil
+	}
+	m := make(map[string]any)
+	exist := int64(0)
+	for current.Next != nil {
+		if exist|current.Passing == exist {
+			current = current.Next
+			continue
+		}
+		index := bits.Len64(uint64(current.Passing))
+		name := vc.names[int64(index)]
+		m[name] = current.Value
+		exist |= current.Passing
+		current = current.Next
+	}
+	return m
+}
+
+func (vc *visibleContext) GetByStepName(stepName, key string) (value any, exist bool) {
+	if vc.indexes == nil {
+		panic("This method is not supported.")
+	}
+	vc.lock.RLock()
+	defer vc.lock.RUnlock()
+	index, ok := vc.indexes[stepName]
+	if !ok {
+		panic(fmt.Sprintf("Step[%s] not found.", stepName))
+	}
+	return vc.matchByIndex(index, key)
 }
 
 func (vc *visibleContext) setResult(key string, value any) {
 	vc.lock.Lock()
 	defer vc.lock.Unlock()
-	// set num and path to -1, so Get method will skip result
 	head := &node{
-		Index:   -1,
 		Value:   value,
-		Visible: resultMark,
+		Passing: resultMark,
 		Next:    vc.nodes[key],
 	}
 	vc.nodes[key] = head
 }
 
 func (vc *visibleContext) Set(key string, value any) {
-	vc.set(vc.index, vc.visible, key, value)
+	if vc.passing == visibleAll {
+		vc.set(publicKey, key, value)
+		return
+	}
+	vc.set(vc.passing, key, value)
+}
+
+func (sc *simpleContext) ContextName() string {
+	return sc.name
+}
+
+func (sc *simpleContext) Get(key string) (value any, exist bool) {
+	value, exist = sc.m[key]
+	return
+}
+
+func (sc *simpleContext) getByName(name, key string) {
+	panic("This method is not supported.")
+}
+
+func (sc *simpleContext) Set(key string, value any) {
+	sc.m[key] = value
 }
 
 // Done method waits for the corresponding process to complete.

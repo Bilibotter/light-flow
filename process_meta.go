@@ -14,7 +14,7 @@ const (
 
 type ProcessMeta struct {
 	ProcessConfig
-	visitor
+	accessInfo
 	belong      *FlowMeta
 	init        sync.Once
 	processName string
@@ -25,7 +25,7 @@ type ProcessMeta struct {
 
 type ProcessInfo struct {
 	basicInfo
-	*visibleContext
+	ProcCtx
 	FlowId string
 }
 
@@ -130,7 +130,7 @@ func (pm *ProcessMeta) initialize() {
 func (pm *ProcessMeta) constructVisible() {
 	for _, step := range pm.sortedSteps() {
 		for _, waiter := range step.waiters {
-			waiter.visible = step.visible | waiter.visible
+			waiter.passing = step.passing | waiter.passing
 		}
 	}
 	return
@@ -233,7 +233,7 @@ func (pm *ProcessMeta) AliasStep(run func(ctx Context) (any, error), alias strin
 		name := toStepName(wrap)
 		depend, exist := pm.steps[name]
 		if !exist {
-			panic(fmt.Sprintf("can't find step[%s]", name))
+			panic(fmt.Sprintf("can't matchByHighest step[%s]", name))
 		}
 		meta.depends = append(meta.depends, depend)
 	}
@@ -263,12 +263,14 @@ func (pm *ProcessMeta) addVisitorInfo(step *StepMeta) {
 	if pm.nodeNum == 62 {
 		panic(fmt.Sprintf("step[%s] exceeds max nodes num, max node num is 62", step.stepName))
 	}
-	step.visitor = visitor{
-		visible: 1 << pm.nodeNum,
-		index:   int32(pm.nodeNum),
+	step.accessInfo = accessInfo{
+		passing: 1 << pm.nodeNum,
+		index:   int64(pm.nodeNum),
 		names:   pm.names,
+		indexes: pm.indexes,
 	}
 	pm.names[step.index] = step.stepName
+	pm.indexes[step.stepName] = step.index
 	pm.nodeNum++
 }
 

@@ -51,6 +51,7 @@ func StepCallback(flag bool, visible []string, notVisible []string, keys ...stri
 		if flag {
 			time.Sleep(10 * time.Millisecond)
 		}
+		fmt.Printf("invoke step[%s] callback, current=%d\n", info.Name, atomic.LoadInt64(&current))
 		for _, k := range visible {
 			if _, ok := info.Get(k); !ok {
 				panic(fmt.Sprintf("%s not found %s", info.ContextName(), k))
@@ -68,12 +69,14 @@ func StepCallback(flag bool, visible []string, notVisible []string, keys ...stri
 		}
 		fmt.Printf("step[%s] set all keys = %s\n", info.ContextName(), strings.Join(keys, ", "))
 		atomic.AddInt64(&current, 1)
+		println()
 		return true, nil
 	}
 }
 
 func CtxChecker(flag bool, visible []string, notVisible []string, keys ...string) func(ctx flow.Context) (any, error) {
 	return func(ctx flow.Context) (any, error) {
+		fmt.Printf("ctx[%s] start check context, current=%d\n", ctx.ContextName(), atomic.LoadInt64(&current))
 		if flag {
 			time.Sleep(10 * time.Millisecond)
 		}
@@ -94,6 +97,7 @@ func CtxChecker(flag bool, visible []string, notVisible []string, keys ...string
 		}
 		fmt.Printf("ctx[%s] set all keys = %s\n", ctx.ContextName(), strings.Join(keys, ", "))
 		atomic.AddInt64(&current, 1)
+		println()
 		return nil, nil
 	}
 }
@@ -183,11 +187,11 @@ func TestAllCallbackConnect(t *testing.T) {
 	workflow := flow.RegisterFlow("TestAllCallbackConnect")
 	process := workflow.Process("TestAllCallbackConnect")
 	process.AfterStep(true, ErrorResultPrinter)
-	process.BeforeProcess(true, ProcCallback(false, []string{}, []string{}, "3"))
-	process.AfterProcess(true, ProcCallback(false, []string{"3"}, []string{"4", "6"}))
+	process.BeforeProcess(true, ProcCallback(false, []string{"1"}, []string{}, "3"))
+	process.AfterProcess(true, ProcCallback(false, []string{"1", "3", "4", "6"}, []string{}))
 	process.BeforeStep(true, StepCallback(false, []string{"3"}, []string{}, "4"))
-	process.AfterStep(true, StepCallback(false, []string{"3", "4", "6"}, []string{}))
-	process.AliasStep(CtxChecker(false, []string{"3", "4"}, []string{}, "6"), "1")
+	process.AfterStep(true, StepCallback(false, []string{"1", "3", "4", "6"}, []string{}))
+	process.AliasStep(CtxChecker(false, []string{"1", "3", "4"}, []string{}, "6"), "1")
 	result := flow.DoneFlow("TestAllCallbackConnect", map[string]any{"1": "1"})
 	if !result.Success() {
 		for _, exception := range result.Exceptions() {

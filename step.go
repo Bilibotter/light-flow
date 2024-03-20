@@ -6,7 +6,7 @@ import (
 )
 
 type StepMeta struct {
-	visitor
+	accessInfo
 	StepConfig
 	belong   *ProcessMeta
 	stepName string
@@ -14,14 +14,14 @@ type StepMeta struct {
 	position *Status     // used to record the position of the step
 	depends  []*StepMeta // prev
 	waiters  []*StepMeta // next
-	priority map[string]int32
+	priority map[string]int64
 	run      func(ctx Context) (any, error)
 }
 
 type runStep struct {
 	*StepMeta
-	*visibleContext
 	*Status
+	*visibleContext
 	id        string
 	flowId    string
 	processId string
@@ -35,7 +35,7 @@ type runStep struct {
 
 type StepInfo struct {
 	*basicInfo
-	*visibleContext
+	StepCtx
 	ProcessId string
 	FlowId    string
 	Start     time.Time
@@ -73,12 +73,12 @@ func (meta *StepMeta) Same(run func(ctx Context) (any, error), alias ...string) 
 
 func (meta *StepMeta) Priority(priority map[string]any) {
 	if meta.priority == nil {
-		meta.priority = make(map[string]int32, len(priority))
+		meta.priority = make(map[string]int64, len(priority))
 	}
 	for key, stepName := range priority {
 		step, exist := meta.belong.steps[toStepName(stepName)]
 		if !exist {
-			panic(fmt.Sprintf("can't find step[%s]", stepName))
+			panic(fmt.Sprintf("step[%s] can't matchByHighest ", stepName))
 		}
 		meta.priority[key] = step.index
 	}

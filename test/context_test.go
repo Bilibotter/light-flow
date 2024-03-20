@@ -89,25 +89,25 @@ func invalidUse(ctx flow.Context) (any, error) {
 	return nil, nil
 }
 
-func getAllAndSet(value string, history ...string) func(ctx flow.Context) (any, error) {
-	return func(ctx flow.Context) (any, error) {
-		ctx.Set("all", value)
-		ks := flow.NewRoutineUnsafeSet[string]()
-		vs := flow.NewRoutineUnsafeSet[string]()
-		m := ctx.GetAll("all")
-		for k, v := range m {
-			ks.Add(k)
-			vs.Add(v.(string))
-		}
-		for _, v := range history {
-			if !vs.Contains(v) {
-				panic(fmt.Sprintf("ctx[%s] not contain %s", ctx.ContextName(), v))
-			}
-		}
-		fmt.Printf("ctx[%s] get all keys=%s\n", ctx.ContextName(), strings.Join(ks.Slice(), ", "))
-		return nil, nil
-	}
-}
+//func getAllAndSet(value string, history ...string) func(ctx flow.Context) (any, error) {
+//	return func(ctx flow.Context) (any, error) {
+//		ctx.Set("all", value)
+//		ks := flow.NewRoutineUnsafeSet[string]()
+//		vs := flow.NewRoutineUnsafeSet[string]()
+//		m := ctx.GetAll("all")
+//		for k, v := range m {
+//			ks.Add(k)
+//			vs.Add(v.(string))
+//		}
+//		for _, v := range history {
+//			if !vs.Contains(v) {
+//				panic(fmt.Sprintf("ctx[%s] not contain %s", ctx.ContextName(), v))
+//			}
+//		}
+//		fmt.Printf("ctx[%s] get all keys=%s\n", ctx.ContextName(), strings.Join(ks.Slice(), ", "))
+//		return nil, nil
+//	}
+//}
 
 func TestSearch(t *testing.T) {
 	defer resetCtx()
@@ -430,24 +430,24 @@ func TestFlowMultipleAsyncExecute(t *testing.T) {
 	}
 }
 
-func TestGetAll(t *testing.T) {
-	workflow := flow.RegisterFlow("TestGetAll")
-	process := workflow.Process("TestGetAll")
-	process.AfterStep(true, ErrorResultPrinter)
-	process.AliasStep(getAllAndSet("1", "0"), "1")
-	process.AliasStep(getAllAndSet("2", "0", "1"), "2", "1")
-	process.AliasStep(getAllAndSet("3", "0", "1", "2"), "3", "2")
-	result := flow.DoneFlow("TestGetAll", map[string]any{"all": "0"})
-	if !result.Success() {
-		t.Errorf("flow[%s] failed, explain=%v", result.GetName(), result.Exceptions())
-	}
-	for _, feature := range result.Futures() {
-		t.Logf("process[%s] explain=%v", feature.GetName(), feature.ExplainStatus())
-		if !feature.Success() {
-			t.Errorf("process[%s] failed, exceptions=%v", feature.GetName(), feature.Exceptions())
-		}
-	}
-}
+//func TestGetAll(t *testing.T) {
+//	workflow := flow.RegisterFlow("TestGetAll")
+//	process := workflow.Process("TestGetAll")
+//	process.AfterStep(true, ErrorResultPrinter)
+//	process.AliasStep(getAllAndSet("1", "0"), "1")
+//	process.AliasStep(getAllAndSet("2", "0", "1"), "2", "1")
+//	process.AliasStep(getAllAndSet("3", "0", "1", "2"), "3", "2")
+//	result := flow.DoneFlow("TestGetAll", map[string]any{"all": "0"})
+//	if !result.Success() {
+//		t.Errorf("flow[%s] failed, explain=%v", result.GetName(), result.Exceptions())
+//	}
+//	for _, feature := range result.Futures() {
+//		t.Logf("process[%s] explain=%v", feature.GetName(), feature.ExplainStatus())
+//		if !feature.Success() {
+//			t.Errorf("process[%s] failed, exceptions=%v", feature.GetName(), feature.Exceptions())
+//		}
+//	}
+//}
 
 func TestContextNameCorrect(t *testing.T) {
 	workflow := flow.RegisterFlow("TestContextNameCorrect")

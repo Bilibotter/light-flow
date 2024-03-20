@@ -23,8 +23,9 @@ type runProcess struct {
 func (rp *runProcess) buildRunStep(meta *StepMeta) *runStep {
 	step := runStep{
 		visibleContext: &visibleContext{
-			parent:  rp.visibleContext,
-			visitor: &meta.visitor,
+			accessInfo:  &meta.accessInfo,
+			linkedTable: rp.linkedTable,
+			prev:        rp.visibleContext.prev,
 		},
 		Status:    emptyStatus(),
 		StepMeta:  meta,
@@ -251,7 +252,7 @@ func (rp *runProcess) stepCallback(step *runStep, flag string) {
 
 func (rp *runProcess) procCallback(flag string) {
 	info := &ProcessInfo{
-		visibleContext: rp.visibleContext,
+		ProcCtx: rp.visibleContext,
 		basicInfo: basicInfo{
 			Status: rp.Status,
 			Id:     rp.id,
@@ -277,12 +278,12 @@ func (rp *runProcess) summaryStepInfo(step *runStep) *StepInfo {
 			Id:     step.id,
 			Name:   step.stepName,
 		},
-		visibleContext: step.visibleContext,
-		ProcessId:      step.processId,
-		FlowId:         step.flowId,
-		Start:          step.Start,
-		End:            step.End,
-		Err:            step.Err,
+		StepCtx:   step.visibleContext,
+		ProcessId: step.processId,
+		FlowId:    step.flowId,
+		Start:     step.Start,
+		End:       step.End,
+		Err:       step.Err,
 	}
 
 	step.infoCache = info

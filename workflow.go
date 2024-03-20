@@ -46,7 +46,6 @@ type FlowConfig struct {
 
 type FlowMeta struct {
 	FlowConfig
-	visitor
 	init              sync.Once
 	flowName          string
 	flowNotUseDefault bool
@@ -56,7 +55,7 @@ type FlowMeta struct {
 type runFlow struct {
 	*FlowMeta
 	*basicInfo
-	*visibleContext
+	*simpleContext
 	processes []*runProcess
 	futures   []*Future
 	lock      sync.Mutex
@@ -87,11 +86,6 @@ func CreateDefaultConfig() *FlowConfig {
 
 func RegisterFlow(name string) *FlowMeta {
 	flow := FlowMeta{
-		visitor: visitor{
-			index:   int32(visibleAll),
-			visible: visibleAll,
-			names:   map[int32]string{int32(visibleAll): name},
-		},
 		flowName: name,
 		init:     sync.Once{},
 	}
@@ -201,15 +195,12 @@ func (fm *FlowMeta) NoUseDefault() *FlowMeta {
 }
 
 func (fm *FlowMeta) buildRunFlow(input map[string]any) *runFlow {
-	table := adjacencyTable{
-		lock:  &sync.RWMutex{},
-		nodes: make(map[string]*node, len(input)),
+	ctx := simpleContext{
+		m:    input,
+		name: fm.flowName,
 	}
 	rf := runFlow{
-		visibleContext: &visibleContext{
-			adjacencyTable: table,
-			visitor:        &fm.visitor,
-		},
+		simpleContext: &ctx,
 		basicInfo: &basicInfo{
 			Status: emptyStatus(),
 			Name:   fm.flowName,
@@ -246,10 +237,11 @@ func (fm *FlowMeta) CloneProcess(name string) *ProcessMeta {
 
 func (fm *FlowMeta) Process(name string) *ProcessMeta {
 	pm := ProcessMeta{
-		visitor: visitor{
-			visible: 0,
+		accessInfo: accessInfo{
+			passing: visibleAll,
 			index:   0,
-			names:   map[int32]string{0: name},
+			names:   map[int64]string{0: name},
+			indexes: map[string]int64{name: 0},
 		},
 		belong:      fm,
 		processName: name,
@@ -263,15 +255,15 @@ func (fm *FlowMeta) Process(name string) *ProcessMeta {
 }
 
 func (rf *runFlow) buildRunProcess(meta *ProcessMeta) *runProcess {
-	table := adjacencyTable{
-		lock:  &sync.RWMutex{},
+	table := linkedTable{
+		lock:  sync.RWMutex{},
 		nodes: map[string]*node{},
 	}
 	process := runProcess{
 		visibleContext: &visibleContext{
-			parent:         rf.visibleContext,
-			visitor:        &meta.visitor,
-			adjacencyTable: table,
+			prev:        rf.simpleContext,
+			accessInfo:  &meta.accessInfo,
+			linkedTable: &table,
 		},
 		Status:      emptyStatus(),
 		ProcessMeta: meta,
@@ -283,13 +275,8 @@ func (rf *runFlow) buildRunProcess(meta *ProcessMeta) *runProcess {
 		finish:      sync.WaitGroup{},
 	}
 
-	stepTable := adjacencyTable{
-		lock:  &sync.RWMutex{},
-		nodes: map[string]*node{},
-	}
 	for _, stepMeta := range meta.sortedSteps() {
 		step := process.buildRunStep(stepMeta)
-		step.adjacencyTable = stepTable
 		process.flowSteps[stepMeta.stepName] = step
 	}
 	process.running.Add(len(process.flowSteps))
