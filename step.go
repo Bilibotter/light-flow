@@ -15,7 +15,7 @@ type StepMeta struct {
 	depends  []*StepMeta // prev
 	waiters  []*StepMeta // next
 	priority map[string]int64
-	run      func(ctx Context) (any, error)
+	run      func(ctx StepCtx) (any, error)
 }
 
 type runStep struct {
@@ -52,7 +52,7 @@ func (si *Step) Error() error {
 	return si.Err
 }
 
-func (meta *StepMeta) Next(run func(ctx Context) (any, error), alias ...string) *StepMeta {
+func (meta *StepMeta) Next(run func(ctx StepCtx) (any, error), alias ...string) *StepMeta {
 	if len(alias) == 1 {
 		return meta.belong.AliasStep(run, alias[0], meta.stepName)
 
@@ -60,7 +60,7 @@ func (meta *StepMeta) Next(run func(ctx Context) (any, error), alias ...string) 
 	return meta.belong.Step(run, meta.stepName)
 }
 
-func (meta *StepMeta) Same(run func(ctx Context) (any, error), alias ...string) *StepMeta {
+func (meta *StepMeta) Same(run func(ctx StepCtx) (any, error), alias ...string) *StepMeta {
 	depends := make([]any, 0, len(meta.depends))
 	for i := 0; i < len(meta.depends); i++ {
 		depends = append(depends, meta.depends[i].stepName)

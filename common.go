@@ -154,7 +154,7 @@ func createStatus(i int64) *Status {
 func toStepName(value any) string {
 	var result string
 	switch value.(type) {
-	case func(ctx Context) (any, error):
+	case func(ctx StepCtx) (any, error):
 		result = GetFuncName(value)
 	case string:
 		result = value.(string)
@@ -534,18 +534,15 @@ func (vc *visibleContext) GetEndValues(key string) map[string]any {
 	m := make(map[string]any)
 	exist := int64(0)
 	for current.Next != nil {
-		if vc.passing&current.Passing != current.Passing && exist|current.Passing == exist {
+		if vc.passing&current.Passing != current.Passing || exist|current.Passing == exist {
 			current = current.Next
 			continue
 		}
-		index := bits.Len64(uint64(current.Passing))
-		name := vc.names[int64(index)]
+		length := bits.Len64(uint64(current.Passing))
+		name := vc.names[int64(length)-1]
 		m[name] = current.Value
 		exist |= current.Passing
 		current = current.Next
-	}
-	if exist == 0 && current.Passing == publicKey {
-		m[vc.names[0]] = current.Value
 	}
 	return m
 }

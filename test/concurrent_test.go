@@ -9,8 +9,8 @@ import (
 	"testing"
 )
 
-func GenerateNoDelayStep(i int) func(ctx flow.Context) (any, error) {
-	return func(ctx flow.Context) (any, error) {
+func GenerateNoDelayStep(i int) func(ctx flow.StepCtx) (any, error) {
+	return func(ctx flow.StepCtx) (any, error) {
 		ctx.Set("step", i)
 		atomic.AddInt64(&current, 1)
 		return i, nil
@@ -22,7 +22,7 @@ func GenerateNoDelayProcessor(info *flow.Step) (bool, error) {
 	return true, nil
 }
 
-func NoDelayContextStep(ctx flow.Context) (any, error) {
+func NoDelayContextStep(ctx flow.StepCtx) (any, error) {
 	addr, _ := ctx.Get(addrKey)
 	atomic.AddInt64(addr.(*int64), 1)
 	ctx.Set("foo", 1)
@@ -38,7 +38,7 @@ func TestQuickStepConcurrent(t *testing.T) {
 	}
 	for i := 0; i < 62; i++ {
 		for _, p := range proc {
-			p.AliasStep(func(ctx flow.Context) (any, error) {
+			p.AliasStep(func(ctx flow.StepCtx) (any, error) {
 				return nil, nil
 			}, strconv.Itoa(i))
 		}

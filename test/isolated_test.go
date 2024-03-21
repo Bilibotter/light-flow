@@ -8,9 +8,12 @@ import (
 	"testing"
 )
 
-func CheckGetEndValues(check ...string) func(info *flow.Step) (keepOn bool, err error) {
-	return func(info *flow.Step) (keepOn bool, err error) {
+func CheckGetEndValues(check ...string) func(info flow.StepCtx) (result any, err error) {
+	return func(info flow.StepCtx) (result any, err error) {
 		values := info.GetEndValues("Step")
+		if len(values) != len(check) {
+			panic(fmt.Sprintf("values length[%d] not equal check length[%d]", len(values), len(check)))
+		}
 		for _, k := range check {
 			if value, exist := values[k]; exist {
 				if value.(string) != k {
@@ -23,7 +26,7 @@ func CheckGetEndValues(check ...string) func(info *flow.Step) (keepOn bool, err 
 			}
 		}
 		atomic.AddInt64(&current, 1)
-		return true, nil
+		return "result", nil
 	}
 }
 
@@ -76,8 +79,8 @@ func StepResultCheck(info *flow.Step) (keepOn bool, err error) {
 	return true, nil
 }
 
-func StepCtxFunc(input map[string]any, check ...string) func(ctx flow.Context) (any, error) {
-	return func(ctx flow.Context) (any, error) {
+func StepCtxFunc(input map[string]any, check ...string) func(ctx flow.StepCtx) (any, error) {
+	return func(ctx flow.StepCtx) (any, error) {
 		fmt.Printf("step[%s] runnning \n", ctx.ContextName())
 		for _, s := range check {
 			if value, exist := ctx.Get(s); exist {
@@ -124,8 +127,8 @@ func ProcCtxFunc(input map[string]any) func(info *flow.Process) (keepOn bool, er
 	}
 }
 
-func SetCtxStepFunc(input map[string]any) func(ctx flow.Context) (any, error) {
-	return func(ctx flow.Context) (any, error) {
+func SetCtxStepFunc(input map[string]any) func(ctx flow.StepCtx) (any, error) {
+	return func(ctx flow.StepCtx) (any, error) {
 		fmt.Printf("ctx[%s] set value\n", ctx.ContextName())
 		for k, v := range input {
 			ctx.Set(k, v)
@@ -135,8 +138,70 @@ func SetCtxStepFunc(input map[string]any) func(ctx flow.Context) (any, error) {
 	}
 }
 
+func TestGetEndIgnoreProc(t *testing.T) {
+	defer resetCurrent()
+	workflow := flow.RegisterFlow("TestGetEndIgnoreProc")
+	process := workflow.Process("TestGetEndIgnoreProc")
+	process.BeforeProcess(true, ProcCtxFunc(map[string]any{"Step": "TestGetEndIgnoreProc"}))
+	process.AliasStep(CheckGetEndValues(), "check")
+	result := flow.DoneFlow("TestGetEndIgnoreProc", nil)
+	if !result.Success() {
+		for _, f := range result.Futures() {
+			if !f.Success() {
+				t.Errorf("process[%s] failed, explain=%s\n", f.Name, strings.Join(f.ExplainStatus(), ","))
+			} else {
+				t.Errorf("process[%s] success, explain=%s\n", f.Name, strings.Join(f.ExplainStatus(), ","))
+			}
+		}
+	}
+	if atomic.LoadInt64(&current) != 2 {
+		t.Errorf("execute 2 step, but current = %d", current)
+	}
+}
+
+func TestCollectGetEndValues(t *testing.T) {
+	defer resetCurrent()
+	workflow := flow.RegisterFlow("TestCollectGetEndValues")
+	process := workflow.Process("TestCollectGetEndValues")
+	process.AliasStep(SetCtxStepFunc(map[string]any{"Step": "Error"}), "Step0")
+	process.AliasStep(SetCtxStepFunc(map[string]any{"Step": "Error"}), "Step1", "Step0")
+	process.AliasStep(SetCtxStepFunc(map[string]any{"Step": "Error"}), "Step2", "Step0")
+	process.AliasStep(SetCtxStepFunc(map[string]any{"Step": "Error"}), "Step3", "Step0")
+	process.Tail(SetCtxStepFunc(map[string]any{"Step": "Step4"}), "Step4")
+	process.Tail(CheckGetEndValues("Step4"), "check")
+	result := flow.DoneFlow("TestCollectGetEndValues", nil)
+	if !result.Success() {
+		for _, f := range result.Futures() {
+			if !f.Success() {
+				t.Errorf("process[%s] failed, explain=%s\n", f.Name, strings.Join(f.ExplainStatus(), ","))
+			}
+		}
+	}
+	if atomic.LoadInt64(&current) != 6 {
+		t.Errorf("execute 6 step, but current = %d", current)
+	}
+}
+
 func TestMultipleGetEndValues(t *testing.T) {
 	defer resetCurrent()
+	workflow := flow.RegisterFlow("TestMultipleGetEndValues")
+	process := workflow.Process("TestMultipleGetEndValues")
+	process.AliasStep(SetCtxStepFunc(map[string]any{"Step": "Error"}), "Step0")
+	process.AliasStep(SetCtxStepFunc(map[string]any{"Step": "Step1"}), "Step1", "Step0")
+	process.AliasStep(SetCtxStepFunc(map[string]any{"Step": "Step2"}), "Step2", "Step0")
+	process.AliasStep(SetCtxStepFunc(map[string]any{"Step": "Step3"}), "Step3", "Step0")
+	process.Tail(CheckGetEndValues("Step1", "Step2", "Step3"), "check")
+	result := flow.DoneFlow("TestMultipleGetEndValues", nil)
+	if !result.Success() {
+		for _, f := range result.Futures() {
+			if !f.Success() {
+				t.Errorf("process[%s] failed, explain=%s\n", f.Name, strings.Join(f.ExplainStatus(), ","))
+			}
+		}
+	}
+	if atomic.LoadInt64(&current) != 5 {
+		t.Errorf("execute 5 step, but current = %d", current)
+	}
 }
 
 func TestGetByStepName(t *testing.T) {

@@ -218,22 +218,24 @@ func (pm *ProcessMeta) updateWaitersLayer(step *StepMeta) {
 	}
 }
 
-func (pm *ProcessMeta) Step(run func(ctx Context) (any, error), depends ...any) *StepMeta {
+func (pm *ProcessMeta) Step(run func(ctx StepCtx) (any, error), depends ...any) *StepMeta {
 	return pm.AliasStep(run, GetFuncName(run), depends...)
 }
 
-func (pm *ProcessMeta) Tail(run func(ctx Context) (any, error), alias string) *StepMeta {
+func (pm *ProcessMeta) Tail(run func(ctx StepCtx) (any, error), alias ...string) *StepMeta {
 	depends := make([]any, 0)
 	for name, step := range pm.steps {
 		if step.position.Contain(End) {
 			depends = append(depends, name)
 		}
 	}
-
-	return pm.AliasStep(run, alias, depends...)
+	if len(alias) == 1 {
+		return pm.AliasStep(run, alias[0], depends...)
+	}
+	return pm.Step(run, depends...)
 }
 
-func (pm *ProcessMeta) AliasStep(run func(ctx Context) (any, error), alias string, depends ...any) *StepMeta {
+func (pm *ProcessMeta) AliasStep(run func(ctx StepCtx) (any, error), alias string, depends ...any) *StepMeta {
 	meta := &StepMeta{
 		stepName: alias,
 	}

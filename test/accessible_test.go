@@ -74,8 +74,8 @@ func StepCallback(flag bool, visible []string, notVisible []string, keys ...stri
 	}
 }
 
-func CtxChecker(flag bool, visible []string, notVisible []string, keys ...string) func(ctx flow.Context) (any, error) {
-	return func(ctx flow.Context) (any, error) {
+func CtxChecker(flag bool, visible []string, notVisible []string, keys ...string) func(ctx flow.StepCtx) (any, error) {
+	return func(ctx flow.StepCtx) (any, error) {
 		fmt.Printf("ctx[%s] start check context, current=%d\n", ctx.ContextName(), atomic.LoadInt64(&current))
 		if flag {
 			time.Sleep(10 * time.Millisecond)

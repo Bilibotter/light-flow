@@ -25,26 +25,26 @@ func resetCurrent() {
 	atomic.StoreInt64(&current, 0)
 }
 
-func NormalStep3(ctx flow.Context) (any, error) {
+func NormalStep3(ctx flow.StepCtx) (any, error) {
 	atomic.AddInt64(&current, 1)
 	fmt.Printf("3.normal step finish\n")
 	return 3, nil
 }
 
-func NormalStep2(ctx flow.Context) (any, error) {
+func NormalStep2(ctx flow.StepCtx) (any, error) {
 	atomic.AddInt64(&current, 1)
 	fmt.Printf("2.normal step finish\n")
 	return 2, nil
 }
 
-func NormalStep1(ctx flow.Context) (any, error) {
+func NormalStep1(ctx flow.StepCtx) (any, error) {
 	atomic.AddInt64(&current, 1)
 	fmt.Printf("1.normal step finish\n")
 	return 1, nil
 }
 
-func GenerateStep(i int, args ...any) func(ctx flow.Context) (any, error) {
-	return func(ctx flow.Context) (any, error) {
+func GenerateStep(i int, args ...any) func(ctx flow.StepCtx) (any, error) {
+	return func(ctx flow.StepCtx) (any, error) {
 		if len(args) > 0 {
 			time.Sleep(100 * time.Millisecond)
 		}
@@ -54,8 +54,8 @@ func GenerateStep(i int, args ...any) func(ctx flow.Context) (any, error) {
 	}
 }
 
-func GenerateErrorStep(i int, args ...any) func(ctx flow.Context) (any, error) {
-	return func(ctx flow.Context) (any, error) {
+func GenerateErrorStep(i int, args ...any) func(ctx flow.StepCtx) (any, error) {
+	return func(ctx flow.StepCtx) (any, error) {
 		if len(args) > 0 {
 			time.Sleep(100 * time.Millisecond)
 		}
@@ -80,8 +80,8 @@ func AfterProcProcessor(info *flow.Process) (bool, error) {
 	return true, nil
 }
 
-func GeneratePanicStep(i int, args ...any) func(ctx flow.Context) (any, error) {
-	return func(ctx flow.Context) (any, error) {
+func GeneratePanicStep(i int, args ...any) func(ctx flow.StepCtx) (any, error) {
+	return func(ctx flow.StepCtx) (any, error) {
 		if len(args) > 0 {
 			time.Sleep(100 * time.Millisecond)
 		}
@@ -370,7 +370,7 @@ func TestArgs(t *testing.T) {
 	factory := flow.RegisterFlow("TestArgs")
 	process := factory.Process("TestArgs")
 	process.AfterStep(true, ErrorResultPrinter)
-	process.AliasStep(func(ctx flow.Context) (any, error) {
+	process.AliasStep(func(ctx flow.StepCtx) (any, error) {
 		a, ok := ctx.Get("InputA")
 		if !ok {
 			panic("InputA not found")
