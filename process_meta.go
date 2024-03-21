@@ -243,7 +243,7 @@ func (pm *ProcessMeta) AliasStep(run func(ctx StepCtx) (any, error), alias strin
 		name := toStepName(wrap)
 		depend, exist := pm.steps[name]
 		if !exist {
-			panic(fmt.Sprintf("can't matchByHighest step[%s]", name))
+			panic(fmt.Sprintf("step[%s]'s depend[%s] not found.]", alias, name))
 		}
 		meta.depends = append(meta.depends, depend)
 	}

@@ -344,3 +344,56 @@ func TestResultAndStepCtxIsolated(t *testing.T) {
 		t.Errorf("execute 6 step, but current = %d", current)
 	}
 }
+
+func TestResultAndStepCtxIsolatedAfterMerge(t *testing.T) {
+	defer resetCurrent()
+	workflow := flow.RegisterFlow("TestResultAndStepCtxIsolatedAfterMerge1")
+	process := workflow.Process("TestResultAndStepCtxIsolatedAfterMerge1")
+	step := process.AliasStep(SetCtxStepFunc(map[string]any{"Step2": "Step2"}), "Step1")
+	workflow = flow.RegisterFlow("TestResultAndStepCtxIsolatedAfterMerge2")
+	process = workflow.Process("TestResultAndStepCtxIsolatedAfterMerge2")
+	process.AfterStep(true, StepResultCheck)
+	process.Merge("TestResultAndStepCtxIsolatedAfterMerge1")
+	step = process.AliasStep(SetCtxStepFunc(map[string]any{"Step3": "Step3"}), "Step2", "Step1")
+	step.
+		Next(SetCtxStepFunc(map[string]any{"Step4": "Step4"}), "Step3")
+	result := flow.DoneFlow("TestResultAndStepCtxIsolatedAfterMerge2", map[string]any{"Step1": "Step1"})
+	if !result.Success() {
+		for _, f := range result.Futures() {
+			if !f.Success() {
+				t.Errorf("process[%s] failed, explain=%s\n", f.Name, strings.Join(f.ExplainStatus(), ","))
+			}
+		}
+		t.Errorf("flow[%s] failed", result.GetName())
+	}
+	if atomic.LoadInt64(&current) != 6 {
+		t.Errorf("execute 6 step, but current = %d", current)
+	}
+}
+
+func TestConnectionWhileMergeBreakOrder(t *testing.T) {
+	defer resetCurrent()
+	workflow := flow.RegisterFlow("TestConnectionWhileMergeBreakOrder1")
+	process := workflow.Process("TestConnectionWhileMergeBreakOrder1")
+	step := process.AliasStep(StepCtxFunc(map[string]any{"Step1": "Step1", "Step3": "Error", "Step4": "Error"}), "Step1")
+	step.Next(StepCtxFunc(map[string]any{"Step2": "Step2"}, "Step1", "Step3", "Step4"), "Step2")
+	process.AliasStep(StepCtxFunc(map[string]any{"Step3": "Step3"}), "Step3").
+		Next(StepCtxFunc(map[string]any{"Step4": "Step4"}), "Step4")
+	workflow = flow.RegisterFlow("TestConnectionWhileMergeBreakOrder2")
+	process = workflow.Process("TestConnectionWhileMergeBreakOrder2")
+	process.Merge("TestConnectionWhileMergeBreakOrder1")
+	process.AliasStep(StepCtxFunc(map[string]any{"Step3": "Step3"}), "Step3", "Step1")
+	process.AliasStep(StepCtxFunc(map[string]any{"Step2": "Step2"}), "Step2", "Step4")
+	result := flow.DoneFlow("TestConnectionWhileMergeBreakOrder2", nil)
+	if !result.Success() {
+		for _, f := range result.Futures() {
+			if !f.Success() {
+				t.Errorf("process[%s] failed, explain=%s\n", f.Name, strings.Join(f.ExplainStatus(), ","))
+			}
+		}
+		t.Errorf("flow[%s] failed", result.GetName())
+	}
+	if atomic.LoadInt64(&current) != 4 {
+		t.Errorf("execute 4 step, but current = %d", current)
+	}
+}
