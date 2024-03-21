@@ -65,7 +65,7 @@ func GenerateErrorStep(i int, args ...any) func(ctx flow.Context) (any, error) {
 	}
 }
 
-func AfterProcProcessor(info *flow.ProcessInfo) (bool, error) {
+func AfterProcProcessor(info *flow.Process) (bool, error) {
 	if info.Name == "" {
 		panic("process name is empty")
 	}

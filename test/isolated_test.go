@@ -8,27 +8,27 @@ import (
 	"testing"
 )
 
-//func CheckGetEndValues(check ...string) func(info *flow.StepInfo) (keepOn bool, err error) {
-//	return func(info *flow.StepInfo) (keepOn bool, err error) {
-//		values := info.GetEndValues("Step")
-//		for _, k := range check {
-//			if value, exist := info.GetByStepName(k, k); exist {
-//				if value.(string) != k {
-//					fmt.Printf("step[%s] key[%s] is %#v, expected get %s\n\n", info.ContextName(), k, value, k)
-//					panic(fmt.Sprintf("step[%s] key[%s] is %#v, expected get %s", info.ContextName(), k, value, k))
-//				}
-//			} else {
-//				fmt.Printf("step[%s] has no key[%s]\n\n", info.ContextName(), k)
-//				panic(fmt.Sprintf("step[%s] has no key[%s]", info.ContextName(), k))
-//			}
-//		}
-//		atomic.AddInt64(&current, 1)
-//		return true, nil
-//	}
-//}
+func CheckGetEndValues(check ...string) func(info *flow.Step) (keepOn bool, err error) {
+	return func(info *flow.Step) (keepOn bool, err error) {
+		values := info.GetEndValues("Step")
+		for _, k := range check {
+			if value, exist := values[k]; exist {
+				if value.(string) != k {
+					fmt.Printf("step[%s] key[%s] is %#v, expected get %s\n\n", info.ContextName(), k, value, k)
+					panic(fmt.Sprintf("step[%s] key[%s] is %#v, expected get %s", info.ContextName(), k, value, k))
+				}
+			} else {
+				fmt.Printf("step[%s] has no key[%s]\n\n", info.ContextName(), k)
+				panic(fmt.Sprintf("step[%s] has no key[%s]", info.ContextName(), k))
+			}
+		}
+		atomic.AddInt64(&current, 1)
+		return true, nil
+	}
+}
 
-func CheckGetByStep(check ...string) func(info *flow.ProcessInfo) (keepOn bool, err error) {
-	return func(info *flow.ProcessInfo) (keepOn bool, err error) {
+func CheckGetByStep(check ...string) func(info *flow.Process) (keepOn bool, err error) {
+	return func(info *flow.Process) (keepOn bool, err error) {
 		for _, k := range check {
 			if value, exist := info.GetByStepName(k, k); exist {
 				if value.(string) != k {
@@ -45,8 +45,8 @@ func CheckGetByStep(check ...string) func(info *flow.ProcessInfo) (keepOn bool, 
 	}
 }
 
-func StepCallbackCheck(check ...string) func(info *flow.StepInfo) (keepOn bool, err error) {
-	return func(info *flow.StepInfo) (keepOn bool, err error) {
+func StepCallbackCheck(check ...string) func(info *flow.Step) (keepOn bool, err error) {
+	return func(info *flow.Step) (keepOn bool, err error) {
 		for _, s := range check {
 			if value, exist := info.Get(s); exist {
 				if value.(string) != s {
@@ -62,7 +62,7 @@ func StepCallbackCheck(check ...string) func(info *flow.StepInfo) (keepOn bool, 
 		return true, nil
 	}
 }
-func StepResultCheck(info *flow.StepInfo) (keepOn bool, err error) {
+func StepResultCheck(info *flow.Step) (keepOn bool, err error) {
 	result, exist := info.GetResult(info.Name)
 	if !exist {
 		panic(fmt.Sprintf("step[%s] reuslt is missing.", info.Name))
@@ -96,8 +96,8 @@ func StepCtxFunc(input map[string]any, check ...string) func(ctx flow.Context) (
 	}
 }
 
-func ProcCheckFunc(check ...string) func(info *flow.ProcessInfo) (keepOn bool, err error) {
-	return func(info *flow.ProcessInfo) (keepOn bool, err error) {
+func ProcCheckFunc(check ...string) func(info *flow.Process) (keepOn bool, err error) {
+	return func(info *flow.Process) (keepOn bool, err error) {
 		for _, s := range check {
 			if value, exist := info.Get(s); exist {
 				if value.(string) != s {
@@ -114,8 +114,8 @@ func ProcCheckFunc(check ...string) func(info *flow.ProcessInfo) (keepOn bool, e
 	}
 }
 
-func ProcCtxFunc(input map[string]any) func(info *flow.ProcessInfo) (keepOn bool, err error) {
-	return func(info *flow.ProcessInfo) (keepOn bool, err error) {
+func ProcCtxFunc(input map[string]any) func(info *flow.Process) (keepOn bool, err error) {
+	return func(info *flow.Process) (keepOn bool, err error) {
 		for k, v := range input {
 			info.Set(k, v)
 		}
@@ -136,7 +136,7 @@ func SetCtxStepFunc(input map[string]any) func(ctx flow.Context) (any, error) {
 }
 
 func TestMultipleGetEndValues(t *testing.T) {
-
+	defer resetCurrent()
 }
 
 func TestGetByStepName(t *testing.T) {

@@ -251,7 +251,7 @@ func (rp *runProcess) stepCallback(step *runStep, flag string) {
 }
 
 func (rp *runProcess) procCallback(flag string) {
-	info := &ProcessInfo{
+	info := &Process{
 		ProcCtx: rp.visibleContext,
 		basicInfo: basicInfo{
 			Status: rp.Status,
@@ -267,12 +267,12 @@ func (rp *runProcess) procCallback(flag string) {
 	rp.procChain.handle(flag, info)
 }
 
-func (rp *runProcess) summaryStepInfo(step *runStep) *StepInfo {
+func (rp *runProcess) summaryStepInfo(step *runStep) *Step {
 	if step.infoCache != nil {
 		step.syncInfo()
 		return step.infoCache
 	}
-	info := &StepInfo{
+	info := &Step{
 		basicInfo: &basicInfo{
 			Status: step.Status,
 			Id:     step.id,

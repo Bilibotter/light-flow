@@ -449,11 +449,11 @@ func (t *linkedTable) matchByIndex(index int64, key string) (any, bool) {
 // Get method retrieves the value associated with the given key from the context path.
 // The method first checks the priority context, then own context, finally parents context.
 // Returns the value associated with the key (if found) and a boolean indicating its presence.
-func (t *linkedTable) get(visible int64, key string) (any, bool) {
+func (t *linkedTable) get(passing int64, key string) (any, bool) {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 	if head, exist := t.nodes[key]; exist {
-		if value, find := head.search(visible); find {
+		if value, find := head.search(passing); find {
 			return value, find
 		}
 	}
@@ -534,7 +534,7 @@ func (vc *visibleContext) GetEndValues(key string) map[string]any {
 	m := make(map[string]any)
 	exist := int64(0)
 	for current.Next != nil {
-		if exist|current.Passing == exist {
+		if vc.passing&current.Passing != current.Passing && exist|current.Passing == exist {
 			current = current.Next
 			continue
 		}
@@ -543,6 +543,9 @@ func (vc *visibleContext) GetEndValues(key string) map[string]any {
 		m[name] = current.Value
 		exist |= current.Passing
 		current = current.Next
+	}
+	if exist == 0 && current.Passing == publicKey {
+		m[vc.names[0]] = current.Value
 	}
 	return m
 }

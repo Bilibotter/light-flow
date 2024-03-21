@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func AfterFlowProcessor(info *flow.FlowInfo) (bool, error) {
+func AfterFlowProcessor(info *flow.WorkFlow) (bool, error) {
 	if info.Name == "" {
 		panic("flow name is empty")
 	}
@@ -19,7 +19,7 @@ func AfterFlowProcessor(info *flow.FlowInfo) (bool, error) {
 	return true, nil
 }
 
-func BeforeFlowProcessor(info *flow.FlowInfo) (bool, error) {
+func BeforeFlowProcessor(info *flow.WorkFlow) (bool, error) {
 	if info.Name == "" {
 		panic("flow name is empty")
 	}

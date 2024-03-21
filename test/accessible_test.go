@@ -9,8 +9,8 @@ import (
 	"time"
 )
 
-func FlowCallback(flag bool, visible []string, notVisible []string, keys ...string) func(*flow.FlowInfo) (keepOn bool, err error) {
-	return func(info *flow.FlowInfo) (keepOn bool, err error) {
+func FlowCallback(flag bool, visible []string, notVisible []string, keys ...string) func(*flow.WorkFlow) (keepOn bool, err error) {
+	return func(info *flow.WorkFlow) (keepOn bool, err error) {
 		if flag {
 			time.Sleep(10 * time.Millisecond)
 		}
@@ -20,8 +20,8 @@ func FlowCallback(flag bool, visible []string, notVisible []string, keys ...stri
 	}
 }
 
-func ProcCallback(flag bool, visible []string, notVisible []string, keys ...string) func(*flow.ProcessInfo) (keepOn bool, err error) {
-	return func(info *flow.ProcessInfo) (keepOn bool, err error) {
+func ProcCallback(flag bool, visible []string, notVisible []string, keys ...string) func(*flow.Process) (keepOn bool, err error) {
+	return func(info *flow.Process) (keepOn bool, err error) {
 		if flag {
 			time.Sleep(10 * time.Millisecond)
 		}
@@ -46,8 +46,8 @@ func ProcCallback(flag bool, visible []string, notVisible []string, keys ...stri
 	}
 }
 
-func StepCallback(flag bool, visible []string, notVisible []string, keys ...string) func(*flow.StepInfo) (keepOn bool, err error) {
-	return func(info *flow.StepInfo) (keepOn bool, err error) {
+func StepCallback(flag bool, visible []string, notVisible []string, keys ...string) func(*flow.Step) (keepOn bool, err error) {
+	return func(info *flow.Step) (keepOn bool, err error) {
 		if flag {
 			time.Sleep(10 * time.Millisecond)
 		}

@@ -23,7 +23,7 @@ type ProcessMeta struct {
 	nodeNum     int
 }
 
-type ProcessInfo struct {
+type Process struct {
 	basicInfo
 	ProcCtx
 	FlowId string
@@ -33,8 +33,8 @@ type ProcessConfig struct {
 	StepConfig
 	ProcTimeout       time.Duration
 	ProcNotUseDefault bool
-	stepChain         Handler[*StepInfo]    `flow:"skip"`
-	procChain         Handler[*ProcessInfo] `flow:"skip"`
+	stepChain         Handler[*Step]    `flow:"skip"`
+	procChain         Handler[*Process] `flow:"skip"`
 }
 
 func newProcessConfig() ProcessConfig {
@@ -43,7 +43,7 @@ func newProcessConfig() ProcessConfig {
 }
 
 // Fix ContextName return first step name
-func (pi *ProcessInfo) ContextName() string {
+func (pi *Process) ContextName() string {
 	return pi.Name
 }
 
@@ -82,19 +82,19 @@ func (pc *ProcessConfig) StepsTimeout(timeout time.Duration) *ProcessConfig {
 	return pc
 }
 
-func (pc *ProcessConfig) BeforeStep(must bool, callback func(*StepInfo) (keepOn bool, err error)) *callback[*StepInfo] {
+func (pc *ProcessConfig) BeforeStep(must bool, callback func(*Step) (keepOn bool, err error)) *callback[*Step] {
 	return pc.stepChain.addCallback(Before, must, callback)
 }
 
-func (pc *ProcessConfig) AfterStep(must bool, callback func(*StepInfo) (keepOn bool, err error)) *callback[*StepInfo] {
+func (pc *ProcessConfig) AfterStep(must bool, callback func(*Step) (keepOn bool, err error)) *callback[*Step] {
 	return pc.stepChain.addCallback(After, must, callback)
 }
 
-func (pc *ProcessConfig) BeforeProcess(must bool, callback func(*ProcessInfo) (keepOn bool, err error)) *callback[*ProcessInfo] {
+func (pc *ProcessConfig) BeforeProcess(must bool, callback func(*Process) (keepOn bool, err error)) *callback[*Process] {
 	return pc.procChain.addCallback(Before, must, callback)
 }
 
-func (pc *ProcessConfig) AfterProcess(must bool, callback func(*ProcessInfo) (keepOn bool, err error)) *callback[*ProcessInfo] {
+func (pc *ProcessConfig) AfterProcess(must bool, callback func(*Process) (keepOn bool, err error)) *callback[*Process] {
 	return pc.procChain.addCallback(After, must, callback)
 }
 
@@ -155,6 +155,14 @@ func (pm *ProcessMeta) Merge(name string) {
 		}
 		step := pm.AliasStep(merge.run, merge.stepName, depends...)
 		step.position.Append(Merged)
+	}
+
+	// ensure step index bigger than all depends index
+	for index, step := range pm.sortedSteps() {
+		step.index = int64(index)
+		step.passing = 1 << index
+		pm.names[step.index] = step.stepName
+		pm.indexes[step.stepName] = step.index
 	}
 }
 
@@ -251,7 +259,7 @@ func (pm *ProcessMeta) AliasStep(run func(ctx Context) (any, error), alias strin
 	meta.run = run
 	meta.layer = 1
 	meta.wireDepends()
-	pm.addVisitorInfo(meta)
+	pm.addPassingInfo(meta)
 
 	pm.tailStep = meta.stepName
 	pm.steps[alias] = meta
@@ -259,7 +267,7 @@ func (pm *ProcessMeta) AliasStep(run func(ctx Context) (any, error), alias strin
 	return meta
 }
 
-func (pm *ProcessMeta) addVisitorInfo(step *StepMeta) {
+func (pm *ProcessMeta) addPassingInfo(step *StepMeta) {
 	if pm.nodeNum == 62 {
 		panic(fmt.Sprintf("step[%s] exceeds max nodes num, max node num is 62", step.stepName))
 	}

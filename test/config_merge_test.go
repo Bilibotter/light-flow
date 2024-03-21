@@ -42,28 +42,28 @@ func CheckField(check any, fields ...string) {
 	}
 }
 
-func StepIncr(info *flow.StepInfo) (bool, error) {
+func StepIncr(info *flow.Step) (bool, error) {
 	println("step inc current")
 	atomic.AddInt64(&current, 1)
 	return true, nil
 }
 
-func ProcIncr(info *flow.ProcessInfo) (bool, error) {
+func ProcIncr(info *flow.Process) (bool, error) {
 	println("proc inc current")
 	atomic.AddInt64(&current, 1)
 	return true, nil
 }
 
-func FlowIncr(prefix string) func(info *flow.FlowInfo) (bool, error) {
-	return func(info *flow.FlowInfo) (bool, error) {
+func FlowIncr(prefix string) func(info *flow.WorkFlow) (bool, error) {
+	return func(info *flow.WorkFlow) (bool, error) {
 		fmt.Printf("%s flow inc current\n", prefix)
 		atomic.AddInt64(&current, 1)
 		return true, nil
 	}
 }
 
-func StepCurrentChecker(i int64, flag int) func(info *flow.StepInfo) (bool, error) {
-	return func(info *flow.StepInfo) (bool, error) {
+func StepCurrentChecker(i int64, flag int) func(info *flow.Step) (bool, error) {
+	return func(info *flow.Step) (bool, error) {
 		if flag == 0 {
 			fmt.Printf("execute before step checker\n")
 		} else {
@@ -79,8 +79,8 @@ func StepCurrentChecker(i int64, flag int) func(info *flow.StepInfo) (bool, erro
 	}
 }
 
-func ProcessCurrentChecker(i int64, flag int) func(info *flow.ProcessInfo) (bool, error) {
-	return func(info *flow.ProcessInfo) (bool, error) {
+func ProcessCurrentChecker(i int64, flag int) func(info *flow.Process) (bool, error) {
+	return func(info *flow.Process) (bool, error) {
 		if flag == 0 {
 			fmt.Printf("execute before process checker\n")
 		} else {
@@ -95,8 +95,8 @@ func ProcessCurrentChecker(i int64, flag int) func(info *flow.ProcessInfo) (bool
 	}
 }
 
-func FlowCurrentChecker(i int64, flag int) func(info *flow.FlowInfo) (bool, error) {
-	return func(info *flow.FlowInfo) (bool, error) {
+func FlowCurrentChecker(i int64, flag int) func(info *flow.WorkFlow) (bool, error) {
+	return func(info *flow.WorkFlow) (bool, error) {
 		if flag == 0 {
 			fmt.Printf("execute before flow checker\n")
 		} else {

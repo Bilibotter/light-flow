@@ -451,7 +451,7 @@ func TestFlowMultipleAsyncExecute(t *testing.T) {
 
 func TestContextNameCorrect(t *testing.T) {
 	workflow := flow.RegisterFlow("TestContextNameCorrect")
-	workflow.BeforeFlow(false, func(info *flow.FlowInfo) (keepOn bool, err error) {
+	workflow.BeforeFlow(false, func(info *flow.WorkFlow) (keepOn bool, err error) {
 		if info.GetName() != "TestContextNameCorrect" {
 			fmt.Printf("beforeflow workflow context name incorrect, workflow's name = %s\n", info.GetName())
 		} else {
@@ -459,7 +459,7 @@ func TestContextNameCorrect(t *testing.T) {
 		}
 		return true, nil
 	})
-	workflow.AfterFlow(false, func(info *flow.FlowInfo) (keepOn bool, err error) {
+	workflow.AfterFlow(false, func(info *flow.WorkFlow) (keepOn bool, err error) {
 		if info.GetName() != "TestContextNameCorrect" {
 			fmt.Printf("afterflow workflow context name incorrect, workflow's name = %s\n", info.GetName())
 		} else {
@@ -467,7 +467,7 @@ func TestContextNameCorrect(t *testing.T) {
 		}
 		return true, nil
 	})
-	workflow.BeforeProcess(false, func(info *flow.ProcessInfo) (keepOn bool, err error) {
+	workflow.BeforeProcess(false, func(info *flow.Process) (keepOn bool, err error) {
 		if info.ContextName() != "TestContextNameCorrect-Process" {
 			fmt.Printf("beforeprocess process context name incorrect, workflow's name = %s\n", info.ContextName())
 		} else {
@@ -475,7 +475,7 @@ func TestContextNameCorrect(t *testing.T) {
 		}
 		return true, nil
 	})
-	workflow.AfterProcess(false, func(info *flow.ProcessInfo) (keepOn bool, err error) {
+	workflow.AfterProcess(false, func(info *flow.Process) (keepOn bool, err error) {
 		if info.ContextName() != "TestContextNameCorrect-Process" {
 			fmt.Printf("afterprocess process context name incorrect, workflow's name = %s\n", info.ContextName())
 		} else {
@@ -483,7 +483,7 @@ func TestContextNameCorrect(t *testing.T) {
 		}
 		return true, nil
 	})
-	workflow.BeforeStep(false, func(info *flow.StepInfo) (keepOn bool, err error) {
+	workflow.BeforeStep(false, func(info *flow.Step) (keepOn bool, err error) {
 		if info.ContextName() != "Step1" {
 			fmt.Printf("before step context name incorrect, step's name = %s\n", info.ContextName())
 		} else {
@@ -491,7 +491,7 @@ func TestContextNameCorrect(t *testing.T) {
 		}
 		return true, nil
 	})
-	workflow.AfterStep(false, func(info *flow.StepInfo) (keepOn bool, err error) {
+	workflow.AfterStep(false, func(info *flow.Step) (keepOn bool, err error) {
 		if info.ContextName() != "Step1" {
 			fmt.Printf("afterstep step context name incorrect, step's name = %s\n", info.ContextName())
 		} else {

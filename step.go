@@ -29,11 +29,11 @@ type runStep struct {
 	finish    chan bool
 	Start     time.Time
 	End       time.Time
-	infoCache *StepInfo
+	infoCache *Step
 	Err       error
 }
 
-type StepInfo struct {
+type Step struct {
 	*basicInfo
 	StepCtx
 	ProcessId string
@@ -48,7 +48,7 @@ type StepConfig struct {
 	StepRetry   int
 }
 
-func (si *StepInfo) Error() error {
+func (si *Step) Error() error {
 	return si.Err
 }
 

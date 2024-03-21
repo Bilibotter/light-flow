@@ -17,7 +17,7 @@ func GenerateNoDelayStep(i int) func(ctx flow.Context) (any, error) {
 	}
 }
 
-func GenerateNoDelayProcessor(info *flow.StepInfo) (bool, error) {
+func GenerateNoDelayProcessor(info *flow.Step) (bool, error) {
 	atomic.AddInt64(&current, 1)
 	return true, nil
 }

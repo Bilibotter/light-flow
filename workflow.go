@@ -40,7 +40,7 @@ type FlowController interface {
 }
 
 type FlowConfig struct {
-	Handler[*FlowInfo] `flow:"skip"`
+	Handler[*WorkFlow] `flow:"skip"`
 	ProcessConfig      `flow:"skip"`
 }
 
@@ -60,10 +60,10 @@ type runFlow struct {
 	futures   []*Future
 	lock      sync.Mutex
 	finish    sync.WaitGroup
-	infoCache *FlowInfo
+	infoCache *WorkFlow
 }
 
-type FlowInfo struct {
+type WorkFlow struct {
 	*basicInfo
 }
 
@@ -137,11 +137,11 @@ func BuildRunFlow(name string, input map[string]any) *runFlow {
 	return factory.(*FlowMeta).buildRunFlow(input)
 }
 
-func (fc *FlowConfig) BeforeFlow(must bool, callback func(*FlowInfo) (keepOn bool, err error)) *callback[*FlowInfo] {
+func (fc *FlowConfig) BeforeFlow(must bool, callback func(*WorkFlow) (keepOn bool, err error)) *callback[*WorkFlow] {
 	return fc.addCallback(Before, must, callback)
 }
 
-func (fc *FlowConfig) AfterFlow(must bool, callback func(*FlowInfo) (keepOn bool, err error)) *callback[*FlowInfo] {
+func (fc *FlowConfig) AfterFlow(must bool, callback func(*WorkFlow) (keepOn bool, err error)) *callback[*WorkFlow] {
 	return fc.addCallback(After, must, callback)
 }
 
@@ -323,7 +323,7 @@ func (rf *runFlow) Flow() []*Future {
 		return rf.futures
 	}
 	rf.initialize()
-	rf.infoCache = &FlowInfo{
+	rf.infoCache = &WorkFlow{
 		basicInfo: &basicInfo{
 			Status: rf.Status,
 			Id:     rf.Id,
