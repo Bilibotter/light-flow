@@ -17,10 +17,10 @@ const (
 
 // these constants are used to indicate the position of the process
 var (
-	End     = &StatusEnum{0b1, "End"}
-	Head    = &StatusEnum{0b1 << 1, "Head"}
-	HasNext = &StatusEnum{0b1 << 2, "HasNext"}
-	Merged  = &StatusEnum{0b1 << 3, "Merged"}
+	end     = &StatusEnum{0b1, "end"}
+	head    = &StatusEnum{0b1 << 1, "head"}
+	hasNext = &StatusEnum{0b1 << 2, "hasNext"}
+	merged  = &StatusEnum{0b1 << 3, "merged"}
 )
 
 // these variable are used to indicate the status of the unit
@@ -48,20 +48,20 @@ var (
 
 type status int64
 
-type StatusI interface {
+type statusI interface {
 	Has(enum *StatusEnum) bool
 	Success() bool
 	Exceptions() []string
 }
 
-type BasicInfoI interface {
-	StatusI
+type basicInfoI interface {
+	statusI
 	addr() *status
 	GetId() string
 	GetName() string
 }
 
-type Context interface {
+type context interface {
 	ContextName() string
 	Get(key string) (value any, exist bool)
 	getByName(name, key string)
@@ -69,14 +69,14 @@ type Context interface {
 }
 
 type StepCtx interface {
-	Context
+	context
 	GetEndValues(key string) map[string]any
 	GetResult(key string) (value any, exist bool)
 	setResult(key string, value any)
 }
 
-type ProcCtx interface {
-	Context
+type procCtx interface {
+	context
 	GetByStepName(stepName, key string) (value any, exist bool)
 }
 
@@ -91,11 +91,11 @@ type basicInfo struct {
 	Name string
 }
 
-type Handler[T BasicInfoI] struct {
+type handler[T basicInfoI] struct {
 	filter []*callback[T]
 }
 
-type callback[T BasicInfoI] struct {
+type callback[T basicInfoI] struct {
 	// If must is false, the process will continue to execute
 	// even if the processor fails
 	must bool
@@ -113,8 +113,8 @@ type simpleContext struct {
 type visibleContext struct {
 	*linkedTable
 	*accessInfo // step accessInfo will update when mergeConfig, so using pointer
-	prev        Context
-	next        Context
+	prev        context
+	next        context
 }
 
 type accessInfo struct {
@@ -155,11 +155,11 @@ func toStepName(value any) string {
 	var result string
 	switch value.(type) {
 	case func(ctx StepCtx) (any, error):
-		result = GetFuncName(value)
+		result = getFuncName(value)
 	case string:
 		result = value.(string)
 	default:
-		panic("value must be func(ctx Context) (any, error) or string")
+		panic("value must be func(ctx context) (any, error) or string")
 	}
 	return result
 }
@@ -286,13 +286,13 @@ func (bi *basicInfo) GetId() string {
 	return bi.Id
 }
 
-func (cc *Handler[T]) clone() Handler[T] {
-	config := Handler[T]{}
+func (cc *handler[T]) clone() handler[T] {
+	config := handler[T]{}
 	config.filter = cc.copyFilters()
 	return config
 }
 
-func (cc *Handler[T]) copyFilters() []*callback[T] {
+func (cc *handler[T]) copyFilters() []*callback[T] {
 	result := make([]*callback[T], 0, len(cc.filter))
 	for _, filter := range cc.filter {
 		result = append(result, filter)
@@ -300,7 +300,7 @@ func (cc *Handler[T]) copyFilters() []*callback[T] {
 	return result
 }
 
-func (cc *Handler[T]) addCallback(flag string, must bool, run func(info T) (bool, error)) *callback[T] {
+func (cc *handler[T]) addCallback(flag string, must bool, run func(info T) (bool, error)) *callback[T] {
 	if len(cc.filter) > 0 {
 		last := cc.filter[len(cc.filter)-1]
 		// essential callback depend on non-essential callback is against Dependency Inversion Principle
@@ -319,14 +319,14 @@ func (cc *Handler[T]) addCallback(flag string, must bool, run func(info T) (bool
 	return filter
 }
 
-func (cc *Handler[T]) combine(chain *Handler[T]) {
+func (cc *handler[T]) combine(chain *handler[T]) {
 	for _, filter := range chain.filter {
 		cc.filter = append(cc.filter, filter)
 	}
 }
 
 // don't want to raise error not deal hint, so return string
-func (cc *Handler[T]) handle(flag string, info T) string {
+func (cc *handler[T]) handle(flag string, info T) string {
 	for _, filter := range cc.filter {
 		keepOn, err, panicStack := filter.call(flag, info)
 		if filter.must {
@@ -424,7 +424,7 @@ func (c *callback[T]) call(flag string, info T) (keepOn bool, err error, panicSt
 	return
 }
 
-// Set method sets the value associated with the given key in own context.
+// set method sets the value associated with the given key in own context.
 func (t *linkedTable) set(passing int64, key string, value any) {
 	t.lock.Lock()
 	defer t.lock.Unlock()

@@ -19,28 +19,28 @@ var (
 	defaultConfig *FlowConfig
 )
 
-type Controller interface {
+type controller interface {
 	Resume()
 	Pause()
 	Stop()
 }
 
-type ResultI interface {
-	BasicInfoI
+type resultI interface {
+	basicInfoI
 	Futures() []*Future
 	Fails() []*Future
 }
 
 type FlowController interface {
-	Controller
-	ResultI
+	controller
+	resultI
 	Done() []*Future
 	ListProcess() []string
-	ProcessController(name string) Controller
+	ProcessController(name string) controller
 }
 
 type FlowConfig struct {
-	Handler[*WorkFlow] `flow:"skip"`
+	handler[*WorkFlow] `flow:"skip"`
 	ProcessConfig      `flow:"skip"`
 }
 
@@ -96,7 +96,7 @@ func RegisterFlow(name string) *FlowMeta {
 func AsyncArgs(name string, args ...any) FlowController {
 	input := make(map[string]any, len(args))
 	for _, arg := range args {
-		input[GetStructName(arg)] = arg
+		input[getStructName(arg)] = arg
 	}
 	return AsyncFlow(name, input)
 }
@@ -111,15 +111,15 @@ func AsyncFlow(name string, input map[string]any) FlowController {
 	return flow
 }
 
-func DoneArgs(name string, args ...any) ResultI {
+func DoneArgs(name string, args ...any) resultI {
 	input := make(map[string]any, len(args))
 	for _, arg := range args {
-		input[GetStructName(arg)] = arg
+		input[getStructName(arg)] = arg
 	}
 	return DoneFlow(name, input)
 }
 
-func DoneFlow(name string, input map[string]any) ResultI {
+func DoneFlow(name string, input map[string]any) resultI {
 	factory, ok := allFlows.Load(name)
 	if !ok {
 		panic(fmt.Sprintf("flow factory [%s] not found", name))
@@ -146,16 +146,16 @@ func (fc *FlowConfig) AfterFlow(must bool, callback func(*WorkFlow) (keepOn bool
 }
 
 func (fc *FlowConfig) combine(config *FlowConfig) *FlowConfig {
-	CopyPropertiesSkipNotEmpty(fc, config)
-	fc.Handler.combine(&config.Handler)
+	copyPropertiesSkipNotEmpty(fc, config)
+	fc.handler.combine(&config.handler)
 	fc.ProcessConfig.combine(&config.ProcessConfig)
 	return fc
 }
 
 func (fc *FlowConfig) clone() FlowConfig {
 	config := FlowConfig{}
-	CopyPropertiesSkipNotEmpty(fc, config)
-	config.Handler = fc.Handler.clone()
+	copyPropertiesSkipNotEmpty(fc, config)
+	config.handler = fc.handler.clone()
 	config.ProcessConfig = fc.ProcessConfig.clone()
 	return config
 }
@@ -165,13 +165,13 @@ func (fm *FlowMeta) initialize() {
 		if fm.flowNotUseDefault || defaultConfig == nil {
 			return
 		}
-		CopyPropertiesSkipNotEmpty(defaultConfig, &fm.FlowConfig)
-		CopyPropertiesSkipNotEmpty(&defaultConfig.ProcessConfig, &fm.FlowConfig.ProcessConfig)
+		copyPropertiesSkipNotEmpty(defaultConfig, &fm.FlowConfig)
+		copyPropertiesSkipNotEmpty(&defaultConfig.ProcessConfig, &fm.FlowConfig.ProcessConfig)
 		for _, meta := range fm.processes {
 			if meta.ProcNotUseDefault {
 				continue
 			}
-			CopyPropertiesSkipNotEmpty(&fm.ProcessConfig, &meta.ProcessConfig)
+			copyPropertiesSkipNotEmpty(&fm.ProcessConfig, &meta.ProcessConfig)
 		}
 	})
 }
@@ -377,9 +377,9 @@ func (rf *runFlow) ListProcess() []string {
 	return processes
 }
 
-// ProcessController returns the Controller of the specified process name.
-// Controller can stop and resume the process.
-func (rf *runFlow) ProcessController(processName string) Controller {
+// ProcessController returns the controller of the specified process name.
+// controller can stop and resume the process.
+func (rf *runFlow) ProcessController(processName string) controller {
 	for _, process := range rf.processes {
 		if process.processName == processName {
 			return process

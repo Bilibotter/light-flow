@@ -91,9 +91,9 @@ func invalidUse(ctx flow.StepCtx) (any, error) {
 
 //func getAllAndSet(value string, history ...string) func(ctx flow.StepCtx) (any, error) {
 //	return func(ctx flow.StepCtx) (any, error) {
-//		ctx.Set("all", value)
-//		ks := flow.NewRoutineUnsafeSet[string]()
-//		vs := flow.NewRoutineUnsafeSet[string]()
+//		ctx.set("all", value)
+//		ks := flow.newRoutineUnsafeSet[string]()
+//		vs := flow.newRoutineUnsafeSet[string]()
 //		m := ctx.GetAll("all")
 //		for k, v := range m {
 //			ks.Add(k)

@@ -36,18 +36,18 @@ type PConfig struct {
 }
 
 func TestGetFuncName(t *testing.T) {
-	if GetFuncName(TestGetFuncName) != "TestGetFuncName" {
+	if getFuncName(TestGetFuncName) != "TestGetFuncName" {
 		t.Errorf("get TestGetFuncName name error")
 	}
-	if GetFuncName(GetStructName) != "GetStructName" {
-		t.Errorf("get GetStructName name error")
+	if getFuncName(getStructName) != "getStructName" {
+		t.Errorf("get getStructName name error")
 	}
 	defer func() {
 		if r := recover(); r != nil {
 			t.Logf("test used get func name to anonymous function, panic: %v", r)
 		}
 	}()
-	if strings.HasPrefix(GetFuncName(func() {}), "func") {
+	if strings.HasPrefix(getFuncName(func() {}), "func") {
 		t.Errorf("get anonymous function name error")
 	}
 }
@@ -57,22 +57,22 @@ func TestGetStructName(t *testing.T) {
 	dP := &Dst{}
 	step := FlowMeta{}
 	stepP := &FlowMeta{}
-	if GetStructName(d) != "Dst" {
+	if getStructName(d) != "Dst" {
 		t.Errorf("get Dst struct name error")
 	}
-	if GetStructName(dP) != "*Dst" {
+	if getStructName(dP) != "*Dst" {
 		t.Errorf("get Dst pointer struct name error")
 	}
-	if GetStructName(step) != "FlowMeta" {
+	if getStructName(step) != "FlowMeta" {
 		t.Errorf("get FlowMeta struct name error")
 	}
-	if GetStructName(stepP) != "*FlowMeta" {
+	if getStructName(stepP) != "*FlowMeta" {
 		t.Errorf("get FlowMeta pointer struct name error")
 	}
 }
 
 func TestSet(t *testing.T) {
-	s := NewRoutineUnsafeSet[string]()
+	s := newRoutineUnsafeSet[string]()
 	for i := 0; i < 1000; i++ {
 		s.Add(strconv.Itoa(i))
 	}
@@ -89,7 +89,7 @@ func TestSet(t *testing.T) {
 }
 
 func TestComparableSet(t *testing.T) {
-	s := NewRoutineUnsafeSet[Dst]()
+	s := newRoutineUnsafeSet[Dst]()
 	d1 := Dst{
 		Name:     "",
 		Id:       1,
@@ -270,7 +270,7 @@ func TestCreateStruct(t *testing.T) {
 		SameName: "same",
 		Exist:    true,
 	}
-	dst := CreateStruct[Dst](&src)
+	dst := createStruct[Dst](&src)
 	if dst.Name != src.Name {
 		t.Errorf("dst.GetCtxName != src.GetCtxName")
 	}
@@ -299,7 +299,7 @@ func TestCopyProperties(t *testing.T) {
 		Exist:    true,
 	}
 	dst := Dst{}
-	CopyProperties(&src, &dst)
+	copyPropertiesWithMerge(&src, &dst)
 	if dst.Name != src.Name {
 		t.Errorf("dst.GetCtxName != src.GetCtxName")
 	}

@@ -25,7 +25,7 @@ type ProcessMeta struct {
 
 type Process struct {
 	basicInfo
-	ProcCtx
+	procCtx
 	FlowId string
 }
 
@@ -33,8 +33,8 @@ type ProcessConfig struct {
 	StepConfig
 	ProcTimeout       time.Duration
 	ProcNotUseDefault bool
-	stepChain         Handler[*Step]    `flow:"skip"`
-	procChain         Handler[*Process] `flow:"skip"`
+	stepChain         handler[*Step]    `flow:"skip"`
+	procChain         handler[*Process] `flow:"skip"`
 }
 
 func newProcessConfig() ProcessConfig {
@@ -49,7 +49,7 @@ func (pi *Process) ContextName() string {
 
 func (pc *ProcessConfig) clone() ProcessConfig {
 	config := ProcessConfig{}
-	CopyPropertiesSkipNotEmpty(pc, config)
+	copyPropertiesSkipNotEmpty(pc, config)
 	config.StepConfig = pc.StepConfig.clone()
 	config.stepChain = pc.stepChain.clone()
 	config.procChain = pc.procChain.clone()
@@ -57,7 +57,7 @@ func (pc *ProcessConfig) clone() ProcessConfig {
 }
 
 func (pc *ProcessConfig) combine(config *ProcessConfig) {
-	CopyPropertiesSkipNotEmpty(pc, config)
+	copyPropertiesSkipNotEmpty(pc, config)
 	pc.StepConfig.combine(&config.StepConfig)
 	pc.stepChain.combine(&config.stepChain)
 	pc.procChain.combine(&config.procChain)
@@ -154,7 +154,7 @@ func (pm *ProcessMeta) Merge(name string) {
 			depends = append(depends, depend.stepName)
 		}
 		step := pm.AliasStep(merge.run, merge.stepName, depends...)
-		step.position.add(Merged)
+		step.position.add(merged)
 	}
 
 	// ensure step index bigger than all depends index
@@ -219,13 +219,13 @@ func (pm *ProcessMeta) updateWaitersLayer(step *StepMeta) {
 }
 
 func (pm *ProcessMeta) Step(run func(ctx StepCtx) (any, error), depends ...any) *StepMeta {
-	return pm.AliasStep(run, GetFuncName(run), depends...)
+	return pm.AliasStep(run, getFuncName(run), depends...)
 }
 
 func (pm *ProcessMeta) Tail(run func(ctx StepCtx) (any, error), alias ...string) *StepMeta {
 	depends := make([]any, 0)
 	for name, step := range pm.steps {
-		if step.position.Has(End) {
+		if step.position.Has(end) {
 			depends = append(depends, name)
 		}
 	}
@@ -249,9 +249,9 @@ func (pm *ProcessMeta) AliasStep(run func(ctx StepCtx) (any, error), alias strin
 	}
 
 	if old, exist := pm.steps[alias]; exist {
-		if !old.position.Has(Merged) {
+		if !old.position.Has(merged) {
 			panic(fmt.Sprintf("step named [%s] already exist, can used %s to avoid stepName duplicate",
-				alias, GetFuncName(pm.AliasStep)))
+				alias, getFuncName(pm.AliasStep)))
 		}
 		pm.mergeStep(meta)
 		return old

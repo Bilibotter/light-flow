@@ -96,9 +96,9 @@ func (meta *StepMeta) wireDepends() {
 			continue
 		}
 		depend.waiters = append(depend.waiters, meta)
-		if depend.position.Has(End) {
-			depend.position.add(HasNext)
-			depend.position.remove(End)
+		if depend.position.Has(end) {
+			depend.position.add(hasNext)
+			depend.position.remove(end)
 		}
 		if depend.layer+1 > meta.layer {
 			meta.layer = depend.layer + 1
@@ -106,10 +106,10 @@ func (meta *StepMeta) wireDepends() {
 	}
 
 	if len(meta.depends) == 0 {
-		meta.position.add(Head)
+		meta.position.add(head)
 	}
 
-	meta.position.add(End)
+	meta.position.add(end)
 }
 
 // checkPriority checks if the priority key corresponds to an existing step.
@@ -171,11 +171,11 @@ func (step *runStep) syncInfo() {
 }
 
 func (sc *StepConfig) combine(config *StepConfig) {
-	CopyPropertiesSkipNotEmpty(sc, config)
+	copyPropertiesSkipNotEmpty(sc, config)
 }
 
 func (sc *StepConfig) clone() StepConfig {
 	config := StepConfig{}
-	CopyPropertiesSkipNotEmpty(sc, config)
+	copyPropertiesSkipNotEmpty(sc, config)
 	return config
 }

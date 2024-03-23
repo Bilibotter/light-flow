@@ -304,7 +304,7 @@ func TestFieldSkip(t *testing.T) {
 	move.StepsTimeout(2 * time.Second)
 	move.StepsRetry(4)
 	tmp := move
-	CopyPropertiesSkipNotEmpty(config, &move)
+	copyPropertiesSkipNotEmpty(config, &move)
 	if tmp.ProcNotUseDefault != move.ProcNotUseDefault {
 		t.Errorf("not use default not equal")
 	}
@@ -327,8 +327,8 @@ func TestFieldCorrect(t *testing.T) {
 	config.StepsTimeout(1 * time.Second)
 	config.StepsRetry(3)
 	move := FlowConfig{}
-	CopyPropertiesSkipNotEmpty(config, &move)
-	CopyPropertiesSkipNotEmpty(&config.ProcessConfig, &move.ProcessConfig)
+	copyPropertiesSkipNotEmpty(config, &move)
+	copyPropertiesSkipNotEmpty(&config.ProcessConfig, &move.ProcessConfig)
 	CheckField(move.ProcessConfig, "ProcTimeout", "ProcNotUseDefault", "StepConfig")
 	CheckField(move.ProcessConfig.StepConfig, "StepTimeout", "StepRetry")
 	return

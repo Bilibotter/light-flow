@@ -252,7 +252,7 @@ func (rp *runProcess) stepCallback(step *runStep, flag string) {
 
 func (rp *runProcess) procCallback(flag string) {
 	info := &Process{
-		ProcCtx: rp.visibleContext,
+		procCtx: rp.visibleContext,
 		basicInfo: basicInfo{
 			status: rp.status,
 			Id:     rp.id,

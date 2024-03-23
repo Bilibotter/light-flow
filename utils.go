@@ -8,25 +8,25 @@ import (
 	"strings"
 )
 
-type Set[T comparable] struct {
+type set[T comparable] struct {
 	data map[T]bool
 }
 
-func NewRoutineUnsafeSet[T comparable]() *Set[T] {
-	s := &Set[T]{}
+func newRoutineUnsafeSet[T comparable]() *set[T] {
+	s := &set[T]{}
 	s.data = make(map[T]bool)
 	return s
 }
 
-func createSetBySliceFunc[T any, K comparable](src []T, transfer func(T) K) *Set[K] {
-	result := NewRoutineUnsafeSet[K]()
+func createSetBySliceFunc[T any, K comparable](src []T, transfer func(T) K) *set[K] {
+	result := newRoutineUnsafeSet[K]()
 	for _, ele := range src {
 		result.Add(transfer(ele))
 	}
 	return result
 }
 
-func (s *Set[T]) Slice() []T {
+func (s *set[T]) Slice() []T {
 	result := make([]T, 0, len(s.data))
 	for key := range s.data {
 		result = append(result, key)
@@ -34,32 +34,32 @@ func (s *Set[T]) Slice() []T {
 	return result
 }
 
-func (s *Set[T]) Add(item T) {
+func (s *set[T]) Add(item T) {
 	s.data[item] = true
 }
 
-func (s *Set[T]) Contains(item T) bool {
+func (s *set[T]) Contains(item T) bool {
 	return s.data[item]
 }
 
-func (s *Set[T]) Remove(item T) {
+func (s *set[T]) Remove(item T) {
 	delete(s.data, item)
 }
 
-func (s *Set[T]) Size() int {
+func (s *set[T]) Size() int {
 	return len(s.data)
 }
 
-func GetStructName(obj any) string {
+func getStructName(obj any) string {
 	if reflect.ValueOf(obj).Kind() == reflect.Ptr {
 		return "*" + reflect.TypeOf(obj).Elem().Name()
 	}
 	return reflect.TypeOf(obj).Name()
 }
 
-// GetFuncName function retrieves the stepName of a provided function.
+// getFuncName function retrieves the stepName of a provided function.
 // If the provided function is anonymous function, it panics.
-func GetFuncName(f interface{}) string {
+func getFuncName(f interface{}) string {
 	funcValue := reflect.ValueOf(f)
 	funcType := funcValue.Type()
 
@@ -69,7 +69,7 @@ func GetFuncName(f interface{}) string {
 
 	absoluteName := runtime.FuncForPC(funcValue.Pointer()).Name()
 	if len(absoluteName) == 0 {
-		panic("It is not allowed to use GetFuncName to an anonymous function.")
+		panic("It is not allowed to use getFuncName to an anonymous function.")
 	}
 	if strings.Contains(absoluteName, ".") {
 		splits := strings.Split(absoluteName, ".")
@@ -84,12 +84,12 @@ func GetFuncName(f interface{}) string {
 	return absoluteName
 }
 
-// CopyPropertiesSkipNotEmpty will skip field contain`skip` tag value
-func CopyPropertiesSkipNotEmpty(src, dst interface{}) {
+// copyPropertiesSkipNotEmpty will skip field contain`skip` tag value
+func copyPropertiesSkipNotEmpty(src, dst interface{}) {
 	copyProperties(src, dst, true)
 }
 
-func CopyProperties(src, dst interface{}) {
+func copyPropertiesWithMerge(src, dst interface{}) {
 	copyProperties(src, dst, false)
 }
 
@@ -134,7 +134,7 @@ func copyProperties(src, dst interface{}, skipNotEmpty bool) {
 	}
 }
 
-func CreateStruct[T any](src any) (target T) {
+func createStruct[T any](src any) (target T) {
 	srcValue := reflect.ValueOf(src)
 	if srcValue.Kind() != reflect.Ptr {
 		panic("src must be a pointer")
@@ -144,7 +144,7 @@ func CreateStruct[T any](src any) (target T) {
 		panic("The generic type is not a struct")
 	}
 
-	CopyProperties(src, &target)
+	copyPropertiesWithMerge(src, &target)
 
 	return target
 }
