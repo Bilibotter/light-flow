@@ -224,7 +224,7 @@ func (fm *FlowMeta) buildRunFlow(input map[string]any) *runFlow {
 	return &rf
 }
 
-func (fm *FlowMeta) CloneProcess(name string) *ProcessMeta {
+func (fm *FlowMeta) cloneProcess(name string) *ProcessMeta {
 	pm, exist := allProcess.Load(name)
 	if !exist {
 		panic(fmt.Sprintf("process [%s] not registered", name))

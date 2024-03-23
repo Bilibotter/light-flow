@@ -17,39 +17,39 @@ const (
 
 // these constants are used to indicate the position of the process
 var (
-	end     = &StatusEnum{0b1, "end"}
-	head    = &StatusEnum{0b1 << 1, "head"}
-	hasNext = &StatusEnum{0b1 << 2, "hasNext"}
-	merged  = &StatusEnum{0b1 << 3, "merged"}
+	end     = &statusEnum{0b1, "end"}
+	head    = &statusEnum{0b1 << 1, "head"}
+	hasNext = &statusEnum{0b1 << 2, "hasNext"}
+	merged  = &statusEnum{0b1 << 3, "merged"}
 )
 
 // these variable are used to indicate the status of the unit
 var (
-	Pending      = &StatusEnum{0, "Pending"}
-	Running      = &StatusEnum{0b1, "Running"}
-	Pause        = &StatusEnum{0b1 << 1, "Pause"}
-	Success      = &StatusEnum{0b1 << 15, "Success"}
-	NormalMask   = &StatusEnum{0b1<<16 - 1, "NormalMask"}
-	Cancel       = &StatusEnum{0b1 << 16, "Cancel"}
-	Timeout      = &StatusEnum{0b1 << 17, "Timeout"}
-	Panic        = &StatusEnum{0b1 << 18, "Panic"}
-	Error        = &StatusEnum{0b1 << 19, "Error"}
-	Stop         = &StatusEnum{0b1 << 20, "Stop"}
-	CallbackFail = &StatusEnum{0b1 << 21, "CallbackFail"}
-	Failed       = &StatusEnum{0b1 << 31, "Failed"}
+	Pending      = &statusEnum{0, "Pending"}
+	Running      = &statusEnum{0b1, "Running"}
+	Pause        = &statusEnum{0b1 << 1, "Pause"}
+	Success      = &statusEnum{0b1 << 15, "Success"}
+	NormalMask   = &statusEnum{0b1<<16 - 1, "NormalMask"}
+	Cancel       = &statusEnum{0b1 << 16, "Cancel"}
+	Timeout      = &statusEnum{0b1 << 17, "Timeout"}
+	Panic        = &statusEnum{0b1 << 18, "Panic"}
+	Error        = &statusEnum{0b1 << 19, "Error"}
+	Stop         = &statusEnum{0b1 << 20, "Stop"}
+	CallbackFail = &statusEnum{0b1 << 21, "CallbackFail"}
+	Failed       = &statusEnum{0b1 << 31, "Failed"}
 	// AbnormalMask An abnormal step status will cause the cancellation of dependent unexecuted steps.
-	AbnormalMask = &StatusEnum{NormalMask.flag << 16, "AbnormalMask"}
+	AbnormalMask = &statusEnum{NormalMask.flag << 16, "AbnormalMask"}
 )
 
 var (
-	normal   = []*StatusEnum{Pending, Running, Pause, Success}
-	abnormal = []*StatusEnum{Cancel, Timeout, Panic, Error, Stop, CallbackFail, Failed}
+	normal   = []*statusEnum{Pending, Running, Pause, Success}
+	abnormal = []*statusEnum{Cancel, Timeout, Panic, Error, Stop, CallbackFail, Failed}
 )
 
 type status int64
 
 type statusI interface {
-	Has(enum *StatusEnum) bool
+	Has(enum *statusEnum) bool
 	Success() bool
 	Exceptions() []string
 }
@@ -80,7 +80,7 @@ type procCtx interface {
 	GetByStepName(stepName, key string) (value any, exist bool)
 }
 
-type StatusEnum struct {
+type statusEnum struct {
 	flag status
 	msg  string
 }
@@ -174,7 +174,7 @@ func (s *status) Normal() bool {
 	return s.load()&AbnormalMask.flag == 0
 }
 
-func (s *status) Has(enum *StatusEnum) bool {
+func (s *status) Has(enum *statusEnum) bool {
 	// can't use s.load()&enum.flag != 0, because enum.flag may be 0
 	return s.load()&enum.flag == enum.flag
 }
@@ -226,7 +226,7 @@ func (s *status) ExplainStatus() []string {
 // The function checks if the specified status bit exists in the current value.
 // If it exists, it removes the status bit, and returns true indicating successful removal of the status bit.
 // Otherwise, it returns false.
-func (s *status) remove(enum *StatusEnum) bool {
+func (s *status) remove(enum *statusEnum) bool {
 	for current := s.load(); enum.flag&current != 0; {
 		if s.cas(current, current^enum.flag) {
 			return true
@@ -235,7 +235,7 @@ func (s *status) remove(enum *StatusEnum) bool {
 	return false
 }
 
-func (s *status) add(enum *StatusEnum) bool {
+func (s *status) add(enum *statusEnum) bool {
 	for current := s.load(); !current.Has(enum); current = s.load() {
 		if s.cas(current, current|enum.flag) {
 			return true
@@ -261,7 +261,7 @@ func (s *status) cas(old, new status) bool {
 	return atomic.CompareAndSwapInt64((*int64)(s), int64(old), int64(new))
 }
 
-func (s *StatusEnum) Contained(explain ...string) bool {
+func (s *statusEnum) Contained(explain ...string) bool {
 	for _, value := range explain {
 		if value == s.msg {
 			return true
@@ -270,7 +270,7 @@ func (s *StatusEnum) Contained(explain ...string) bool {
 	return false
 }
 
-func (s *StatusEnum) Message() string {
+func (s *statusEnum) Message() string {
 	return s.msg
 }
 
@@ -373,10 +373,10 @@ func (c *callback[T]) OnlyFor(name ...string) *callback[T] {
 	return c
 }
 
-func (c *callback[T]) When(status ...*StatusEnum) *callback[T] {
+func (c *callback[T]) When(status ...*statusEnum) *callback[T] {
 	if c.flag == Before {
 		if len(status) > 1 || status[0] != CallbackFail {
-			panic("CallbackFail is only valid StatusEnum for Before")
+			panic("CallbackFail is only valid statusEnum for Before")
 		}
 	}
 	old := c.run
@@ -392,7 +392,7 @@ func (c *callback[T]) When(status ...*StatusEnum) *callback[T] {
 	return c
 }
 
-func (c *callback[T]) Exclude(status ...*StatusEnum) *callback[T] {
+func (c *callback[T]) Exclude(status ...*statusEnum) *callback[T] {
 	old := c.run
 	f := func(info T) (bool, error) {
 		for _, match := range status {
