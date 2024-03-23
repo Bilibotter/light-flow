@@ -6,22 +6,22 @@ import (
 )
 
 type StepMeta struct {
-	visitor
+	accessInfo
 	StepConfig
 	belong   *ProcessMeta
 	stepName string
 	layer    int
-	position *Status     // used to record the position of the step
+	position *status     // used to record the position of the step
 	depends  []*StepMeta // prev
 	waiters  []*StepMeta // next
-	priority map[string]int32
-	run      func(ctx Context) (any, error)
+	priority map[string]int64
+	run      func(ctx StepCtx) (any, error)
 }
 
 type runStep struct {
 	*StepMeta
+	*status
 	*visibleContext
-	*Status
 	id        string
 	flowId    string
 	processId string
@@ -29,13 +29,13 @@ type runStep struct {
 	finish    chan bool
 	Start     time.Time
 	End       time.Time
-	infoCache *StepInfo
+	infoCache *Step
 	Err       error
 }
 
-type StepInfo struct {
+type Step struct {
 	*basicInfo
-	*visibleContext
+	StepCtx
 	ProcessId string
 	FlowId    string
 	Start     time.Time
@@ -48,11 +48,11 @@ type StepConfig struct {
 	StepRetry   int
 }
 
-func (si *StepInfo) Error() error {
+func (si *Step) Error() error {
 	return si.Err
 }
 
-func (meta *StepMeta) Next(run func(ctx Context) (any, error), alias ...string) *StepMeta {
+func (meta *StepMeta) Next(run func(ctx StepCtx) (any, error), alias ...string) *StepMeta {
 	if len(alias) == 1 {
 		return meta.belong.AliasStep(run, alias[0], meta.stepName)
 
@@ -60,7 +60,7 @@ func (meta *StepMeta) Next(run func(ctx Context) (any, error), alias ...string) 
 	return meta.belong.Step(run, meta.stepName)
 }
 
-func (meta *StepMeta) Same(run func(ctx Context) (any, error), alias ...string) *StepMeta {
+func (meta *StepMeta) Same(run func(ctx StepCtx) (any, error), alias ...string) *StepMeta {
 	depends := make([]any, 0, len(meta.depends))
 	for i := 0; i < len(meta.depends); i++ {
 		depends = append(depends, meta.depends[i].stepName)
@@ -73,12 +73,12 @@ func (meta *StepMeta) Same(run func(ctx Context) (any, error), alias ...string) 
 
 func (meta *StepMeta) Priority(priority map[string]any) {
 	if meta.priority == nil {
-		meta.priority = make(map[string]int32, len(priority))
+		meta.priority = make(map[string]int64, len(priority))
 	}
 	for key, stepName := range priority {
 		step, exist := meta.belong.steps[toStepName(stepName)]
 		if !exist {
-			panic(fmt.Sprintf("can't find step[%s]", stepName))
+			panic(fmt.Sprintf("step[%s] can't matchByHighest ", stepName))
 		}
 		meta.priority[key] = step.index
 	}
@@ -91,14 +91,14 @@ func (meta *StepMeta) wireDepends() {
 	}
 
 	for _, depend := range meta.depends {
-		wired := CreateSetBySliceFunc(depend.waiters, func(waiter *StepMeta) string { return waiter.stepName })
+		wired := createSetBySliceFunc(depend.waiters, func(waiter *StepMeta) string { return waiter.stepName })
 		if wired.Contains(meta.stepName) {
 			continue
 		}
 		depend.waiters = append(depend.waiters, meta)
-		if depend.position.Contain(End) {
-			depend.position.Append(HasNext)
-			depend.position.Pop(End)
+		if depend.position.Has(end) {
+			depend.position.add(hasNext)
+			depend.position.remove(end)
 		}
 		if depend.layer+1 > meta.layer {
 			meta.layer = depend.layer + 1
@@ -106,10 +106,10 @@ func (meta *StepMeta) wireDepends() {
 	}
 
 	if len(meta.depends) == 0 {
-		meta.position.Append(Head)
+		meta.position.add(head)
 	}
 
-	meta.position.Append(End)
+	meta.position.add(end)
 }
 
 // checkPriority checks if the priority key corresponds to an existing step.
@@ -164,18 +164,18 @@ func (step *runStep) syncInfo() {
 	if step.infoCache == nil {
 		return
 	}
-	step.infoCache.Status = step.Status
+	step.infoCache.status = step.status
 	step.infoCache.Err = step.Err
 	step.infoCache.Start = step.Start
 	step.infoCache.End = step.End
 }
 
 func (sc *StepConfig) combine(config *StepConfig) {
-	CopyPropertiesSkipNotEmpty(sc, config)
+	copyPropertiesSkipNotEmpty(sc, config)
 }
 
 func (sc *StepConfig) clone() StepConfig {
 	config := StepConfig{}
-	CopyPropertiesSkipNotEmpty(sc, config)
+	copyPropertiesSkipNotEmpty(sc, config)
 	return config
 }

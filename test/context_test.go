@@ -28,8 +28,8 @@ func resetCtx() {
 	atomic.StoreInt64(&ctx6, 0)
 }
 
-func GenerateSleep(duration time.Duration, args ...any) func(ctx flow.Context) (any, error) {
-	return func(ctx flow.Context) (any, error) {
+func GenerateSleep(duration time.Duration, args ...any) func(ctx flow.StepCtx) (any, error) {
+	return func(ctx flow.StepCtx) (any, error) {
 		addrWrap, ok := ctx.Get(addrKey)
 		if !ok {
 			panic(fmt.Sprintf("%s not found addr", ctx.ContextName()))
@@ -39,8 +39,8 @@ func GenerateSleep(duration time.Duration, args ...any) func(ctx flow.Context) (
 	}
 }
 
-func ChangeCtxStepFunc(addr *int64, args ...any) func(ctx flow.Context) (any, error) {
-	return func(ctx flow.Context) (any, error) {
+func ChangeCtxStepFunc(addr *int64, args ...any) func(ctx flow.StepCtx) (any, error) {
+	return func(ctx flow.StepCtx) (any, error) {
 		if len(args) > 0 {
 			time.Sleep(100 * time.Millisecond)
 		}
@@ -55,8 +55,8 @@ func ChangeCtxStepFunc(addr *int64, args ...any) func(ctx flow.Context) (any, er
 	}
 }
 
-func GenerateStepIncAddr(i int, args ...any) func(ctx flow.Context) (any, error) {
-	return func(ctx flow.Context) (any, error) {
+func GenerateStepIncAddr(i int, args ...any) func(ctx flow.StepCtx) (any, error) {
+	return func(ctx flow.StepCtx) (any, error) {
 		if len(args) > 0 {
 			time.Sleep(100 * time.Millisecond)
 		}
@@ -70,44 +70,44 @@ func GenerateStepIncAddr(i int, args ...any) func(ctx flow.Context) (any, error)
 	}
 }
 
-//func ExposeAddrFunc(addr *int64) func(ctx flow.Context) (any, error) {
-//	return func(ctx flow.Context) (any, error) {
+//func ExposeAddrFunc(addr *int64) func(ctx flow.StepCtx) (any, error) {
+//	return func(ctx flow.StepCtx) (any, error) {
 //		ctx.Exposed(addrKey, addr)
 //		atomic.AddInt64(addr, 1)
 //		return nil, nil
 //	}
 //}
 
-func getUnExist(ctx flow.Context) (any, error) {
+func getUnExist(ctx flow.StepCtx) (any, error) {
 	println("start")
 	ctx.Get("unExist")
 	println("end")
 	return nil, nil
 }
 
-func invalidUse(ctx flow.Context) (any, error) {
+func invalidUse(ctx flow.StepCtx) (any, error) {
 	return nil, nil
 }
 
-func getAllAndSet(value string, history ...string) func(ctx flow.Context) (any, error) {
-	return func(ctx flow.Context) (any, error) {
-		ctx.Set("all", value)
-		ks := flow.NewRoutineUnsafeSet[string]()
-		vs := flow.NewRoutineUnsafeSet[string]()
-		m := ctx.GetAll("all")
-		for k, v := range m {
-			ks.Add(k)
-			vs.Add(v.(string))
-		}
-		for _, v := range history {
-			if !vs.Contains(v) {
-				panic(fmt.Sprintf("ctx[%s] not contain %s", ctx.ContextName(), v))
-			}
-		}
-		fmt.Printf("ctx[%s] get all keys=%s\n", ctx.ContextName(), strings.Join(ks.Slice(), ", "))
-		return nil, nil
-	}
-}
+//func getAllAndSet(value string, history ...string) func(ctx flow.StepCtx) (any, error) {
+//	return func(ctx flow.StepCtx) (any, error) {
+//		ctx.set("all", value)
+//		ks := flow.newRoutineUnsafeSet[string]()
+//		vs := flow.newRoutineUnsafeSet[string]()
+//		m := ctx.GetAll("all")
+//		for k, v := range m {
+//			ks.Add(k)
+//			vs.Add(v.(string))
+//		}
+//		for _, v := range history {
+//			if !vs.Contains(v) {
+//				panic(fmt.Sprintf("ctx[%s] not contain %s", ctx.ContextName(), v))
+//			}
+//		}
+//		fmt.Printf("ctx[%s] get all keys=%s\n", ctx.ContextName(), strings.Join(ks.Slice(), ", "))
+//		return nil, nil
+//	}
+//}
 
 func TestSearch(t *testing.T) {
 	defer resetCtx()
@@ -430,44 +430,44 @@ func TestFlowMultipleAsyncExecute(t *testing.T) {
 	}
 }
 
-func TestGetAll(t *testing.T) {
-	workflow := flow.RegisterFlow("TestGetAll")
-	process := workflow.Process("TestGetAll")
-	process.AfterStep(true, ErrorResultPrinter)
-	process.AliasStep(getAllAndSet("1", "0"), "1")
-	process.AliasStep(getAllAndSet("2", "0", "1"), "2", "1")
-	process.AliasStep(getAllAndSet("3", "0", "1", "2"), "3", "2")
-	result := flow.DoneFlow("TestGetAll", map[string]any{"all": "0"})
-	if !result.Success() {
-		t.Errorf("flow[%s] failed, explain=%v", result.GetName(), result.Exceptions())
-	}
-	for _, feature := range result.Futures() {
-		t.Logf("process[%s] explain=%v", feature.GetName(), feature.ExplainStatus())
-		if !feature.Success() {
-			t.Errorf("process[%s] failed, exceptions=%v", feature.GetName(), feature.Exceptions())
-		}
-	}
-}
+//func TestGetAll(t *testing.T) {
+//	workflow := flow.RegisterFlow("TestGetAll")
+//	process := workflow.Process("TestGetAll")
+//	process.AfterStep(true, ErrorResultPrinter)
+//	process.AliasStep(getAllAndSet("1", "0"), "1")
+//	process.AliasStep(getAllAndSet("2", "0", "1"), "2", "1")
+//	process.AliasStep(getAllAndSet("3", "0", "1", "2"), "3", "2")
+//	result := flow.DoneFlow("TestGetAll", map[string]any{"all": "0"})
+//	if !result.Success() {
+//		t.Errorf("flow[%s] failed, explain=%v", result.GetName(), result.Exceptions())
+//	}
+//	for _, feature := range result.Futures() {
+//		t.Logf("process[%s] explain=%v", feature.GetName(), feature.ExplainStatus())
+//		if !feature.Success() {
+//			t.Errorf("process[%s] failed, exceptions=%v", feature.GetName(), feature.Exceptions())
+//		}
+//	}
+//}
 
 func TestContextNameCorrect(t *testing.T) {
 	workflow := flow.RegisterFlow("TestContextNameCorrect")
-	workflow.BeforeFlow(false, func(info *flow.FlowInfo) (keepOn bool, err error) {
-		if info.ContextName() != "TestContextNameCorrect" {
-			fmt.Printf("beforeflow workflow context name incorrect, workflow's name = %s\n", info.ContextName())
+	workflow.BeforeFlow(false, func(info *flow.WorkFlow) (keepOn bool, err error) {
+		if info.GetName() != "TestContextNameCorrect" {
+			fmt.Printf("beforeflow workflow context name incorrect, workflow's name = %s\n", info.GetName())
 		} else {
-			fmt.Printf("workflow's context name='%s' before flow\n", info.ContextName())
+			fmt.Printf("workflow's context name='%s' before flow\n", info.GetName())
 		}
 		return true, nil
 	})
-	workflow.AfterFlow(false, func(info *flow.FlowInfo) (keepOn bool, err error) {
-		if info.ContextName() != "TestContextNameCorrect" {
-			fmt.Printf("afterflow workflow context name incorrect, workflow's name = %s\n", info.ContextName())
+	workflow.AfterFlow(false, func(info *flow.WorkFlow) (keepOn bool, err error) {
+		if info.GetName() != "TestContextNameCorrect" {
+			fmt.Printf("afterflow workflow context name incorrect, workflow's name = %s\n", info.GetName())
 		} else {
-			fmt.Printf("workflow's context name='%s' after flow\n", info.ContextName())
+			fmt.Printf("workflow's context name='%s' after flow\n", info.GetName())
 		}
 		return true, nil
 	})
-	workflow.BeforeProcess(false, func(info *flow.ProcessInfo) (keepOn bool, err error) {
+	workflow.BeforeProcess(false, func(info *flow.Process) (keepOn bool, err error) {
 		if info.ContextName() != "TestContextNameCorrect-Process" {
 			fmt.Printf("beforeprocess process context name incorrect, workflow's name = %s\n", info.ContextName())
 		} else {
@@ -475,7 +475,7 @@ func TestContextNameCorrect(t *testing.T) {
 		}
 		return true, nil
 	})
-	workflow.AfterProcess(false, func(info *flow.ProcessInfo) (keepOn bool, err error) {
+	workflow.AfterProcess(false, func(info *flow.Process) (keepOn bool, err error) {
 		if info.ContextName() != "TestContextNameCorrect-Process" {
 			fmt.Printf("afterprocess process context name incorrect, workflow's name = %s\n", info.ContextName())
 		} else {
@@ -483,7 +483,7 @@ func TestContextNameCorrect(t *testing.T) {
 		}
 		return true, nil
 	})
-	workflow.BeforeStep(false, func(info *flow.StepInfo) (keepOn bool, err error) {
+	workflow.BeforeStep(false, func(info *flow.Step) (keepOn bool, err error) {
 		if info.ContextName() != "Step1" {
 			fmt.Printf("before step context name incorrect, step's name = %s\n", info.ContextName())
 		} else {
@@ -491,7 +491,7 @@ func TestContextNameCorrect(t *testing.T) {
 		}
 		return true, nil
 	})
-	workflow.AfterStep(false, func(info *flow.StepInfo) (keepOn bool, err error) {
+	workflow.AfterStep(false, func(info *flow.Step) (keepOn bool, err error) {
 		if info.ContextName() != "Step1" {
 			fmt.Printf("afterstep step context name incorrect, step's name = %s\n", info.ContextName())
 		} else {
@@ -500,7 +500,7 @@ func TestContextNameCorrect(t *testing.T) {
 		return true, nil
 	})
 	process := workflow.Process("TestContextNameCorrect-Process")
-	process.AliasStep(func(ctx flow.Context) (any, error) {
+	process.AliasStep(func(ctx flow.StepCtx) (any, error) {
 		if ctx.ContextName() != "Step1" {
 			fmt.Printf("run step's context name is incorrect, step's name = %s\n", ctx.ContextName())
 			return nil, fmt.Errorf("step context name incorrect")
@@ -509,6 +509,10 @@ func TestContextNameCorrect(t *testing.T) {
 		return nil, nil
 	}, "Step1")
 	result := flow.DoneFlow("TestContextNameCorrect", nil)
+	if !result.Success() {
+		t.Errorf("flow[%s] failed, explain=%v", result.GetName(), result.Exceptions())
+	}
+	result = flow.DoneFlow("TestContextNameCorrect", nil)
 	if !result.Success() {
 		t.Errorf("flow[%s] failed, explain=%v", result.GetName(), result.Exceptions())
 	}

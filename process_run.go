@@ -10,7 +10,7 @@ import (
 
 type runProcess struct {
 	*ProcessMeta
-	*Status
+	*status
 	*visibleContext
 	id        string
 	flowId    string
@@ -23,10 +23,11 @@ type runProcess struct {
 func (rp *runProcess) buildRunStep(meta *StepMeta) *runStep {
 	step := runStep{
 		visibleContext: &visibleContext{
-			parent:  rp.visibleContext,
-			visitor: &meta.visitor,
+			accessInfo:  &meta.accessInfo,
+			linkedTable: rp.linkedTable,
+			prev:        rp.visibleContext.prev,
 		},
-		Status:    emptyStatus(),
+		status:    emptyStatus(),
 		StepMeta:  meta,
 		id:        generateId(),
 		processId: rp.id,
@@ -41,20 +42,20 @@ func (rp *runProcess) buildRunStep(meta *StepMeta) *runStep {
 }
 
 func (rp *runProcess) Resume() {
-	if rp.Pop(Pause) {
+	if rp.remove(Pause) {
 		rp.pause.Done()
 	}
 }
 
 func (rp *runProcess) Pause() {
-	if rp.Append(Pause) {
+	if rp.add(Pause) {
 		rp.pause.Add(1)
 	}
 }
 
 func (rp *runProcess) Stop() {
-	rp.Append(Stop)
-	rp.Append(Failed)
+	rp.add(Stop)
+	rp.add(Failed)
 }
 
 func (rp *runProcess) schedule() (future *Future) {
@@ -63,19 +64,19 @@ func (rp *runProcess) schedule() (future *Future) {
 		basicInfo: &basicInfo{
 			Id:     rp.id,
 			Name:   rp.processName,
-			Status: rp.Status,
+			status: rp.status,
 		},
-		Status: rp.Status,
+		status: rp.status,
 		finish: &rp.finish,
 	}
 
 	// CallbackFail from Flow
-	if rp.Contain(CallbackFail) {
-		rp.Append(Cancel)
+	if rp.Has(CallbackFail) {
+		rp.add(Cancel)
 		return
 	}
 
-	rp.Append(Running)
+	rp.add(Running)
 	rp.procCallback(Before)
 	for _, step := range rp.flowSteps {
 		if step.layer == 1 {
@@ -92,12 +93,12 @@ func (rp *runProcess) startStep(step *runStep) {
 	defer rp.startNextSteps(step)
 
 	if _, finish := step.GetResult(step.stepName); finish {
-		step.Append(Success)
+		step.add(Success)
 		return
 	}
 
 	if !rp.Normal() {
-		step.Append(Cancel)
+		step.add(Cancel)
 		return
 	}
 
@@ -107,7 +108,7 @@ func (rp *runProcess) startStep(step *runStep) {
 		return
 	}
 
-	for rp.Contain(Pause) {
+	for rp.Has(Pause) {
 		rp.pause.Wait()
 	}
 
@@ -123,8 +124,8 @@ func (rp *runProcess) startStep(step *runStep) {
 	go rp.runStep(step)
 	select {
 	case <-timer.C:
-		step.Append(Timeout)
-		step.Append(Failed)
+		step.add(Timeout)
+		step.add(Failed)
 	case <-step.finish:
 		return
 	}
@@ -144,17 +145,17 @@ func (rp *runProcess) finalize() {
 	}()
 	select {
 	case <-timer.C:
-		rp.Append(Timeout)
-		rp.Append(Failed)
+		rp.add(Timeout)
+		rp.add(Failed)
 	case <-finish:
 	}
 
 	for _, step := range rp.flowSteps {
-		rp.append(step.Status.load())
+		rp.adds(step.status.load())
 	}
 
 	if rp.Normal() {
-		rp.Append(Success)
+		rp.add(Success)
 	}
 
 	rp.procCallback(After)
@@ -168,13 +169,13 @@ func (rp *runProcess) startNextSteps(step *runStep) {
 		next := rp.flowSteps[waiter.stepName]
 		waiting := atomic.AddInt64(&next.waiting, -1)
 		if cancel {
-			next.Append(Cancel)
+			next.add(Cancel)
 		}
 		if atomic.LoadInt64(&waiting) != 0 {
 			continue
 		}
 		if step.Success() {
-			next.Append(Running)
+			next.add(Running)
 		}
 		go rp.startStep(next)
 	}
@@ -203,8 +204,8 @@ func (rp *runProcess) runStep(step *runStep) {
 	defer func() {
 		if r := recover(); r != nil {
 			panicErr := fmt.Errorf("panic: %v\n\n%s", r, string(debug.Stack()))
-			step.Append(Panic)
-			step.Append(Failed)
+			step.add(Panic)
+			step.add(Failed)
 			step.Err = panicErr
 			step.End = time.Now().UTC()
 		}
@@ -216,14 +217,14 @@ func (rp *runProcess) runStep(step *runStep) {
 		step.End = time.Now().UTC()
 		step.Err = err
 		if err != nil {
-			step.Append(Error)
-			step.Append(Failed)
+			step.add(Error)
+			step.add(Failed)
 			continue
 		}
 		if result != nil {
 			step.setResult(step.stepName, result)
 		}
-		step.Append(Success)
+		step.add(Success)
 		break
 	}
 }
@@ -250,10 +251,10 @@ func (rp *runProcess) stepCallback(step *runStep, flag string) {
 }
 
 func (rp *runProcess) procCallback(flag string) {
-	info := &ProcessInfo{
-		visibleContext: rp.visibleContext,
+	info := &Process{
+		procCtx: rp.visibleContext,
 		basicInfo: basicInfo{
-			Status: rp.Status,
+			status: rp.status,
 			Id:     rp.id,
 			Name:   rp.processName,
 		},
@@ -266,23 +267,23 @@ func (rp *runProcess) procCallback(flag string) {
 	rp.procChain.handle(flag, info)
 }
 
-func (rp *runProcess) summaryStepInfo(step *runStep) *StepInfo {
+func (rp *runProcess) summaryStepInfo(step *runStep) *Step {
 	if step.infoCache != nil {
 		step.syncInfo()
 		return step.infoCache
 	}
-	info := &StepInfo{
+	info := &Step{
 		basicInfo: &basicInfo{
-			Status: step.Status,
+			status: step.status,
 			Id:     step.id,
 			Name:   step.stepName,
 		},
-		visibleContext: step.visibleContext,
-		ProcessId:      step.processId,
-		FlowId:         step.flowId,
-		Start:          step.Start,
-		End:            step.End,
-		Err:            step.Err,
+		StepCtx:   step.visibleContext,
+		ProcessId: step.processId,
+		FlowId:    step.flowId,
+		Start:     step.Start,
+		End:       step.End,
+		Err:       step.Err,
 	}
 
 	step.infoCache = info

@@ -19,34 +19,33 @@ var (
 	defaultConfig *FlowConfig
 )
 
-type Controller interface {
+type controller interface {
 	Resume()
 	Pause()
 	Stop()
 }
 
-type ResultI interface {
-	BasicInfoI
+type resultI interface {
+	basicInfoI
 	Futures() []*Future
 	Fails() []*Future
 }
 
 type FlowController interface {
-	Controller
-	ResultI
+	controller
+	resultI
 	Done() []*Future
 	ListProcess() []string
-	ProcessController(name string) Controller
+	ProcessController(name string) controller
 }
 
 type FlowConfig struct {
-	Handler[*FlowInfo] `flow:"skip"`
+	handler[*WorkFlow] `flow:"skip"`
 	ProcessConfig      `flow:"skip"`
 }
 
 type FlowMeta struct {
 	FlowConfig
-	visitor
 	init              sync.Once
 	flowName          string
 	flowNotUseDefault bool
@@ -56,17 +55,16 @@ type FlowMeta struct {
 type runFlow struct {
 	*FlowMeta
 	*basicInfo
-	*visibleContext
+	*simpleContext
 	processes []*runProcess
 	futures   []*Future
 	lock      sync.Mutex
 	finish    sync.WaitGroup
-	infoCache *FlowInfo
+	infoCache *WorkFlow
 }
 
-type FlowInfo struct {
+type WorkFlow struct {
 	*basicInfo
-	*visibleContext
 }
 
 func init() {
@@ -88,11 +86,6 @@ func CreateDefaultConfig() *FlowConfig {
 
 func RegisterFlow(name string) *FlowMeta {
 	flow := FlowMeta{
-		visitor: visitor{
-			index:   int32(visibleAll),
-			visible: visibleAll,
-			names:   map[int32]string{int32(visibleAll): name},
-		},
 		flowName: name,
 		init:     sync.Once{},
 	}
@@ -103,7 +96,7 @@ func RegisterFlow(name string) *FlowMeta {
 func AsyncArgs(name string, args ...any) FlowController {
 	input := make(map[string]any, len(args))
 	for _, arg := range args {
-		input[GetStructName(arg)] = arg
+		input[getStructName(arg)] = arg
 	}
 	return AsyncFlow(name, input)
 }
@@ -118,15 +111,15 @@ func AsyncFlow(name string, input map[string]any) FlowController {
 	return flow
 }
 
-func DoneArgs(name string, args ...any) ResultI {
+func DoneArgs(name string, args ...any) resultI {
 	input := make(map[string]any, len(args))
 	for _, arg := range args {
-		input[GetStructName(arg)] = arg
+		input[getStructName(arg)] = arg
 	}
 	return DoneFlow(name, input)
 }
 
-func DoneFlow(name string, input map[string]any) ResultI {
+func DoneFlow(name string, input map[string]any) resultI {
 	factory, ok := allFlows.Load(name)
 	if !ok {
 		panic(fmt.Sprintf("flow factory [%s] not found", name))
@@ -144,25 +137,25 @@ func BuildRunFlow(name string, input map[string]any) *runFlow {
 	return factory.(*FlowMeta).buildRunFlow(input)
 }
 
-func (fc *FlowConfig) BeforeFlow(must bool, callback func(*FlowInfo) (keepOn bool, err error)) *callback[*FlowInfo] {
+func (fc *FlowConfig) BeforeFlow(must bool, callback func(*WorkFlow) (keepOn bool, err error)) *callback[*WorkFlow] {
 	return fc.addCallback(Before, must, callback)
 }
 
-func (fc *FlowConfig) AfterFlow(must bool, callback func(*FlowInfo) (keepOn bool, err error)) *callback[*FlowInfo] {
+func (fc *FlowConfig) AfterFlow(must bool, callback func(*WorkFlow) (keepOn bool, err error)) *callback[*WorkFlow] {
 	return fc.addCallback(After, must, callback)
 }
 
 func (fc *FlowConfig) combine(config *FlowConfig) *FlowConfig {
-	CopyPropertiesSkipNotEmpty(fc, config)
-	fc.Handler.combine(&config.Handler)
+	copyPropertiesSkipNotEmpty(fc, config)
+	fc.handler.combine(&config.handler)
 	fc.ProcessConfig.combine(&config.ProcessConfig)
 	return fc
 }
 
 func (fc *FlowConfig) clone() FlowConfig {
 	config := FlowConfig{}
-	CopyPropertiesSkipNotEmpty(fc, config)
-	config.Handler = fc.Handler.clone()
+	copyPropertiesSkipNotEmpty(fc, config)
+	config.handler = fc.handler.clone()
 	config.ProcessConfig = fc.ProcessConfig.clone()
 	return config
 }
@@ -172,13 +165,13 @@ func (fm *FlowMeta) initialize() {
 		if fm.flowNotUseDefault || defaultConfig == nil {
 			return
 		}
-		CopyPropertiesSkipNotEmpty(defaultConfig, &fm.FlowConfig)
-		CopyPropertiesSkipNotEmpty(&defaultConfig.ProcessConfig, &fm.FlowConfig.ProcessConfig)
+		copyPropertiesSkipNotEmpty(defaultConfig, &fm.FlowConfig)
+		copyPropertiesSkipNotEmpty(&defaultConfig.ProcessConfig, &fm.FlowConfig.ProcessConfig)
 		for _, meta := range fm.processes {
 			if meta.ProcNotUseDefault {
 				continue
 			}
-			CopyPropertiesSkipNotEmpty(&fm.ProcessConfig, &meta.ProcessConfig)
+			copyPropertiesSkipNotEmpty(&fm.ProcessConfig, &meta.ProcessConfig)
 		}
 	})
 }
@@ -202,17 +195,14 @@ func (fm *FlowMeta) NoUseDefault() *FlowMeta {
 }
 
 func (fm *FlowMeta) buildRunFlow(input map[string]any) *runFlow {
-	table := adjacencyTable{
-		lock:  &sync.RWMutex{},
-		nodes: make(map[string]*node, len(input)),
+	ctx := simpleContext{
+		m:    input,
+		name: fm.flowName,
 	}
 	rf := runFlow{
-		visibleContext: &visibleContext{
-			adjacencyTable: table,
-			visitor:        &fm.visitor,
-		},
+		simpleContext: &ctx,
 		basicInfo: &basicInfo{
-			Status: emptyStatus(),
+			status: emptyStatus(),
 			Name:   fm.flowName,
 			Id:     generateId(),
 		},
@@ -234,7 +224,7 @@ func (fm *FlowMeta) buildRunFlow(input map[string]any) *runFlow {
 	return &rf
 }
 
-func (fm *FlowMeta) CloneProcess(name string) *ProcessMeta {
+func (fm *FlowMeta) cloneProcess(name string) *ProcessMeta {
 	pm, exist := allProcess.Load(name)
 	if !exist {
 		panic(fmt.Sprintf("process [%s] not registered", name))
@@ -247,10 +237,11 @@ func (fm *FlowMeta) CloneProcess(name string) *ProcessMeta {
 
 func (fm *FlowMeta) Process(name string) *ProcessMeta {
 	pm := ProcessMeta{
-		visitor: visitor{
-			visible: 0,
+		accessInfo: accessInfo{
+			passing: visibleAll,
 			index:   0,
-			names:   map[int32]string{0: name},
+			names:   map[int64]string{0: name},
+			indexes: map[string]int64{name: 0},
 		},
 		belong:      fm,
 		processName: name,
@@ -264,17 +255,17 @@ func (fm *FlowMeta) Process(name string) *ProcessMeta {
 }
 
 func (rf *runFlow) buildRunProcess(meta *ProcessMeta) *runProcess {
-	table := adjacencyTable{
-		lock:  &sync.RWMutex{},
+	table := linkedTable{
+		lock:  sync.RWMutex{},
 		nodes: map[string]*node{},
 	}
 	process := runProcess{
 		visibleContext: &visibleContext{
-			parent:         rf.visibleContext,
-			visitor:        &meta.visitor,
-			adjacencyTable: table,
+			prev:        rf.simpleContext,
+			accessInfo:  &meta.accessInfo,
+			linkedTable: &table,
 		},
-		Status:      emptyStatus(),
+		status:      emptyStatus(),
 		ProcessMeta: meta,
 		id:          generateId(),
 		flowId:      rf.Id,
@@ -284,13 +275,8 @@ func (rf *runFlow) buildRunProcess(meta *ProcessMeta) *runProcess {
 		finish:      sync.WaitGroup{},
 	}
 
-	stepTable := adjacencyTable{
-		lock:  &sync.RWMutex{},
-		nodes: map[string]*node{},
-	}
 	for _, stepMeta := range meta.sortedSteps() {
 		step := process.buildRunStep(stepMeta)
-		step.adjacencyTable = stepTable
 		process.flowSteps[stepMeta.stepName] = step
 	}
 	process.running.Add(len(process.flowSteps))
@@ -303,10 +289,10 @@ func (rf *runFlow) finalize() {
 		future.Done()
 	}
 	for _, process := range rf.processes {
-		rf.append(process.Status.load())
+		rf.adds(process.status.load())
 	}
 	if rf.Normal() {
-		rf.Append(Success)
+		rf.add(Success)
 	}
 	rf.advertise(After)
 	rf.finish.Done()
@@ -337,19 +323,18 @@ func (rf *runFlow) Flow() []*Future {
 		return rf.futures
 	}
 	rf.initialize()
-	rf.infoCache = &FlowInfo{
+	rf.infoCache = &WorkFlow{
 		basicInfo: &basicInfo{
-			Status: rf.Status,
+			status: rf.status,
 			Id:     rf.Id,
 			Name:   rf.flowName,
 		},
-		visibleContext: rf.visibleContext,
 	}
 	rf.advertise(Before)
 	futures := make([]*Future, 0, len(rf.processes))
 	for _, process := range rf.processes {
-		if rf.Contain(CallbackFail) {
-			process.Append(CallbackFail)
+		if rf.Has(CallbackFail) {
+			process.add(CallbackFail)
 		}
 		futures = append(futures, process.schedule())
 	}
@@ -392,9 +377,9 @@ func (rf *runFlow) ListProcess() []string {
 	return processes
 }
 
-// ProcessController returns the Controller of the specified process name.
-// Controller can stop and resume the process.
-func (rf *runFlow) ProcessController(processName string) Controller {
+// ProcessController returns the controller of the specified process name.
+// controller can stop and resume the process.
+func (rf *runFlow) ProcessController(processName string) controller {
 	for _, process := range rf.processes {
 		if process.processName == processName {
 			return process

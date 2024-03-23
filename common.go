@@ -2,86 +2,100 @@ package light_flow
 
 import (
 	"fmt"
+	"math/bits"
 	"runtime/debug"
 	"sync"
 	"sync/atomic"
 )
 
-var (
-	visibleAll = Status(0)
-	resultMark = Status(1 << 62)
+const (
+	publicKey   int64 = 0
+	resultIndex int64 = 62
+	visibleAll  int64 = 1<<62 - 1
+	resultMark  int64 = 1 << resultIndex
 )
 
 // these constants are used to indicate the position of the process
 var (
-	End     = &StatusEnum{0b1, "End"}
-	Head    = &StatusEnum{0b1 << 1, "Head"}
-	HasNext = &StatusEnum{0b1 << 2, "HasNext"}
-	Merged  = &StatusEnum{0b1 << 3, "Merged"}
+	end     = &statusEnum{0b1, "end"}
+	head    = &statusEnum{0b1 << 1, "head"}
+	hasNext = &statusEnum{0b1 << 2, "hasNext"}
+	merged  = &statusEnum{0b1 << 3, "merged"}
 )
 
 // these variable are used to indicate the status of the unit
 var (
-	Pending      = &StatusEnum{0, "Pending"}
-	Running      = &StatusEnum{0b1, "Running"}
-	Pause        = &StatusEnum{0b1 << 1, "Pause"}
-	Success      = &StatusEnum{0b1 << 15, "Success"}
-	NormalMask   = &StatusEnum{0b1<<16 - 1, "NormalMask"}
-	Cancel       = &StatusEnum{0b1 << 16, "Cancel"}
-	Timeout      = &StatusEnum{0b1 << 17, "Timeout"}
-	Panic        = &StatusEnum{0b1 << 18, "Panic"}
-	Error        = &StatusEnum{0b1 << 19, "Error"}
-	Stop         = &StatusEnum{0b1 << 20, "Stop"}
-	CallbackFail = &StatusEnum{0b1 << 21, "CallbackFail"}
-	Failed       = &StatusEnum{0b1 << 31, "Failed"}
+	Pending      = &statusEnum{0, "Pending"}
+	Running      = &statusEnum{0b1, "Running"}
+	Pause        = &statusEnum{0b1 << 1, "Pause"}
+	Success      = &statusEnum{0b1 << 15, "Success"}
+	NormalMask   = &statusEnum{0b1<<16 - 1, "NormalMask"}
+	Cancel       = &statusEnum{0b1 << 16, "Cancel"}
+	Timeout      = &statusEnum{0b1 << 17, "Timeout"}
+	Panic        = &statusEnum{0b1 << 18, "Panic"}
+	Error        = &statusEnum{0b1 << 19, "Error"}
+	Stop         = &statusEnum{0b1 << 20, "Stop"}
+	CallbackFail = &statusEnum{0b1 << 21, "CallbackFail"}
+	Failed       = &statusEnum{0b1 << 31, "Failed"}
 	// AbnormalMask An abnormal step status will cause the cancellation of dependent unexecuted steps.
-	AbnormalMask = &StatusEnum{NormalMask.flag << 16, "AbnormalMask"}
+	AbnormalMask = &statusEnum{NormalMask.flag << 16, "AbnormalMask"}
 )
 
 var (
-	normal   = []*StatusEnum{Pending, Running, Pause, Success}
-	abnormal = []*StatusEnum{Cancel, Timeout, Panic, Error, Stop, CallbackFail, Failed}
+	normal   = []*statusEnum{Pending, Running, Pause, Success}
+	abnormal = []*statusEnum{Cancel, Timeout, Panic, Error, Stop, CallbackFail, Failed}
 )
 
-type Status int64
+type status int64
 
-type StatusI interface {
-	Contain(enum *StatusEnum) bool
+type statusI interface {
+	Has(enum *statusEnum) bool
 	Success() bool
 	Exceptions() []string
 }
 
-type BasicInfoI interface {
-	StatusI
-	addr() *Status
+type basicInfoI interface {
+	statusI
+	addr() *status
 	GetId() string
 	GetName() string
 }
 
-type Context interface {
+type context interface {
 	ContextName() string
 	Get(key string) (value any, exist bool)
-	GetAll(key string) map[string]any
-	GetResult(key string) (value any, exist bool)
+	getByName(name, key string)
 	Set(key string, value any)
 }
 
-type StatusEnum struct {
-	flag Status
+type StepCtx interface {
+	context
+	GetEndValues(key string) map[string]any
+	GetResult(key string) (value any, exist bool)
+	setResult(key string, value any)
+}
+
+type procCtx interface {
+	context
+	GetByStepName(stepName, key string) (value any, exist bool)
+}
+
+type statusEnum struct {
+	flag status
 	msg  string
 }
 
 type basicInfo struct {
-	*Status
+	*status
 	Id   string
 	Name string
 }
 
-type Handler[T BasicInfoI] struct {
+type handler[T basicInfoI] struct {
 	filter []*callback[T]
 }
 
-type callback[T BasicInfoI] struct {
+type callback[T basicInfoI] struct {
 	// If must is false, the process will continue to execute
 	// even if the processor fails
 	must bool
@@ -91,80 +105,86 @@ type callback[T BasicInfoI] struct {
 	run func(info T) (keepOn bool, err error)
 }
 
+type simpleContext struct {
+	m    map[string]any
+	name string
+}
+
 type visibleContext struct {
-	adjacencyTable
-	*visitor // step visitor will update when mergeConfig, so using pointer
-	parent   *visibleContext
+	*linkedTable
+	*accessInfo // step accessInfo will update when mergeConfig, so using pointer
+	prev        context
+	next        context
 }
 
-type visitor struct {
-	names    map[int32]string // index to name
-	priority map[string]int32 // specify the  key to index
-	index    int32
-	visible  Status
+type accessInfo struct {
+	names    map[int64]string // index to name
+	indexes  map[string]int64 // name to indexes
+	priority map[string]int64 // specify the  key to index
+	index    int64
+	passing  int64
 }
 
-type adjacencyTable struct {
-	lock  *sync.RWMutex
+type linkedTable struct {
+	lock  sync.RWMutex
 	nodes map[string]*node
 }
 
 type node struct {
-	Index   int32  // used to identify a node
-	Visible Status // combine current node connected node's index, corresponding bit will be set to 1
+	Passing int64 // combine current node connected node's index, corresponding bit will be set to 1
 	Value   any
 	Next    *node
 }
 
 type Future struct {
-	*Status
+	*status
 	*basicInfo
 	finish *sync.WaitGroup
 }
 
-func emptyStatus() *Status {
+func emptyStatus() *status {
 	return createStatus(0)
 }
 
-func createStatus(i int64) *Status {
-	s := Status(i)
+func createStatus(i int64) *status {
+	s := status(i)
 	return &s
 }
 
 func toStepName(value any) string {
 	var result string
 	switch value.(type) {
-	case func(ctx Context) (any, error):
-		result = GetFuncName(value)
+	case func(ctx StepCtx) (any, error):
+		result = getFuncName(value)
 	case string:
 		result = value.(string)
 	default:
-		panic("value must be func(ctx Context) (any, error) or string")
+		panic("value must be func(ctx context) (any, error) or string")
 	}
 	return result
 }
 
 // Success return true if finish running and success
-func (s *Status) Success() bool {
-	return s.Contain(Success) && s.Normal()
+func (s *status) Success() bool {
+	return s.Has(Success) && s.Normal()
 }
 
 // Normal return true if not exception occur
-func (s *Status) Normal() bool {
+func (s *status) Normal() bool {
 	return s.load()&AbnormalMask.flag == 0
 }
 
-func (s *Status) Contain(enum *StatusEnum) bool {
+func (s *status) Has(enum *statusEnum) bool {
 	// can't use s.load()&enum.flag != 0, because enum.flag may be 0
 	return s.load()&enum.flag == enum.flag
 }
 
-func (s *Status) contain(flag Status) bool {
+func (s *status) contain(flag status) bool {
 	return s.load()&flag == flag
 }
 
 // Exceptions return contain exception's message
-func (s *Status) Exceptions() []string {
+func (s *status) Exceptions() []string {
 	if s.Normal() {
 		return nil
 	}
@@ -177,11 +197,11 @@ func (s *Status) Exceptions() []string {
 // Parameter status is the bitmask representing the status.
 // The returned slice contains the names of the matching flags in the layer they were found.
 // If abnormal flags are found, normal flags will be ignored.
-func (s *Status) ExplainStatus() []string {
+func (s *status) ExplainStatus() []string {
 	compress := make([]string, 0)
 
 	for _, enum := range abnormal {
-		if s.Contain(enum) {
+		if s.Has(enum) {
 			compress = append(compress, enum.Message())
 		}
 	}
@@ -189,12 +209,12 @@ func (s *Status) ExplainStatus() []string {
 		return compress
 	}
 
-	if s.Contain(Success) {
+	if s.Has(Success) {
 		return []string{Success.Message()}
 	}
 
 	for _, enum := range normal {
-		if s.Contain(enum) {
+		if s.Has(enum) {
 			compress = append(compress, enum.Message())
 		}
 	}
@@ -202,11 +222,11 @@ func (s *Status) ExplainStatus() []string {
 	return compress
 }
 
-// Pop function pops a status bit from the specified address.
+// remove function pops a status bit from the specified address.
 // The function checks if the specified status bit exists in the current value.
 // If it exists, it removes the status bit, and returns true indicating successful removal of the status bit.
 // Otherwise, it returns false.
-func (s *Status) Pop(enum *StatusEnum) bool {
+func (s *status) remove(enum *statusEnum) bool {
 	for current := s.load(); enum.flag&current != 0; {
 		if s.cas(current, current^enum.flag) {
 			return true
@@ -215,8 +235,8 @@ func (s *Status) Pop(enum *StatusEnum) bool {
 	return false
 }
 
-func (s *Status) Append(enum *StatusEnum) bool {
-	for current := s.load(); !current.Contain(enum); current = s.load() {
+func (s *status) add(enum *statusEnum) bool {
+	for current := s.load(); !current.Has(enum); current = s.load() {
 		if s.cas(current, current|enum.flag) {
 			return true
 		}
@@ -224,7 +244,7 @@ func (s *Status) Append(enum *StatusEnum) bool {
 	return false
 }
 
-func (s *Status) append(flag Status) bool {
+func (s *status) adds(flag status) bool {
 	for current := s.load(); !current.contain(flag); current = s.load() {
 		if s.cas(current, current|flag) {
 			return true
@@ -233,15 +253,15 @@ func (s *Status) append(flag Status) bool {
 	return false
 }
 
-func (s *Status) load() Status {
-	return Status(atomic.LoadInt64((*int64)(s)))
+func (s *status) load() status {
+	return status(atomic.LoadInt64((*int64)(s)))
 }
 
-func (s *Status) cas(old, new Status) bool {
+func (s *status) cas(old, new status) bool {
 	return atomic.CompareAndSwapInt64((*int64)(s), int64(old), int64(new))
 }
 
-func (s *StatusEnum) Contained(explain ...string) bool {
+func (s *statusEnum) Contained(explain ...string) bool {
 	for _, value := range explain {
 		if value == s.msg {
 			return true
@@ -250,7 +270,7 @@ func (s *StatusEnum) Contained(explain ...string) bool {
 	return false
 }
 
-func (s *StatusEnum) Message() string {
+func (s *statusEnum) Message() string {
 	return s.msg
 }
 
@@ -258,21 +278,21 @@ func (bi *basicInfo) GetName() string {
 	return bi.Name
 }
 
-func (bi *basicInfo) addr() *Status {
-	return bi.Status
+func (bi *basicInfo) addr() *status {
+	return bi.status
 }
 
 func (bi *basicInfo) GetId() string {
 	return bi.Id
 }
 
-func (cc *Handler[T]) clone() Handler[T] {
-	config := Handler[T]{}
+func (cc *handler[T]) clone() handler[T] {
+	config := handler[T]{}
 	config.filter = cc.copyFilters()
 	return config
 }
 
-func (cc *Handler[T]) copyFilters() []*callback[T] {
+func (cc *handler[T]) copyFilters() []*callback[T] {
 	result := make([]*callback[T], 0, len(cc.filter))
 	for _, filter := range cc.filter {
 		result = append(result, filter)
@@ -280,7 +300,7 @@ func (cc *Handler[T]) copyFilters() []*callback[T] {
 	return result
 }
 
-func (cc *Handler[T]) addCallback(flag string, must bool, run func(info T) (bool, error)) *callback[T] {
+func (cc *handler[T]) addCallback(flag string, must bool, run func(info T) (bool, error)) *callback[T] {
 	if len(cc.filter) > 0 {
 		last := cc.filter[len(cc.filter)-1]
 		// essential callback depend on non-essential callback is against Dependency Inversion Principle
@@ -299,20 +319,20 @@ func (cc *Handler[T]) addCallback(flag string, must bool, run func(info T) (bool
 	return filter
 }
 
-func (cc *Handler[T]) combine(chain *Handler[T]) {
+func (cc *handler[T]) combine(chain *handler[T]) {
 	for _, filter := range chain.filter {
 		cc.filter = append(cc.filter, filter)
 	}
 }
 
 // don't want to raise error not deal hint, so return string
-func (cc *Handler[T]) handle(flag string, info T) string {
+func (cc *handler[T]) handle(flag string, info T) string {
 	for _, filter := range cc.filter {
 		keepOn, err, panicStack := filter.call(flag, info)
 		if filter.must {
 			if len(panicStack) != 0 || err != nil {
-				info.addr().Append(CallbackFail)
-				info.addr().Append(Failed)
+				info.addr().add(CallbackFail)
+				info.addr().add(Failed)
 				return panicStack
 			}
 		}
@@ -326,7 +346,7 @@ func (cc *Handler[T]) handle(flag string, info T) string {
 }
 
 func (c *callback[T]) NotFor(name ...string) *callback[T] {
-	s := CreateSetBySliceFunc(name, func(value string) string { return value })
+	s := createSetBySliceFunc(name, func(value string) string { return value })
 	old := c.run
 	f := func(info T) (bool, error) {
 		if s.Contains(info.GetName()) {
@@ -340,7 +360,7 @@ func (c *callback[T]) NotFor(name ...string) *callback[T] {
 }
 
 func (c *callback[T]) OnlyFor(name ...string) *callback[T] {
-	s := CreateSetBySliceFunc(name, func(value string) string { return value })
+	s := createSetBySliceFunc(name, func(value string) string { return value })
 	old := c.run
 	f := func(info T) (bool, error) {
 		if !s.Contains(info.GetName()) {
@@ -353,16 +373,16 @@ func (c *callback[T]) OnlyFor(name ...string) *callback[T] {
 	return c
 }
 
-func (c *callback[T]) When(status ...*StatusEnum) *callback[T] {
+func (c *callback[T]) When(status ...*statusEnum) *callback[T] {
 	if c.flag == Before {
 		if len(status) > 1 || status[0] != CallbackFail {
-			panic("CallbackFail is only valid StatusEnum for Before")
+			panic("CallbackFail is only valid statusEnum for Before")
 		}
 	}
 	old := c.run
 	f := func(info T) (bool, error) {
 		for _, match := range status {
-			if info.Contain(match) {
+			if info.Has(match) {
 				return old(info)
 			}
 		}
@@ -372,11 +392,11 @@ func (c *callback[T]) When(status ...*StatusEnum) *callback[T] {
 	return c
 }
 
-func (c *callback[T]) Exclude(status ...*StatusEnum) *callback[T] {
+func (c *callback[T]) Exclude(status ...*statusEnum) *callback[T] {
 	old := c.run
 	f := func(info T) (bool, error) {
 		for _, match := range status {
-			if info.Contain(match) {
+			if info.Has(match) {
 				return true, nil
 			}
 		}
@@ -404,78 +424,62 @@ func (c *callback[T]) call(flag string, info T) (keepOn bool, err error, panicSt
 	return
 }
 
-// Set method sets the value associated with the given key in own context.
-func (t *adjacencyTable) set(num int32, visible Status, key string, value any) {
+// set method sets the value associated with the given key in own context.
+func (t *linkedTable) set(passing int64, key string, value any) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	n := &node{
-		Index:   num,
 		Value:   value,
-		Visible: visible.load(),
+		Passing: passing,
 		Next:    t.nodes[key],
 	}
 	t.nodes[key] = n
 }
 
-func (t *adjacencyTable) find(num int32, key string) (any, bool) {
+func (t *linkedTable) matchByIndex(index int64, key string) (any, bool) {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 	head, exist := t.nodes[key]
 	if !exist {
 		return nil, false
 	}
-	return head.searchByIndex(num)
+	return head.matchByHighest(1 << index)
 }
 
 // Get method retrieves the value associated with the given key from the context path.
 // The method first checks the priority context, then own context, finally parents context.
 // Returns the value associated with the key (if found) and a boolean indicating its presence.
-func (t *adjacencyTable) get(visible Status, key string) (any, bool) {
+func (t *linkedTable) get(passing int64, key string) (any, bool) {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 	if head, exist := t.nodes[key]; exist {
-		if value, find := head.search(visible); find {
+		if value, find := head.search(passing); find {
 			return value, find
 		}
 	}
 	return nil, false
 }
 
-func (t *adjacencyTable) getAll(visible Status, key string) map[int32]any {
-	t.lock.RLock()
-	defer t.lock.RUnlock()
-	head, exist := t.nodes[key]
-	if !exist {
-		return nil
-	}
-	all := make(map[int32]any)
-	for head != nil {
-		if visible.contain(head.Visible) {
-			all[head.Index] = head.Value
-		}
-		head = head.Next
-	}
-	return all
-}
-
-func (n *node) searchByIndex(index int32) (any, bool) {
-	if n.Index == index {
+func (n *node) matchByHighest(highest int64) (any, bool) {
+	// Check if the highest set bit in "highest" is equal to the highest set bit in "n.Passing".
+	// If the condition is true, the value of node is set by the step corresponding to highest.
+	if bits.Len64(uint64(highest)) == bits.Len64(uint64(n.Passing)) {
 		return n.Value, true
 	}
 	if n.Next == nil {
 		return nil, false
 	}
-	return n.Next.searchByIndex(index)
+	return n.Next.matchByHighest(highest)
 }
 
-func (n *node) search(visible Status) (any, bool) {
-	if visible.contain(n.Visible) {
+func (n *node) search(passing int64) (any, bool) {
+	if passing&n.Passing == n.Passing {
 		return n.Value, true
 	}
 	if n.Next == nil {
 		return nil, false
 	}
-	return n.Next.search(visible)
+	return n.Next.search(passing)
 }
 
 func (vc *visibleContext) ContextName() string {
@@ -484,39 +488,26 @@ func (vc *visibleContext) ContextName() string {
 
 func (vc *visibleContext) Get(key string) (value any, exist bool) {
 	if index, match := vc.priority[key]; match {
-		return vc.find(index, key)
+		return vc.matchByIndex(index, key)
 	}
-	if value, exist = vc.get(vc.visible, key); exist {
+	if value, exist = vc.get(vc.passing, key); exist {
 		return
 	}
-	if vc.parent != nil {
-		return vc.parent.Get(key)
+	if vc.prev != nil {
+		return vc.prev.Get(key)
 	}
 	return nil, false
 }
 
-func (vc *visibleContext) GetAll(key string) map[string]any {
-	find := vc.getAll(vc.visible, key)
-	result := make(map[string]any, len(find))
-	for num, value := range find {
-		name, ok := vc.names[num]
-		if !ok {
-			continue
-		}
-		// if set a value more than once, only the last value will be returned
-		if _, exist := result[name]; exist {
-			continue
-		}
-		result[name] = value
+func (vc *visibleContext) getByName(name, key string) {
+	if vc.indexes == nil {
+		panic("This method is not supported.")
 	}
-	if vc.parent != nil {
-		for k, v := range vc.parent.GetAll(key) {
-			if _, exist := result[k]; !exist {
-				result[k] = v
-			}
-		}
+	index, ok := vc.indexes[name]
+	if !ok {
+		panic("Invalid node name.")
 	}
-	return result
+	vc.matchByIndex(index, key)
 }
 
 func (vc *visibleContext) GetResult(key string) (value any, exist bool) {
@@ -526,24 +517,83 @@ func (vc *visibleContext) GetResult(key string) (value any, exist bool) {
 	if !find {
 		return nil, false
 	}
-	return head.search(resultMark)
+	// head.search may find process set value
+	return head.matchByHighest(resultMark)
+}
+
+func (vc *visibleContext) GetEndValues(key string) map[string]any {
+	if vc.names == nil {
+		panic("This method is not supported.")
+	}
+	vc.lock.RLock()
+	defer vc.lock.RUnlock()
+	current, find := vc.nodes[key]
+	if !find {
+		return nil
+	}
+	m := make(map[string]any)
+	exist := int64(0)
+	for current.Next != nil {
+		if vc.passing&current.Passing != current.Passing || exist|current.Passing == exist {
+			current = current.Next
+			continue
+		}
+		length := bits.Len64(uint64(current.Passing))
+		name := vc.names[int64(length)-1]
+		m[name] = current.Value
+		exist |= current.Passing
+		current = current.Next
+	}
+	return m
+}
+
+func (vc *visibleContext) GetByStepName(stepName, key string) (value any, exist bool) {
+	if vc.indexes == nil {
+		panic("This method is not supported.")
+	}
+	vc.lock.RLock()
+	defer vc.lock.RUnlock()
+	index, ok := vc.indexes[stepName]
+	if !ok {
+		panic(fmt.Sprintf("Step[%s] not found.", stepName))
+	}
+	return vc.matchByIndex(index, key)
 }
 
 func (vc *visibleContext) setResult(key string, value any) {
 	vc.lock.Lock()
 	defer vc.lock.Unlock()
-	// set num and path to -1, so Get method will skip result
 	head := &node{
-		Index:   -1,
 		Value:   value,
-		Visible: resultMark,
+		Passing: resultMark,
 		Next:    vc.nodes[key],
 	}
 	vc.nodes[key] = head
 }
 
 func (vc *visibleContext) Set(key string, value any) {
-	vc.set(vc.index, vc.visible, key, value)
+	if vc.passing == visibleAll {
+		vc.set(publicKey, key, value)
+		return
+	}
+	vc.set(vc.passing, key, value)
+}
+
+func (sc *simpleContext) ContextName() string {
+	return sc.name
+}
+
+func (sc *simpleContext) Get(key string) (value any, exist bool) {
+	value, exist = sc.m[key]
+	return
+}
+
+func (sc *simpleContext) getByName(name, key string) {
+	panic("This method is not supported.")
+}
+
+func (sc *simpleContext) Set(key string, value any) {
+	sc.m[key] = value
 }
 
 // Done method waits for the corresponding process to complete.
