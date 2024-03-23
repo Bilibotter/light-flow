@@ -46,17 +46,17 @@ var (
 	abnormal = []*StatusEnum{Cancel, Timeout, Panic, Error, Stop, CallbackFail, Failed}
 )
 
-type Status int64
+type status int64
 
 type StatusI interface {
-	Contain(enum *StatusEnum) bool
+	Has(enum *StatusEnum) bool
 	Success() bool
 	Exceptions() []string
 }
 
 type BasicInfoI interface {
 	StatusI
-	addr() *Status
+	addr() *status
 	GetId() string
 	GetName() string
 }
@@ -81,12 +81,12 @@ type ProcCtx interface {
 }
 
 type StatusEnum struct {
-	flag Status
+	flag status
 	msg  string
 }
 
 type basicInfo struct {
-	*Status
+	*status
 	Id   string
 	Name string
 }
@@ -137,17 +137,17 @@ type node struct {
 }
 
 type Future struct {
-	*Status
+	*status
 	*basicInfo
 	finish *sync.WaitGroup
 }
 
-func emptyStatus() *Status {
+func emptyStatus() *status {
 	return createStatus(0)
 }
 
-func createStatus(i int64) *Status {
-	s := Status(i)
+func createStatus(i int64) *status {
+	s := status(i)
 	return &s
 }
 
@@ -165,26 +165,26 @@ func toStepName(value any) string {
 }
 
 // Success return true if finish running and success
-func (s *Status) Success() bool {
-	return s.Contain(Success) && s.Normal()
+func (s *status) Success() bool {
+	return s.Has(Success) && s.Normal()
 }
 
 // Normal return true if not exception occur
-func (s *Status) Normal() bool {
+func (s *status) Normal() bool {
 	return s.load()&AbnormalMask.flag == 0
 }
 
-func (s *Status) Contain(enum *StatusEnum) bool {
+func (s *status) Has(enum *StatusEnum) bool {
 	// can't use s.load()&enum.flag != 0, because enum.flag may be 0
 	return s.load()&enum.flag == enum.flag
 }
 
-func (s *Status) contain(flag Status) bool {
+func (s *status) contain(flag status) bool {
 	return s.load()&flag == flag
 }
 
 // Exceptions return contain exception's message
-func (s *Status) Exceptions() []string {
+func (s *status) Exceptions() []string {
 	if s.Normal() {
 		return nil
 	}
@@ -197,11 +197,11 @@ func (s *Status) Exceptions() []string {
 // Parameter status is the bitmask representing the status.
 // The returned slice contains the names of the matching flags in the layer they were found.
 // If abnormal flags are found, normal flags will be ignored.
-func (s *Status) ExplainStatus() []string {
+func (s *status) ExplainStatus() []string {
 	compress := make([]string, 0)
 
 	for _, enum := range abnormal {
-		if s.Contain(enum) {
+		if s.Has(enum) {
 			compress = append(compress, enum.Message())
 		}
 	}
@@ -209,12 +209,12 @@ func (s *Status) ExplainStatus() []string {
 		return compress
 	}
 
-	if s.Contain(Success) {
+	if s.Has(Success) {
 		return []string{Success.Message()}
 	}
 
 	for _, enum := range normal {
-		if s.Contain(enum) {
+		if s.Has(enum) {
 			compress = append(compress, enum.Message())
 		}
 	}
@@ -222,11 +222,11 @@ func (s *Status) ExplainStatus() []string {
 	return compress
 }
 
-// Pop function pops a status bit from the specified address.
+// remove function pops a status bit from the specified address.
 // The function checks if the specified status bit exists in the current value.
 // If it exists, it removes the status bit, and returns true indicating successful removal of the status bit.
 // Otherwise, it returns false.
-func (s *Status) Pop(enum *StatusEnum) bool {
+func (s *status) remove(enum *StatusEnum) bool {
 	for current := s.load(); enum.flag&current != 0; {
 		if s.cas(current, current^enum.flag) {
 			return true
@@ -235,8 +235,8 @@ func (s *Status) Pop(enum *StatusEnum) bool {
 	return false
 }
 
-func (s *Status) Append(enum *StatusEnum) bool {
-	for current := s.load(); !current.Contain(enum); current = s.load() {
+func (s *status) add(enum *StatusEnum) bool {
+	for current := s.load(); !current.Has(enum); current = s.load() {
 		if s.cas(current, current|enum.flag) {
 			return true
 		}
@@ -244,7 +244,7 @@ func (s *Status) Append(enum *StatusEnum) bool {
 	return false
 }
 
-func (s *Status) append(flag Status) bool {
+func (s *status) adds(flag status) bool {
 	for current := s.load(); !current.contain(flag); current = s.load() {
 		if s.cas(current, current|flag) {
 			return true
@@ -253,11 +253,11 @@ func (s *Status) append(flag Status) bool {
 	return false
 }
 
-func (s *Status) load() Status {
-	return Status(atomic.LoadInt64((*int64)(s)))
+func (s *status) load() status {
+	return status(atomic.LoadInt64((*int64)(s)))
 }
 
-func (s *Status) cas(old, new Status) bool {
+func (s *status) cas(old, new status) bool {
 	return atomic.CompareAndSwapInt64((*int64)(s), int64(old), int64(new))
 }
 
@@ -278,8 +278,8 @@ func (bi *basicInfo) GetName() string {
 	return bi.Name
 }
 
-func (bi *basicInfo) addr() *Status {
-	return bi.Status
+func (bi *basicInfo) addr() *status {
+	return bi.status
 }
 
 func (bi *basicInfo) GetId() string {
@@ -331,8 +331,8 @@ func (cc *Handler[T]) handle(flag string, info T) string {
 		keepOn, err, panicStack := filter.call(flag, info)
 		if filter.must {
 			if len(panicStack) != 0 || err != nil {
-				info.addr().Append(CallbackFail)
-				info.addr().Append(Failed)
+				info.addr().add(CallbackFail)
+				info.addr().add(Failed)
 				return panicStack
 			}
 		}
@@ -346,7 +346,7 @@ func (cc *Handler[T]) handle(flag string, info T) string {
 }
 
 func (c *callback[T]) NotFor(name ...string) *callback[T] {
-	s := CreateSetBySliceFunc(name, func(value string) string { return value })
+	s := createSetBySliceFunc(name, func(value string) string { return value })
 	old := c.run
 	f := func(info T) (bool, error) {
 		if s.Contains(info.GetName()) {
@@ -360,7 +360,7 @@ func (c *callback[T]) NotFor(name ...string) *callback[T] {
 }
 
 func (c *callback[T]) OnlyFor(name ...string) *callback[T] {
-	s := CreateSetBySliceFunc(name, func(value string) string { return value })
+	s := createSetBySliceFunc(name, func(value string) string { return value })
 	old := c.run
 	f := func(info T) (bool, error) {
 		if !s.Contains(info.GetName()) {
@@ -382,7 +382,7 @@ func (c *callback[T]) When(status ...*StatusEnum) *callback[T] {
 	old := c.run
 	f := func(info T) (bool, error) {
 		for _, match := range status {
-			if info.Contain(match) {
+			if info.Has(match) {
 				return old(info)
 			}
 		}
@@ -396,7 +396,7 @@ func (c *callback[T]) Exclude(status ...*StatusEnum) *callback[T] {
 	old := c.run
 	f := func(info T) (bool, error) {
 		for _, match := range status {
-			if info.Contain(match) {
+			if info.Has(match) {
 				return true, nil
 			}
 		}

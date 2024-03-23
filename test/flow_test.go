@@ -119,13 +119,13 @@ func TestMultipleExceptionStatus(t *testing.T) {
 			t.Errorf("process[%s] success, but expected failed", feature.GetName())
 		}
 		explain := feature.ExplainStatus()
-		if !feature.Contain(flow.Timeout) {
+		if !feature.Has(flow.Timeout) {
 			t.Errorf("process[%s] timeout, but explain not contain, explain=%v", feature.GetName(), explain)
 		}
-		if !feature.Contain(flow.Error) {
+		if !feature.Has(flow.Error) {
 			t.Errorf("process[%s] error, but explain not contain, but explain=%v", feature.GetName(), explain)
 		}
-		if !feature.Contain(flow.Panic) {
+		if !feature.Has(flow.Panic) {
 			t.Errorf("process[%s] panic, but explain not contain, but explain=%v", feature.GetName(), explain)
 		}
 	}
@@ -348,7 +348,7 @@ func TestWorkFlowPause(t *testing.T) {
 	for _, feature := range wf.Futures() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
-		if !feature.Contain(flow.Pause) {
+		if !feature.Has(flow.Pause) {
 			t.Errorf("process[%s] pause fail", feature.Name)
 		}
 	}
@@ -425,7 +425,7 @@ func TestProcessPause(t *testing.T) {
 	for _, feature := range workflow.Futures() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
 		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
-		if !feature.Contain(flow.Pause) {
+		if !feature.Has(flow.Pause) {
 			t.Errorf("process[%s] pause fail", feature.Name)
 		}
 	}

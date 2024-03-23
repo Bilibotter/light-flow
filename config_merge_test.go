@@ -1,8 +1,7 @@
-package test
+package light_flow
 
 import (
 	"fmt"
-	flow "github.com/Bilibotter/light-flow"
 	"reflect"
 	"strings"
 	"sync/atomic"
@@ -10,8 +9,27 @@ import (
 	"time"
 )
 
+var (
+	current int64
+)
+
+func resetCurrent() {
+	atomic.StoreInt64(&current, 0)
+}
+
+func GenerateStep(i int, args ...any) func(ctx StepCtx) (any, error) {
+	return func(ctx StepCtx) (any, error) {
+		if len(args) > 0 {
+			time.Sleep(100 * time.Millisecond)
+		}
+		fmt.Printf("%d.step finish\n", i)
+		atomic.AddInt64(&current, 1)
+		return i, nil
+	}
+}
+
 func CheckField(check any, fields ...string) {
-	fieldSet := flow.CreateSetBySliceFunc(fields, func(s string) string {
+	fieldSet := createSetBySliceFunc(fields, func(s string) string {
 		return s
 	})
 	// 获取结构体的反射类型
@@ -42,28 +60,28 @@ func CheckField(check any, fields ...string) {
 	}
 }
 
-func StepIncr(info *flow.Step) (bool, error) {
+func StepIncr(info *Step) (bool, error) {
 	println("step inc current")
 	atomic.AddInt64(&current, 1)
 	return true, nil
 }
 
-func ProcIncr(info *flow.Process) (bool, error) {
+func ProcIncr(info *Process) (bool, error) {
 	println("proc inc current")
 	atomic.AddInt64(&current, 1)
 	return true, nil
 }
 
-func FlowIncr(prefix string) func(info *flow.WorkFlow) (bool, error) {
-	return func(info *flow.WorkFlow) (bool, error) {
+func FlowIncr(prefix string) func(info *WorkFlow) (bool, error) {
+	return func(info *WorkFlow) (bool, error) {
 		fmt.Printf("%s flow inc current\n", prefix)
 		atomic.AddInt64(&current, 1)
 		return true, nil
 	}
 }
 
-func StepCurrentChecker(i int64, flag int) func(info *flow.Step) (bool, error) {
-	return func(info *flow.Step) (bool, error) {
+func StepCurrentChecker(i int64, flag int) func(info *Step) (bool, error) {
+	return func(info *Step) (bool, error) {
 		if flag == 0 {
 			fmt.Printf("execute before step checker\n")
 		} else {
@@ -79,8 +97,8 @@ func StepCurrentChecker(i int64, flag int) func(info *flow.Step) (bool, error) {
 	}
 }
 
-func ProcessCurrentChecker(i int64, flag int) func(info *flow.Process) (bool, error) {
-	return func(info *flow.Process) (bool, error) {
+func ProcessCurrentChecker(i int64, flag int) func(info *Process) (bool, error) {
+	return func(info *Process) (bool, error) {
 		if flag == 0 {
 			fmt.Printf("execute before process checker\n")
 		} else {
@@ -95,8 +113,8 @@ func ProcessCurrentChecker(i int64, flag int) func(info *flow.Process) (bool, er
 	}
 }
 
-func FlowCurrentChecker(i int64, flag int) func(info *flow.WorkFlow) (bool, error) {
-	return func(info *flow.WorkFlow) (bool, error) {
+func FlowCurrentChecker(i int64, flag int) func(info *WorkFlow) (bool, error) {
+	return func(info *WorkFlow) (bool, error) {
 		if flag == 0 {
 			fmt.Printf("execute before flow checker\n")
 		} else {
@@ -114,19 +132,19 @@ func FlowCurrentChecker(i int64, flag int) func(info *flow.WorkFlow) (bool, erro
 func TestExecuteDefaultOrder(t *testing.T) {
 	defer resetCurrent()
 	defer func() {
-		flow.CreateDefaultConfig()
+		CreateDefaultConfig()
 	}()
-	config := flow.CreateDefaultConfig()
+	config := CreateDefaultConfig()
 	config.BeforeFlow(true, FlowCurrentChecker(0, 0))
 	config.BeforeProcess(true, ProcessCurrentChecker(1, 0))
 	config.BeforeStep(true, StepCurrentChecker(2, 0))
 	config.AfterStep(true, StepCurrentChecker(4, 1))
 	config.AfterProcess(true, ProcessCurrentChecker(5, 1))
 	config.AfterFlow(true, FlowCurrentChecker(6, 1))
-	workflow := flow.RegisterFlow("TestExecuteDefaultOrder")
+	workflow := RegisterFlow("TestExecuteDefaultOrder")
 	process := workflow.Process("TestExecuteDefaultOrder")
 	process.AliasStep(GenerateStep(1), "1")
-	features := flow.DoneFlow("TestExecuteDefaultOrder", nil)
+	features := DoneFlow("TestExecuteDefaultOrder", nil)
 	for _, feature := range features.Futures() {
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", feature.GetName())
@@ -142,10 +160,10 @@ func TestExecuteDefaultOrder(t *testing.T) {
 func TestExecuteOwnOrder(t *testing.T) {
 	defer resetCurrent()
 	defer func() {
-		flow.CreateDefaultConfig()
+		CreateDefaultConfig()
 	}()
-	flow.CreateDefaultConfig()
-	workflow := flow.RegisterFlow("TestExecuteOwnOrder")
+	CreateDefaultConfig()
+	workflow := RegisterFlow("TestExecuteOwnOrder")
 	workflow.BeforeFlow(true, FlowCurrentChecker(0, 0))
 	workflow.BeforeProcess(true, ProcessCurrentChecker(1, 0))
 	workflow.BeforeStep(true, StepCurrentChecker(2, 0))
@@ -154,7 +172,7 @@ func TestExecuteOwnOrder(t *testing.T) {
 	workflow.AfterFlow(true, FlowCurrentChecker(6, 1))
 	process := workflow.Process("TestExecuteOwnOrder")
 	process.AliasStep(GenerateStep(1), "1")
-	features := flow.DoneFlow("TestExecuteOwnOrder", nil)
+	features := DoneFlow("TestExecuteOwnOrder", nil)
 	for _, feature := range features.Futures() {
 		if !feature.Success() {
 			t.Errorf("process[%s] fail, explain=%#v", feature.GetName(), feature.ExplainStatus())
@@ -170,16 +188,16 @@ func TestExecuteOwnOrder(t *testing.T) {
 func TestExecuteMixOrder(t *testing.T) {
 	defer resetCurrent()
 	defer func() {
-		flow.CreateDefaultConfig()
+		CreateDefaultConfig()
 	}()
-	config := flow.CreateDefaultConfig()
+	config := CreateDefaultConfig()
 	config.BeforeFlow(true, FlowCurrentChecker(0, 0))
 	config.BeforeProcess(true, ProcessCurrentChecker(2, 0))
 	config.BeforeStep(true, StepCurrentChecker(4, 0))
 	config.AfterStep(true, StepCurrentChecker(7, 1))
 	config.AfterProcess(true, ProcessCurrentChecker(9, 1))
 	config.AfterFlow(true, FlowCurrentChecker(11, 1))
-	workflow := flow.RegisterFlow("TestExecuteMixOrder")
+	workflow := RegisterFlow("TestExecuteMixOrder")
 	workflow.BeforeFlow(true, FlowCurrentChecker(1, 0))
 	workflow.BeforeProcess(true, ProcessCurrentChecker(3, 0))
 	workflow.BeforeStep(true, StepCurrentChecker(5, 0))
@@ -188,7 +206,7 @@ func TestExecuteMixOrder(t *testing.T) {
 	workflow.AfterFlow(true, FlowCurrentChecker(12, 1))
 	process := workflow.Process("TestExecuteMixOrder")
 	process.AliasStep(GenerateStep(1), "1")
-	features := flow.DoneFlow("TestExecuteMixOrder", nil)
+	features := DoneFlow("TestExecuteMixOrder", nil)
 	for _, feature := range features.Futures() {
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", feature.GetName())
@@ -204,16 +222,16 @@ func TestExecuteMixOrder(t *testing.T) {
 func TestExecuteDeepMixOrder(t *testing.T) {
 	defer resetCurrent()
 	defer func() {
-		flow.CreateDefaultConfig()
+		CreateDefaultConfig()
 	}()
-	config := flow.CreateDefaultConfig()
+	config := CreateDefaultConfig()
 	config.BeforeFlow(true, FlowCurrentChecker(0, 0))
 	config.BeforeProcess(true, ProcessCurrentChecker(2, 0))
 	config.BeforeStep(true, StepCurrentChecker(5, 0))
 	config.AfterStep(true, StepCurrentChecker(9, 1))
 	config.AfterProcess(true, ProcessCurrentChecker(12, 1))
 	config.AfterFlow(true, FlowCurrentChecker(15, 1))
-	workflow := flow.RegisterFlow("TestExecuteDeepMixOrder")
+	workflow := RegisterFlow("TestExecuteDeepMixOrder")
 	workflow.BeforeFlow(true, FlowCurrentChecker(1, 0))
 	workflow.BeforeProcess(true, ProcessCurrentChecker(3, 0))
 	workflow.BeforeStep(true, StepCurrentChecker(6, 0))
@@ -226,7 +244,7 @@ func TestExecuteDeepMixOrder(t *testing.T) {
 	process.AfterProcess(true, ProcessCurrentChecker(14, 1))
 	process.BeforeStep(true, StepCurrentChecker(7, 0))
 	process.AfterStep(true, StepCurrentChecker(11, 1))
-	features := flow.DoneFlow("TestExecuteDeepMixOrder", nil)
+	features := DoneFlow("TestExecuteDeepMixOrder", nil)
 	for _, feature := range features.Futures() {
 		if !feature.Success() {
 			t.Errorf("process[%s] fail", feature.GetName())
@@ -241,8 +259,8 @@ func TestExecuteDeepMixOrder(t *testing.T) {
 
 func TestBreakWhileFlowError(t *testing.T) {
 	defer resetCurrent()
-	defer flow.CreateDefaultConfig()
-	config := flow.CreateDefaultConfig()
+	defer CreateDefaultConfig()
+	config := CreateDefaultConfig()
 	config.BeforeFlow(true, FlowIncr("default config before panic"))
 	config.BeforeFlow(true, FlowCurrentChecker(111, 0))
 	config.BeforeFlow(true, FlowIncr("default config after panic"))
@@ -251,7 +269,7 @@ func TestBreakWhileFlowError(t *testing.T) {
 	config.AfterStep(true, StepIncr)
 	config.AfterProcess(true, ProcIncr)
 	config.AfterFlow(true, FlowIncr("default config after flow"))
-	workflow := flow.RegisterFlow("TestBreakWhileFlowError")
+	workflow := RegisterFlow("TestBreakWhileFlowError")
 	workflow.BeforeFlow(true, FlowIncr("own config before flow"))
 	workflow.BeforeProcess(true, ProcIncr)
 	workflow.BeforeStep(true, StepIncr)
@@ -264,9 +282,9 @@ func TestBreakWhileFlowError(t *testing.T) {
 	process.AfterProcess(true, ProcIncr)
 	process.BeforeStep(true, StepIncr)
 	process.AfterStep(true, StepIncr)
-	features := flow.DoneFlow("TestBreakWhileFlowError", nil)
+	features := DoneFlow("TestBreakWhileFlowError", nil)
 	for _, feature := range features.Futures() {
-		if !feature.Contain(flow.CallbackFail) {
+		if !feature.Has(CallbackFail) {
 			t.Errorf("process[%s] not contain callback failed, explain=%#v", feature.GetName(), feature.ExplainStatus())
 		}
 	}
@@ -276,17 +294,17 @@ func TestBreakWhileFlowError(t *testing.T) {
 }
 
 func TestFieldSkip(t *testing.T) {
-	config := flow.CreateDefaultConfig()
+	config := CreateDefaultConfig()
 	config.ProcessTimeout(1 * time.Second)
 	config.StepsTimeout(1 * time.Second)
 	config.StepsRetry(3)
-	move := flow.FlowConfig{}
+	move := FlowConfig{}
 	move.ProcessTimeout(2 * time.Second)
 	move.NotUseDefault()
 	move.StepsTimeout(2 * time.Second)
 	move.StepsRetry(4)
 	tmp := move
-	flow.CopyPropertiesSkipNotEmpty(config, &move)
+	CopyPropertiesSkipNotEmpty(config, &move)
 	if tmp.ProcNotUseDefault != move.ProcNotUseDefault {
 		t.Errorf("not use default not equal")
 	}
@@ -302,15 +320,15 @@ func TestFieldSkip(t *testing.T) {
 }
 
 func TestFieldCorrect(t *testing.T) {
-	defer flow.CreateDefaultConfig()
-	config := flow.CreateDefaultConfig()
+	defer CreateDefaultConfig()
+	config := CreateDefaultConfig()
 	config.ProcessTimeout(1 * time.Second)
 	config.NotUseDefault()
 	config.StepsTimeout(1 * time.Second)
 	config.StepsRetry(3)
-	move := flow.FlowConfig{}
-	flow.CopyPropertiesSkipNotEmpty(config, &move)
-	flow.CopyPropertiesSkipNotEmpty(&config.ProcessConfig, &move.ProcessConfig)
+	move := FlowConfig{}
+	CopyPropertiesSkipNotEmpty(config, &move)
+	CopyPropertiesSkipNotEmpty(&config.ProcessConfig, &move.ProcessConfig)
 	CheckField(move.ProcessConfig, "ProcTimeout", "ProcNotUseDefault", "StepConfig")
 	CheckField(move.ProcessConfig.StepConfig, "StepTimeout", "StepRetry")
 	return

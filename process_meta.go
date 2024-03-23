@@ -154,7 +154,7 @@ func (pm *ProcessMeta) Merge(name string) {
 			depends = append(depends, depend.stepName)
 		}
 		step := pm.AliasStep(merge.run, merge.stepName, depends...)
-		step.position.Append(Merged)
+		step.position.add(Merged)
 	}
 
 	// ensure step index bigger than all depends index
@@ -177,7 +177,7 @@ func (pm *ProcessMeta) mergeStep(merge *StepMeta) {
 	}
 
 	// create a set contains all depended on target flowName
-	current := CreateSetBySliceFunc[*StepMeta](target.depends,
+	current := createSetBySliceFunc[*StepMeta](target.depends,
 		func(meta *StepMeta) string { return meta.stepName })
 
 	stepNames := make([]string, 0, len(merge.depends))
@@ -225,7 +225,7 @@ func (pm *ProcessMeta) Step(run func(ctx StepCtx) (any, error), depends ...any) 
 func (pm *ProcessMeta) Tail(run func(ctx StepCtx) (any, error), alias ...string) *StepMeta {
 	depends := make([]any, 0)
 	for name, step := range pm.steps {
-		if step.position.Contain(End) {
+		if step.position.Has(End) {
 			depends = append(depends, name)
 		}
 	}
@@ -249,7 +249,7 @@ func (pm *ProcessMeta) AliasStep(run func(ctx StepCtx) (any, error), alias strin
 	}
 
 	if old, exist := pm.steps[alias]; exist {
-		if !old.position.Contain(Merged) {
+		if !old.position.Has(Merged) {
 			panic(fmt.Sprintf("step named [%s] already exist, can used %s to avoid stepName duplicate",
 				alias, GetFuncName(pm.AliasStep)))
 		}

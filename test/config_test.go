@@ -148,7 +148,7 @@ func TestProcessorOrder1(t *testing.T) {
 		if !feature.Success() {
 			t.Errorf("process[%s] failed,explian=%v", feature.Name, explain)
 		}
-		if feature.Contain(flow.Panic) {
+		if feature.Has(flow.Panic) {
 			t.Errorf("process[%s] not panic, but explain contain, but explain=%v", feature.Name, explain)
 		}
 	}
@@ -169,7 +169,7 @@ func TestNonEssentialProcProcessorPanic(t *testing.T) {
 		if !feature.Success() {
 			t.Errorf("process[%s] failed,explian=%v", feature.Name, explain)
 		}
-		if feature.Contain(flow.Panic) {
+		if feature.Has(flow.Panic) {
 			t.Errorf("process[%s] not panic, but explain contain, but explain=%v", feature.Name, explain)
 		}
 	}
@@ -187,7 +187,7 @@ func TestNonEssentialProcProcessorPanic(t *testing.T) {
 		if !feature.Success() {
 			t.Errorf("process[%s] failed,explian=%v", feature.Name, explain)
 		}
-		if feature.Contain(flow.Panic) {
+		if feature.Has(flow.Panic) {
 			t.Errorf("process[%s] not panic, but explain not contain, but explain=%v", feature.Name, explain)
 		}
 	}
@@ -208,7 +208,7 @@ func TestEssentialProcProcessorPanic(t *testing.T) {
 			t.Errorf("process[%s] success, but expected failed", feature.Name)
 		}
 		explain := feature.ExplainStatus()
-		if !feature.Contain(flow.CallbackFail) {
+		if !feature.Has(flow.CallbackFail) {
 			t.Errorf("process[%s] callback fail, but explain not contain, but explain=%v", feature.Name, explain)
 		}
 	}
@@ -226,7 +226,7 @@ func TestEssentialProcProcessorPanic(t *testing.T) {
 			t.Errorf("process[%s] success, but expected failed", feature.Name)
 		}
 		explain := feature.ExplainStatus()
-		if !feature.Contain(flow.CallbackFail) {
+		if !feature.Has(flow.CallbackFail) {
 			t.Errorf("process[%s] callback fail, but explain not contain, but explain=%v", feature.Name, explain)
 		}
 	}
@@ -247,7 +247,7 @@ func TestNonEssentialStepProcessorPanic(t *testing.T) {
 		if !feature.Success() {
 			t.Errorf("process[%s] failed,explian=%v", feature.Name, explain)
 		}
-		if feature.Contain(flow.Panic) {
+		if feature.Has(flow.Panic) {
 			t.Errorf("process[%s] not panic, but explain contain, but explain=%v", feature.Name, explain)
 		}
 	}
@@ -265,7 +265,7 @@ func TestNonEssentialStepProcessorPanic(t *testing.T) {
 		if !feature.Success() {
 			t.Errorf("process[%s] failed,explian=%v", feature.Name, explain)
 		}
-		if feature.Contain(flow.Panic) {
+		if feature.Has(flow.Panic) {
 			t.Errorf("process[%s] not panic, but explain not contain, but explain=%v", feature.Name, explain)
 		}
 	}
@@ -286,7 +286,7 @@ func TestEssentialStepProcessorPanic(t *testing.T) {
 			t.Errorf("process[%s] success, but expected failed", feature.Name)
 		}
 		explain := feature.ExplainStatus()
-		if !feature.Contain(flow.CallbackFail) {
+		if !feature.Has(flow.CallbackFail) {
 			t.Errorf("process[%s] callbackfail, but explain not contain, but explain=%v", feature.Name, explain)
 		}
 	}
@@ -304,7 +304,7 @@ func TestEssentialStepProcessorPanic(t *testing.T) {
 			t.Errorf("process[%s] success, but expected failed", feature.Name)
 		}
 		explain := feature.ExplainStatus()
-		if !feature.Contain(flow.CallbackFail) {
+		if !feature.Has(flow.CallbackFail) {
 			t.Errorf("process[%s] callback fail, but explain not contain, but explain=%v", feature.Name, explain)
 		}
 	}
@@ -333,13 +333,13 @@ func TestProcessorWhenExceptionOccur(t *testing.T) {
 			t.Errorf("process[%s] success, but expected failed", feature.Name)
 		}
 		explain := feature.ExplainStatus()
-		if !feature.Contain(flow.Timeout) {
+		if !feature.Has(flow.Timeout) {
 			t.Errorf("process[%s] timeout, but explain not contain, explain=%v", feature.Name, explain)
 		}
-		if !feature.Contain(flow.Error) {
+		if !feature.Has(flow.Error) {
 			t.Errorf("process[%s] error, but explain not contain, but explain=%v", feature.Name, explain)
 		}
-		if !feature.Contain(flow.Panic) {
+		if !feature.Has(flow.Panic) {
 			t.Errorf("process[%s] panic, but explain not contain, but explain=%v", feature.Name, explain)
 		}
 	}

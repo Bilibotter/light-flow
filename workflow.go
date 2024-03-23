@@ -202,7 +202,7 @@ func (fm *FlowMeta) buildRunFlow(input map[string]any) *runFlow {
 	rf := runFlow{
 		simpleContext: &ctx,
 		basicInfo: &basicInfo{
-			Status: emptyStatus(),
+			status: emptyStatus(),
 			Name:   fm.flowName,
 			Id:     generateId(),
 		},
@@ -265,7 +265,7 @@ func (rf *runFlow) buildRunProcess(meta *ProcessMeta) *runProcess {
 			accessInfo:  &meta.accessInfo,
 			linkedTable: &table,
 		},
-		Status:      emptyStatus(),
+		status:      emptyStatus(),
 		ProcessMeta: meta,
 		id:          generateId(),
 		flowId:      rf.Id,
@@ -289,10 +289,10 @@ func (rf *runFlow) finalize() {
 		future.Done()
 	}
 	for _, process := range rf.processes {
-		rf.append(process.Status.load())
+		rf.adds(process.status.load())
 	}
 	if rf.Normal() {
-		rf.Append(Success)
+		rf.add(Success)
 	}
 	rf.advertise(After)
 	rf.finish.Done()
@@ -325,7 +325,7 @@ func (rf *runFlow) Flow() []*Future {
 	rf.initialize()
 	rf.infoCache = &WorkFlow{
 		basicInfo: &basicInfo{
-			Status: rf.Status,
+			status: rf.status,
 			Id:     rf.Id,
 			Name:   rf.flowName,
 		},
@@ -333,8 +333,8 @@ func (rf *runFlow) Flow() []*Future {
 	rf.advertise(Before)
 	futures := make([]*Future, 0, len(rf.processes))
 	for _, process := range rf.processes {
-		if rf.Contain(CallbackFail) {
-			process.Append(CallbackFail)
+		if rf.Has(CallbackFail) {
+			process.add(CallbackFail)
 		}
 		futures = append(futures, process.schedule())
 	}

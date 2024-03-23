@@ -11,7 +11,7 @@ type StepMeta struct {
 	belong   *ProcessMeta
 	stepName string
 	layer    int
-	position *Status     // used to record the position of the step
+	position *status     // used to record the position of the step
 	depends  []*StepMeta // prev
 	waiters  []*StepMeta // next
 	priority map[string]int64
@@ -20,7 +20,7 @@ type StepMeta struct {
 
 type runStep struct {
 	*StepMeta
-	*Status
+	*status
 	*visibleContext
 	id        string
 	flowId    string
@@ -91,14 +91,14 @@ func (meta *StepMeta) wireDepends() {
 	}
 
 	for _, depend := range meta.depends {
-		wired := CreateSetBySliceFunc(depend.waiters, func(waiter *StepMeta) string { return waiter.stepName })
+		wired := createSetBySliceFunc(depend.waiters, func(waiter *StepMeta) string { return waiter.stepName })
 		if wired.Contains(meta.stepName) {
 			continue
 		}
 		depend.waiters = append(depend.waiters, meta)
-		if depend.position.Contain(End) {
-			depend.position.Append(HasNext)
-			depend.position.Pop(End)
+		if depend.position.Has(End) {
+			depend.position.add(HasNext)
+			depend.position.remove(End)
 		}
 		if depend.layer+1 > meta.layer {
 			meta.layer = depend.layer + 1
@@ -106,10 +106,10 @@ func (meta *StepMeta) wireDepends() {
 	}
 
 	if len(meta.depends) == 0 {
-		meta.position.Append(Head)
+		meta.position.add(Head)
 	}
 
-	meta.position.Append(End)
+	meta.position.add(End)
 }
 
 // checkPriority checks if the priority key corresponds to an existing step.
@@ -164,7 +164,7 @@ func (step *runStep) syncInfo() {
 	if step.infoCache == nil {
 		return
 	}
-	step.infoCache.Status = step.Status
+	step.infoCache.status = step.status
 	step.infoCache.Err = step.Err
 	step.infoCache.Start = step.Start
 	step.infoCache.End = step.End
