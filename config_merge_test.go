@@ -143,7 +143,7 @@ func TestExecuteDefaultOrder(t *testing.T) {
 	config.AfterFlow(true, FlowCurrentChecker(6, 1))
 	workflow := RegisterFlow("TestExecuteDefaultOrder")
 	process := workflow.Process("TestExecuteDefaultOrder")
-	process.AliasStep(GenerateStep(1), "1")
+	process.NameStep(GenerateStep(1), "1")
 	features := DoneFlow("TestExecuteDefaultOrder", nil)
 	for _, feature := range features.Futures() {
 		if !feature.Success() {
@@ -171,7 +171,7 @@ func TestExecuteOwnOrder(t *testing.T) {
 	workflow.AfterProcess(true, ProcessCurrentChecker(5, 1))
 	workflow.AfterFlow(true, FlowCurrentChecker(6, 1))
 	process := workflow.Process("TestExecuteOwnOrder")
-	process.AliasStep(GenerateStep(1), "1")
+	process.NameStep(GenerateStep(1), "1")
 	features := DoneFlow("TestExecuteOwnOrder", nil)
 	for _, feature := range features.Futures() {
 		if !feature.Success() {
@@ -205,7 +205,7 @@ func TestExecuteMixOrder(t *testing.T) {
 	workflow.AfterProcess(true, ProcessCurrentChecker(10, 1))
 	workflow.AfterFlow(true, FlowCurrentChecker(12, 1))
 	process := workflow.Process("TestExecuteMixOrder")
-	process.AliasStep(GenerateStep(1), "1")
+	process.NameStep(GenerateStep(1), "1")
 	features := DoneFlow("TestExecuteMixOrder", nil)
 	for _, feature := range features.Futures() {
 		if !feature.Success() {
@@ -239,7 +239,7 @@ func TestExecuteDeepMixOrder(t *testing.T) {
 	workflow.AfterProcess(true, ProcessCurrentChecker(13, 1))
 	workflow.AfterFlow(true, FlowCurrentChecker(16, 1))
 	process := workflow.Process("TestExecuteDeepMixOrder")
-	process.AliasStep(GenerateStep(1), "1")
+	process.NameStep(GenerateStep(1), "1")
 	process.BeforeProcess(true, ProcessCurrentChecker(4, 0))
 	process.AfterProcess(true, ProcessCurrentChecker(14, 1))
 	process.BeforeStep(true, StepCurrentChecker(7, 0))
@@ -277,7 +277,7 @@ func TestBreakWhileFlowError(t *testing.T) {
 	workflow.AfterProcess(true, ProcIncr)
 	workflow.AfterFlow(true, FlowIncr("own config after flow"))
 	process := workflow.Process("TestBreakWhileFlowError")
-	process.AliasStep(GenerateStep(1), "1")
+	process.NameStep(GenerateStep(1), "1")
 	process.BeforeProcess(true, ProcIncr)
 	process.AfterProcess(true, ProcIncr)
 	process.BeforeStep(true, StepIncr)

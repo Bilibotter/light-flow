@@ -54,7 +54,7 @@ func (si *Step) Error() error {
 
 func (meta *StepMeta) Next(run func(ctx StepCtx) (any, error), alias ...string) *StepMeta {
 	if len(alias) == 1 {
-		return meta.belong.AliasStep(run, alias[0], meta.stepName)
+		return meta.belong.NameStep(run, alias[0], meta.stepName)
 
 	}
 	return meta.belong.Step(run, meta.stepName)
@@ -66,7 +66,7 @@ func (meta *StepMeta) Same(run func(ctx StepCtx) (any, error), alias ...string) 
 		depends = append(depends, meta.depends[i].stepName)
 	}
 	if len(alias) == 1 {
-		return meta.belong.AliasStep(run, alias[0], depends...)
+		return meta.belong.NameStep(run, alias[0], depends...)
 	}
 	return meta.belong.Step(run, depends)
 }

@@ -153,7 +153,7 @@ func (pm *ProcessMeta) Merge(name string) {
 		for _, depend := range merge.depends {
 			depends = append(depends, depend.stepName)
 		}
-		step := pm.AliasStep(merge.run, merge.stepName, depends...)
+		step := pm.NameStep(merge.run, merge.stepName, depends...)
 		step.position.add(merged)
 	}
 
@@ -219,7 +219,7 @@ func (pm *ProcessMeta) updateWaitersLayer(step *StepMeta) {
 }
 
 func (pm *ProcessMeta) Step(run func(ctx StepCtx) (any, error), depends ...any) *StepMeta {
-	return pm.AliasStep(run, getFuncName(run), depends...)
+	return pm.NameStep(run, getFuncName(run), depends...)
 }
 
 func (pm *ProcessMeta) Tail(run func(ctx StepCtx) (any, error), alias ...string) *StepMeta {
@@ -230,28 +230,28 @@ func (pm *ProcessMeta) Tail(run func(ctx StepCtx) (any, error), alias ...string)
 		}
 	}
 	if len(alias) == 1 {
-		return pm.AliasStep(run, alias[0], depends...)
+		return pm.NameStep(run, alias[0], depends...)
 	}
 	return pm.Step(run, depends...)
 }
 
-func (pm *ProcessMeta) AliasStep(run func(ctx StepCtx) (any, error), alias string, depends ...any) *StepMeta {
+func (pm *ProcessMeta) NameStep(run func(ctx StepCtx) (any, error), name string, depends ...any) *StepMeta {
 	meta := &StepMeta{
-		stepName: alias,
+		stepName: name,
 	}
 	for _, wrap := range depends {
-		name := toStepName(wrap)
-		depend, exist := pm.steps[name]
+		dependName := toStepName(wrap)
+		depend, exist := pm.steps[dependName]
 		if !exist {
-			panic(fmt.Sprintf("step[%s]'s depend[%s] not found.]", alias, name))
+			panic(fmt.Sprintf("step[%s]'s depend[%s] not found.]", name, dependName))
 		}
 		meta.depends = append(meta.depends, depend)
 	}
 
-	if old, exist := pm.steps[alias]; exist {
+	if old, exist := pm.steps[name]; exist {
 		if !old.position.Has(merged) {
 			panic(fmt.Sprintf("step named [%s] already exist, can used %s to avoid stepName duplicate",
-				alias, getFuncName(pm.AliasStep)))
+				name, getFuncName(pm.NameStep)))
 		}
 		pm.mergeStep(meta)
 		return old
@@ -264,7 +264,7 @@ func (pm *ProcessMeta) AliasStep(run func(ctx StepCtx) (any, error), alias strin
 	pm.addPassingInfo(meta)
 
 	pm.tailStep = meta.stepName
-	pm.steps[alias] = meta
+	pm.steps[name] = meta
 
 	return meta
 }

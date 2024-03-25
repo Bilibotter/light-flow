@@ -107,7 +107,7 @@ func TestDependConnectAndIsolated(t *testing.T) {
 	workflow := flow.RegisterFlow("TestDependConnectAndIsolated")
 	process := workflow.Process("TestDependConnectAndIsolated")
 	process.AfterStep(true, ErrorResultPrinter)
-	process.AliasStep(CtxChecker(false, []string{"1", "2", "3"}, []string{}, "a", "b", "c"), "1").
+	process.NameStep(CtxChecker(false, []string{"1", "2", "3"}, []string{}, "a", "b", "c"), "1").
 		Next(CtxChecker(false, []string{"a", "b", "c"}, []string{}, "d", "e", "f"), "2").
 		Same(CtxChecker(true, []string{"a", "b", "c"}, []string{"d", "e", "f"}, "g", "h", "i"), "3")
 	result := flow.DoneFlow("TestDependConnectAndIsolated", map[string]any{"1": "1", "2": "2", "3": "3"})
@@ -127,7 +127,7 @@ func TestFlowCallbackValid(t *testing.T) {
 	workflow.BeforeFlow(true, FlowCallback(false, []string{"4", "5", "6"}, []string{}, "1", "2", "3"))
 	workflow.AfterFlow(true, FlowCallback(false, []string{"1", "2", "3"}, []string{}))
 	process := workflow.Process("TestFlowCallbackValid")
-	process.AliasStep(CtxChecker(false, []string{}, []string{}, "a", "b", "c"), "1").
+	process.NameStep(CtxChecker(false, []string{}, []string{}, "a", "b", "c"), "1").
 		Next(CtxChecker(false, []string{"a", "b", "c"}, []string{}, "d", "e", "f"), "2").
 		Same(CtxChecker(true, []string{"a", "b", "c"}, []string{"d", "e", "f"}, "g", "h", "i"), "3")
 	result := flow.DoneFlow("TestFlowCallbackValid", map[string]any{"4": "1", "5": "2", "6": "3"})
@@ -147,7 +147,7 @@ func TestProcCallbackValid(t *testing.T) {
 	process := workflow.Process("TestProcCallbackValid")
 	process.BeforeProcess(true, ProcCallback(false, []string{"4", "5", "6"}, []string{}, "1", "2", "3"))
 	process.AfterProcess(true, ProcCallback(false, []string{"1", "2", "3"}, []string{}))
-	process.AliasStep(CtxChecker(false, []string{"1", "2", "3"}, []string{}, "a", "b", "c"), "1").
+	process.NameStep(CtxChecker(false, []string{"1", "2", "3"}, []string{}, "a", "b", "c"), "1").
 		Next(CtxChecker(false, []string{"a", "b", "c"}, []string{}, "d", "e", "f"), "2").
 		Same(CtxChecker(true, []string{"a", "b", "c"}, []string{"d", "e", "f"}, "g", "h", "i"), "3")
 	result := flow.DoneFlow("TestProcCallbackValid", map[string]any{"4": "1", "5": "2", "6": "3"})
@@ -168,7 +168,7 @@ func TestStepCallbackValid(t *testing.T) {
 	process.AfterStep(true, ErrorResultPrinter)
 	process.BeforeStep(true, StepCallback(false, []string{"4", "5", "6"}, []string{}, "1", "2", "3"))
 	process.AfterStep(true, StepCallback(false, []string{"1", "2", "3"}, []string{}))
-	process.AliasStep(CtxChecker(false, []string{"1", "2", "3"}, []string{}, "a", "b", "c"), "1").
+	process.NameStep(CtxChecker(false, []string{"1", "2", "3"}, []string{}, "a", "b", "c"), "1").
 		Next(CtxChecker(false, []string{"a", "b", "c"}, []string{}, "d", "e", "f"), "2").
 		Same(CtxChecker(true, []string{"a", "b", "c"}, []string{"d", "e", "f"}, "g", "h", "i"), "3")
 	result := flow.DoneFlow("TestStepCallbackValid", map[string]any{"4": "1", "5": "2", "6": "3"})
@@ -191,7 +191,7 @@ func TestAllCallbackConnect(t *testing.T) {
 	process.AfterProcess(true, ProcCallback(false, []string{"1", "3", "4", "6"}, []string{}))
 	process.BeforeStep(true, StepCallback(false, []string{"3"}, []string{}, "4"))
 	process.AfterStep(true, StepCallback(false, []string{"1", "3", "4", "6"}, []string{}))
-	process.AliasStep(CtxChecker(false, []string{"1", "3", "4"}, []string{}, "6"), "1")
+	process.NameStep(CtxChecker(false, []string{"1", "3", "4"}, []string{}, "6"), "1")
 	result := flow.DoneFlow("TestAllCallbackConnect", map[string]any{"1": "1"})
 	if !result.Success() {
 		for _, exception := range result.Exceptions() {
