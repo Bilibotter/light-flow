@@ -552,7 +552,7 @@ func TestSingleErrorStepWithProcessRetry(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestSingleErrorStepWithProcessRetry")
 	process := workflow.Process("TestSingleErrorStepWithProcessRetry")
-	process.StepsRetry(3)
+	process.StepsRetry(2)
 	process.NameStep(GenerateErrorStep(1), "1")
 	features := flow.DoneFlow("TestSingleErrorStepWithProcessRetry", nil)
 	for _, feature := range features.Futures() {
@@ -571,7 +571,7 @@ func TestSingleErrorStepWithStepRetry(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestSingleErrorStepWithStepRetry")
 	process := workflow.Process("TestSingleErrorStepWithStepRetry")
-	process.NameStep(GenerateErrorStep(1), "1").Retry(3)
+	process.NameStep(GenerateErrorStep(1), "1").Retry(2)
 	features := flow.DoneFlow("TestSingleErrorStepWithStepRetry", nil)
 	for _, feature := range features.Futures() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")
@@ -589,8 +589,8 @@ func TestSingleErrorStepWithProcessAndStepRetry(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestSingleErrorStepWithProcessAndStepRetry")
 	process := workflow.Process("TestSingleErrorStepWithProcessAndStepRetry")
-	process.StepsRetry(3)
-	process.NameStep(GenerateErrorStep(1), "1").Retry(2)
+	process.StepsRetry(2)
+	process.NameStep(GenerateErrorStep(1), "1").Retry(1)
 	features := flow.DoneFlow("TestSingleErrorStepWithProcessAndStepRetry", nil)
 	for _, feature := range features.Futures() {
 		explain := strings.Join(feature.ExplainStatus(), ", ")

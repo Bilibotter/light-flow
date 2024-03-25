@@ -193,7 +193,7 @@ func (rp *runProcess) runStep(step *runStep) {
 		return
 	}
 
-	retry := 1
+	retry := 0
 	if rp.StepRetry > 0 {
 		retry = rp.StepRetry
 	}
@@ -212,7 +212,7 @@ func (rp *runProcess) runStep(step *runStep) {
 		rp.stepCallback(step, After)
 	}()
 
-	for i := 0; i < retry; i++ {
+	for i := 0; i <= retry; i++ {
 		result, err := step.run(step)
 		step.End = time.Now().UTC()
 		step.Err = err
