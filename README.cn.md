@@ -1,25 +1,21 @@
 # LightFlow
 
-**[English](README.md),  [中文](README.cn.md)**
+LightFlow是一个免编排的任务编排框架。
 
-LightFlow is a declarative task orchestration framework.
+用户只需将注意力放在任务的执行时机上，而任务的编排由框架自动完成。
 
-Users only need to focus on the timing of task execution, while the framework automatically handles the orchestration of tasks.
+- **免编排**：专注于执行时机，使用函数式编程。
+- **[可合并流程](./merge.cn.md)**：无缝地将已注册的流程合并到正在构建的流程中。
+- **[多级回调](./callback.cn.md)**：各层级支持回调，灵活加入回调逻辑。
+- **[多级配置](./config.cn.md)**：每个层级都可以设置配置，较小层级配置具有优先级。
+- **[独特上下文机制](./context.cn.md)**：连接具有直接或间接依赖关系的步骤上下文，隔离没有依赖关系的步骤上下文。
+- **尽最大可能执行**：即使某步骤失败，不依赖该步骤的其他步骤仍会继续执行。
 
-- **Declarative** (./context.md): Focus on execution timing using functional programming.
-- **[Mergeable Processes](./merge.md)**: Seamlessly integrate registered processes into the current workflow being constructed.
-- **[Multilevel Callbacks](./callback.md)**: Support callbacks at various levels, allowing flexible inclusion of callback logic.
-- **[Multilevel Configuration](./config.md)**: Each level can be configured with priorities for smaller-level configurations.
-- **[Unique Context Mechanism](./context.md)**: Connect step contexts with direct or indirect dependencies and isolate step contexts without dependencies.
-- **Maximum Execution Coverage**: Even if a step fails, other steps that do not depend on it will continue to execute.
+### 安装
 
-### Installation
+`go get github.com/Bilibotter/light-flow`
 
-```
-go get github.com/Bilibotter/light-flow
-```
-
-### Usage
+### 使用
 
 ```go
 import (
