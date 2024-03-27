@@ -2,7 +2,7 @@
 
 **[English](README.md),  [中文](README.cn.md)**
 
-LightFlow is a declarative task orchestration framework.
+LightFlow is a declarative task arrage framework.
 
 Users only need to focus on the timing of task execution, while the framework automatically handles the orchestration of tasks.
 
