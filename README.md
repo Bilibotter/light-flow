@@ -2,11 +2,11 @@
 
 **[English](README.md),  [中文](README.cn.md)**
 
-LightFlow is a declarative task orchestration framework.
+LightFlow is a declarative task arrage framework.
 
 Users only need to focus on the timing of task execution, while the framework automatically handles the orchestration of tasks.
 
-- **Declarative** (./context.md): Focus on execution timing using functional programming.
+- **Declarative** : Focus on execution timing using functional programming.
 - **[Mergeable Processes](./merge.md)**: Seamlessly integrate registered processes into the current workflow being constructed.
 - **[Multilevel Callbacks](./callback.md)**: Support callbacks at various levels, allowing flexible inclusion of callback logic.
 - **[Multilevel Configuration](./config.md)**: Each level can be configured with priorities for smaller-level configurations.
