@@ -67,4 +67,3 @@ func main() {
 	flow.DoneFlow("WorkFlow", map[string]interface{}{"flow-input": "Hello world!"})
 }
 ```
-
