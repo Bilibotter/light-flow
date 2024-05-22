@@ -8,14 +8,15 @@ import (
 type StepMeta struct {
 	accessInfo
 	StepConfig
-	belong   *ProcessMeta
-	stepName string
-	layer    int
-	position *status     // used to record the position of the step
-	depends  []*StepMeta // prev
-	waiters  []*StepMeta // next
-	priority map[string]int64
-	run      func(ctx StepCtx) (any, error)
+	belong     *ProcessMeta
+	stepName   string
+	layer      int
+	position   *status     // used to record the position of the step
+	depends    []*StepMeta // prev
+	waiters    []*StepMeta // next
+	priority   map[string]int64
+	run        func(ctx StepCtx) (any, error)
+	evaluators []*evaluator
 }
 
 type runStep struct {
@@ -97,8 +98,8 @@ func (meta *StepMeta) wireDepends() {
 		}
 		depend.waiters = append(depend.waiters, meta)
 		if depend.position.Has(end) {
-			depend.position.add(hasNext)
-			depend.position.remove(end)
+			depend.position.set(hasNext)
+			depend.position.clear(end)
 		}
 		if depend.layer+1 > meta.layer {
 			meta.layer = depend.layer + 1
@@ -106,10 +107,10 @@ func (meta *StepMeta) wireDepends() {
 	}
 
 	if len(meta.depends) == 0 {
-		meta.position.add(head)
+		meta.position.set(head)
 	}
 
-	meta.position.add(end)
+	meta.position.set(end)
 }
 
 // checkPriority checks if the priority key corresponds to an existing step.

@@ -289,10 +289,10 @@ func (rf *runFlow) finalize() {
 		future.Done()
 	}
 	for _, process := range rf.processes {
-		rf.adds(process.status.load())
+		rf.add(process.status.load())
 	}
 	if rf.Normal() {
-		rf.add(Success)
+		rf.set(Success)
 	}
 	rf.advertise(After)
 	rf.finish.Done()
@@ -334,7 +334,7 @@ func (rf *runFlow) Flow() []*Future {
 	futures := make([]*Future, 0, len(rf.processes))
 	for _, process := range rf.processes {
 		if rf.Has(CallbackFail) {
-			process.add(CallbackFail)
+			process.set(CallbackFail)
 		}
 		futures = append(futures, process.schedule())
 	}

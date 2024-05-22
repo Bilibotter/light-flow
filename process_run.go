@@ -42,20 +42,20 @@ func (rp *runProcess) buildRunStep(meta *StepMeta) *runStep {
 }
 
 func (rp *runProcess) Resume() {
-	if rp.remove(Pause) {
+	if rp.clear(Pause) {
 		rp.pause.Done()
 	}
 }
 
 func (rp *runProcess) Pause() {
-	if rp.add(Pause) {
+	if rp.set(Pause) {
 		rp.pause.Add(1)
 	}
 }
 
 func (rp *runProcess) Stop() {
-	rp.add(Stop)
-	rp.add(Failed)
+	rp.set(Stop)
+	rp.set(Failed)
 }
 
 func (rp *runProcess) schedule() (future *Future) {
@@ -72,11 +72,11 @@ func (rp *runProcess) schedule() (future *Future) {
 
 	// CallbackFail from Flow
 	if rp.Has(CallbackFail) {
-		rp.add(Cancel)
+		rp.set(Cancel)
 		return
 	}
 
-	rp.add(Running)
+	rp.set(Running)
 	rp.procCallback(Before)
 	for _, step := range rp.flowSteps {
 		if step.layer == 1 {
@@ -93,12 +93,12 @@ func (rp *runProcess) startStep(step *runStep) {
 	defer rp.startNextSteps(step)
 
 	if _, finish := step.GetResult(step.stepName); finish {
-		step.add(Success)
+		step.set(Success)
 		return
 	}
 
 	if !rp.Normal() {
-		step.add(Cancel)
+		step.set(Cancel)
 		return
 	}
 
@@ -124,8 +124,8 @@ func (rp *runProcess) startStep(step *runStep) {
 	go rp.runStep(step)
 	select {
 	case <-timer.C:
-		step.add(Timeout)
-		step.add(Failed)
+		step.set(Timeout)
+		step.set(Failed)
 	case <-step.finish:
 		return
 	}
@@ -145,17 +145,17 @@ func (rp *runProcess) finalize() {
 	}()
 	select {
 	case <-timer.C:
-		rp.add(Timeout)
-		rp.add(Failed)
+		rp.set(Timeout)
+		rp.set(Failed)
 	case <-finish:
 	}
 
 	for _, step := range rp.flowSteps {
-		rp.adds(step.status.load())
+		rp.add(step.status.load())
 	}
 
 	if rp.Normal() {
-		rp.add(Success)
+		rp.set(Success)
 	}
 
 	rp.procCallback(After)
@@ -169,13 +169,13 @@ func (rp *runProcess) startNextSteps(step *runStep) {
 		next := rp.flowSteps[waiter.stepName]
 		waiting := atomic.AddInt64(&next.waiting, -1)
 		if cancel {
-			next.add(Cancel)
+			next.set(Cancel)
 		}
 		if atomic.LoadInt64(&waiting) != 0 {
 			continue
 		}
 		if step.Success() {
-			next.add(Running)
+			next.set(Running)
 		}
 		go rp.startStep(next)
 	}
@@ -204,8 +204,8 @@ func (rp *runProcess) runStep(step *runStep) {
 	defer func() {
 		if r := recover(); r != nil {
 			panicErr := fmt.Errorf("panic: %v\n\n%s", r, string(debug.Stack()))
-			step.add(Panic)
-			step.add(Failed)
+			step.set(Panic)
+			step.set(Failed)
 			step.Err = panicErr
 			step.End = time.Now().UTC()
 		}
@@ -217,14 +217,14 @@ func (rp *runProcess) runStep(step *runStep) {
 		step.End = time.Now().UTC()
 		step.Err = err
 		if err != nil {
-			step.add(Error)
-			step.add(Failed)
+			step.set(Error)
+			step.set(Failed)
 			continue
 		}
 		if result != nil {
 			step.setResult(step.stepName, result)
 		}
-		step.add(Success)
+		step.set(Success)
 		break
 	}
 }

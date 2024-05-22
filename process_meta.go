@@ -154,7 +154,7 @@ func (pm *ProcessMeta) Merge(name string) {
 			depends = append(depends, depend.stepName)
 		}
 		step := pm.NameStep(merge.run, merge.stepName, depends...)
-		step.position.add(merged)
+		step.position.set(merged)
 	}
 
 	// ensure step index bigger than all depends index

@@ -28,6 +28,7 @@ var (
 	Pending      = &statusEnum{0, "Pending"}
 	Running      = &statusEnum{0b1, "Running"}
 	Pause        = &statusEnum{0b1 << 1, "Pause"}
+	skip         = &statusEnum{0b1 << 2, "skip"}
 	Success      = &statusEnum{0b1 << 15, "Success"}
 	NormalMask   = &statusEnum{0b1<<16 - 1, "NormalMask"}
 	Cancel       = &statusEnum{0b1 << 16, "Cancel"}
@@ -142,6 +143,19 @@ type Future struct {
 	finish *sync.WaitGroup
 }
 
+type outcome struct {
+	Result     interface{}
+	EvalValues evalValues
+}
+
+type evalValues []evalValue
+
+type evalValue struct {
+	matches *set[string]
+	value   interface{}
+	next    *evalValue
+}
+
 func emptyStatus() *status {
 	return createStatus(0)
 }
@@ -177,10 +191,6 @@ func (s *status) Normal() bool {
 func (s *status) Has(enum *statusEnum) bool {
 	// can't use s.load()&enum.flag != 0, because enum.flag may be 0
 	return s.load()&enum.flag == enum.flag
-}
-
-func (s *status) contain(flag status) bool {
-	return s.load()&flag == flag
 }
 
 // Exceptions return contain exception's message
@@ -222,11 +232,11 @@ func (s *status) ExplainStatus() []string {
 	return compress
 }
 
-// remove function pops a status bit from the specified address.
+// clear function pops a status bit from the specified address.
 // The function checks if the specified status bit exists in the current value.
 // If it exists, it removes the status bit, and returns true indicating successful removal of the status bit.
 // Otherwise, it returns false.
-func (s *status) remove(enum *statusEnum) bool {
+func (s *status) clear(enum *statusEnum) bool {
 	for current := s.load(); enum.flag&current != 0; {
 		if s.cas(current, current^enum.flag) {
 			return true
@@ -235,17 +245,12 @@ func (s *status) remove(enum *statusEnum) bool {
 	return false
 }
 
-func (s *status) add(enum *statusEnum) bool {
-	for current := s.load(); !current.Has(enum); current = s.load() {
-		if s.cas(current, current|enum.flag) {
-			return true
-		}
-	}
-	return false
+func (s *status) set(enum *statusEnum) bool {
+	return s.add(enum.flag)
 }
 
-func (s *status) adds(flag status) bool {
-	for current := s.load(); !current.contain(flag); current = s.load() {
+func (s *status) add(flag status) bool {
+	for current := s.load(); current.load()&flag != flag; current = s.load() {
 		if s.cas(current, current|flag) {
 			return true
 		}
@@ -331,8 +336,8 @@ func (cc *handler[T]) handle(flag string, info T) string {
 		keepOn, err, panicStack := filter.call(flag, info)
 		if filter.must {
 			if len(panicStack) != 0 || err != nil {
-				info.addr().add(CallbackFail)
-				info.addr().add(Failed)
+				info.addr().set(CallbackFail)
+				info.addr().set(Failed)
 				return panicStack
 			}
 		}
@@ -460,6 +465,8 @@ func (t *linkedTable) get(passing int64, key string) (any, bool) {
 	return nil, false
 }
 
+// matchByHighest will exact search node.
+// In most cases, the position of the highest bit is the index.
 func (n *node) matchByHighest(highest int64) (any, bool) {
 	// Check if the highest set bit in "highest" is equal to the highest set bit in "n.Passing".
 	// If the condition is true, the value of node is set by the step corresponding to highest.
@@ -513,12 +520,15 @@ func (vc *visibleContext) getByName(name, key string) {
 func (vc *visibleContext) GetResult(key string) (value any, exist bool) {
 	vc.lock.RLock()
 	defer vc.lock.RUnlock()
-	head, find := vc.nodes[key]
-	if !find {
+	find, ok := vc.nodes[key]
+	if !ok {
 		return nil, false
 	}
-	// head.search may find process set value
-	return head.matchByHighest(resultMark)
+	wrap, ok := find.matchByHighest(resultMark)
+	if !ok {
+		return nil, false
+	}
+	return wrap.(outcome).Result, true
 }
 
 func (vc *visibleContext) GetEndValues(key string) map[string]any {
@@ -563,12 +573,20 @@ func (vc *visibleContext) GetByStepName(stepName, key string) (value any, exist 
 func (vc *visibleContext) setResult(key string, value any) {
 	vc.lock.Lock()
 	defer vc.lock.Unlock()
-	head := &node{
-		Value:   value,
+	if find, exist := vc.nodes[key]; exist {
+		wrap, ok := find.matchByHighest(resultMark)
+		if ok {
+			output := wrap.(outcome)
+			output.Result = value
+			return
+		}
+	}
+	result := &node{
+		Value:   outcome{Result: value},
 		Passing: resultMark,
 		Next:    vc.nodes[key],
 	}
-	vc.nodes[key] = head
+	vc.nodes[key] = result
 }
 
 func (vc *visibleContext) Set(key string, value any) {
