@@ -79,7 +79,7 @@ func getFuncName(f interface{}) string {
 	pattern := `^func\d+`
 	match, _ := regexp.MatchString(pattern, absoluteName)
 	if match {
-		panic(fmt.Sprintf("func flowName %s is like anonymous function flowName", absoluteName))
+		panic(fmt.Sprintf("FuncName[%s] is like anonymous function name", absoluteName))
 	}
 	return absoluteName
 }

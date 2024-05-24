@@ -41,7 +41,7 @@ type runStep struct {
 	id        string
 	flowId    string
 	processId string
-	segments  segment //  0-12 bits for waiting, 12-24 bits for condition.
+	segments  segment //  0-12 bits for waiting, 12-24 bits for comparator.
 	finish    chan bool
 	Start     time.Time
 	End       time.Time

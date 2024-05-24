@@ -104,7 +104,7 @@ func AsyncArgs(name string, args ...any) FlowController {
 func AsyncFlow(name string, input map[string]any) FlowController {
 	factory, ok := allFlows.Load(name)
 	if !ok {
-		panic(fmt.Sprintf("flow factory [%s] not found", name))
+		panic(fmt.Sprintf("Flow[%s] not found", name))
 	}
 	flow := factory.(*FlowMeta).buildRunFlow(input)
 	flow.Flow()
@@ -122,7 +122,7 @@ func DoneArgs(name string, args ...any) resultI {
 func DoneFlow(name string, input map[string]any) resultI {
 	factory, ok := allFlows.Load(name)
 	if !ok {
-		panic(fmt.Sprintf("flow factory [%s] not found", name))
+		panic(fmt.Sprintf("Flow[%s] not found", name))
 	}
 	flow := factory.(*FlowMeta).buildRunFlow(input)
 	flow.Done()
@@ -132,7 +132,7 @@ func DoneFlow(name string, input map[string]any) resultI {
 func BuildRunFlow(name string, input map[string]any) *runFlow {
 	factory, ok := allFlows.Load(name)
 	if !ok {
-		panic(fmt.Sprintf("flow factory [%s] not found", name))
+		panic(fmt.Sprintf("Flow[%s] not found", name))
 	}
 	return factory.(*FlowMeta).buildRunFlow(input)
 }
@@ -178,12 +178,12 @@ func (fm *FlowMeta) initialize() {
 
 func (fm *FlowMeta) register() *FlowMeta {
 	if len(fm.flowName) == 0 {
-		panic("can't register flow factory with empty stepName")
+		panic("can't register flow with empty name")
 	}
 
 	_, load := allFlows.LoadOrStore(fm.flowName, fm)
 	if load {
-		panic(fmt.Sprintf("register duplicate flow factory named [%s]", fm.flowName))
+		panic(fmt.Sprintf("Flow[%s] alraedy exists", fm.flowName))
 	}
 
 	return fm
@@ -227,7 +227,7 @@ func (fm *FlowMeta) buildRunFlow(input map[string]any) *runFlow {
 func (fm *FlowMeta) cloneProcess(name string) *ProcessMeta {
 	pm, exist := allProcess.Load(name)
 	if !exist {
-		panic(fmt.Sprintf("process [%s] not registered", name))
+		panic(fmt.Sprintf("Process[%s] not registered", name))
 	}
 	meta := pm.(*ProcessMeta).clone()
 	meta.belong = fm

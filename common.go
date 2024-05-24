@@ -175,7 +175,7 @@ func toStepName(value any) string {
 	case string:
 		result = value.(string)
 	default:
-		panic("value must be func(ctx context) (any, error) or string")
+		panic("depend must be func(ctx context) (any, error) or string")
 	}
 	return result
 }

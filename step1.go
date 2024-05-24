@@ -25,21 +25,21 @@ var (
 	accurate float64 = 1e-9
 )
 
-type operator int8
+type logical int8
 
 const (
-	noneOP operator = iota // Avoiding the effects of default values
-	andOP
-	orOP
-	notOP
+	noneLg logical = iota // Avoiding the effects of default values
+	andLg
+	orLg
+	notLg
 )
 
-type condition int8
+type comparator int8
 
 type flags int64
 
 const (
-	noneC condition = iota // Avoiding the effects of default values
+	noneC comparator = iota // Avoiding the effects of default values
 	equalC
 	notEqualC
 	lessC
@@ -68,11 +68,11 @@ type evalGroup struct {
 }
 
 type evaluator struct {
-	op        operator  // int8 And Or Not
-	cond      condition // int8 EQ NE LT LE GT GE IN NOTIN
-	flags     flags     // int64 bool string int uint float time
-	criterias []interface{}
-	evaluate  func(e evalValues, flags flags) (flags, bool)
+	op          logical    // int8 And Or Not
+	comparator  comparator // int8 EQ NE LT LE GT GE IN NOTIN
+	typeFlags   flags      // int64 bool string int uint float time
+	comparative []interface{}
+	evaluate    func(e evalValues, flags flags) (flags, bool)
 }
 
 type condStep struct {
@@ -194,10 +194,10 @@ func (meta *StepMeta) EQ(depend interface{}, value ...any) {
 		target: target,
 	}
 	e := &evaluator{
-		cond:      equalC,
-		criterias: value,
+		comparator:  equalC,
+		comparative: value,
 	}
-	e.flags, e.evaluate = buildEqEvaluate(meta.stepName, target, value...)
+	e.typeFlags, e.evaluate = buildEqEvaluate(meta.stepName, target, value...)
 	group.evaluators = append(group.evaluators, e)
 	meta.evalGroups = append(meta.evalGroups, group)
 }
@@ -279,80 +279,80 @@ func buildEqEvaluate(name, target string, values ...any) (flags, func(e evalValu
 }
 
 func buildTypeMap(name, target string, values ...any) (flags, map[int64]any) {
-	types := make(map[int64]any)
+	typeValues := make(map[int64]any)
 	// condition match has a high time complexity,must limit the number of conditions
 	for _, value := range values {
 		switch value.(type) {
 		case bool:
-			checkAndAdd(name, target, boolF, value, types)
+			checkAndAdd(name, target, boolF, value, typeValues)
 		case string:
-			checkAndAdd(name, target, strF, value, types)
+			checkAndAdd(name, target, strF, value, typeValues)
 		case int, int8, int16, int32, int64:
-			checkAndAdd(name, target, intF, value, types)
+			checkAndAdd(name, target, intF, value, typeValues)
 		case uint, uint8, uint16, uint32, uint64:
-			checkAndAdd(name, target, uintF, value, types)
+			checkAndAdd(name, target, uintF, value, typeValues)
 		case float32, float64:
-			checkAndAdd(name, target, floatF, value, types)
+			checkAndAdd(name, target, floatF, value, typeValues)
 		case time.Time:
-			checkAndAdd(name, target, timeF, value, types)
+			checkAndAdd(name, target, timeF, value, typeValues)
 		case Equality:
-			checkAndAdd(name, target, equalityF, value, types)
+			checkAndAdd(name, target, equalityF, value, typeValues)
 		default:
 			panic(fmt.Sprintf("Step[%s] set condition Step[%s]EQ failed, Type[%T] has not Equality, please implement Equality interface or not use pointers as method receivers", name, target, value))
 		}
 	}
-	already := flags(0)
-	for index := range types {
-		already.SetFlag(index)
+	typeFlags := flags(0)
+	for index := range typeValues {
+		typeFlags.SetFlag(index)
 	}
-	return already, types
+	return typeFlags, typeValues
 }
 
-func checkAndAdd(name, target string, flag int64, value any, types map[int64]any) {
-	if _, ok := types[flag]; ok {
+func checkAndAdd(name, target string, flag int64, value any, typeValues map[int64]any) {
+	if _, ok := typeValues[flag]; ok {
 		panic(fmt.Sprintf("Step[%s] set condition Step[%s]EQ failed, Type[%T] has not Equality, please implement Equality interface or not use pointers as method receivers", name, target, value))
 	}
 	switch flag {
 	case intF:
-		types[flag] = toInt64(value)
+		typeValues[flag] = toInt64(value)
 	case uintF:
-		types[flag] = toUint64(value)
+		typeValues[flag] = toUint64(value)
 	case floatF:
-		types[flag] = toFloat64(value)
+		typeValues[flag] = toFloat64(value)
 	default:
-		types[flag] = value
+		typeValues[flag] = value
 	}
 }
 
-func matchAndTransform(name string, types map[int64]any, f *flags, e *evalValue) (flag int64, convert interface{}) {
+func matchAndTransform(name string, typeValues map[int64]any, typeFlags *flags, e *evalValue) (flag int64, convert interface{}) {
 	if e.matches != nil && !e.matches.Contains(name) {
 		return noneFlag, nil
 	}
 	switch e.value.(type) {
 	case bool:
-		return trySetFlagAndConvert(boolF, types, f, e)
+		return trySetFlagAndConvert(boolF, typeValues, typeFlags, e)
 	case string:
-		return trySetFlagAndConvert(strF, types, f, e)
+		return trySetFlagAndConvert(strF, typeValues, typeFlags, e)
 	case int64:
 		// int8, int16, int32, int64, int has converted to int64 while setCond
-		return trySetFlagAndConvert(intF, types, f, e)
+		return trySetFlagAndConvert(intF, typeValues, typeFlags, e)
 	case uint64:
 		// uint8, uint16, uint32, uint64, uint has converted to uint64 while setCond
-		return trySetFlagAndConvert(uintF, types, f, e)
+		return trySetFlagAndConvert(uintF, typeValues, typeFlags, e)
 	case float64:
 		// float32, float64 has converted to float64 while setCond
-		return trySetFlagAndConvert(floatF, types, f, e)
+		return trySetFlagAndConvert(floatF, typeValues, typeFlags, e)
 	case time.Time:
-		return trySetFlagAndConvert(timeF, types, f, e)
+		return trySetFlagAndConvert(timeF, typeValues, typeFlags, e)
 	case Equality:
-		return trySetFlagAndConvert(equalityF, types, f, e)
+		return trySetFlagAndConvert(equalityF, typeValues, typeFlags, e)
 	}
 	return noneFlag, nil
 }
 
-func trySetFlagAndConvert(match int64, types map[int64]any, f *flags, e *evalValue) (flag int64, convert interface{}) {
+func trySetFlagAndConvert(match int64, typeValues map[int64]any, f *flags, e *evalValue) (flag int64, convert interface{}) {
 	// types does not have a key with a value of nil
-	if f.Exist(match) || types[match] == nil {
+	if f.Exist(match) || typeValues[match] == nil {
 		return noneFlag, nil
 	}
 	f.SetFlag(match)
