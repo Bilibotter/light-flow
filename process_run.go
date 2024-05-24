@@ -10,7 +10,7 @@ import (
 
 type runProcess struct {
 	*ProcessMeta
-	*status
+	*state
 	*visibleContext
 	id        string
 	flowId    string
@@ -27,12 +27,12 @@ func (rp *runProcess) buildRunStep(meta *StepMeta) *runStep {
 			linkedTable: rp.linkedTable,
 			prev:        rp.visibleContext.prev,
 		},
-		status:    emptyStatus(),
+		state:     emptyStatus(),
 		StepMeta:  meta,
 		id:        generateId(),
 		processId: rp.id,
 		flowId:    rp.flowId,
-		waiting:   int64(len(meta.depends)),
+		segments:  segment(len(meta.depends)),
 		finish:    make(chan bool, 1),
 	}
 
@@ -62,11 +62,11 @@ func (rp *runProcess) schedule() (future *Future) {
 	rp.initialize()
 	future = &Future{
 		basicInfo: &basicInfo{
-			Id:     rp.id,
-			Name:   rp.processName,
-			status: rp.status,
+			Id:    rp.id,
+			Name:  rp.processName,
+			state: rp.state,
 		},
-		status: rp.status,
+		state:  rp.state,
 		finish: &rp.finish,
 	}
 
@@ -112,6 +112,15 @@ func (rp *runProcess) startStep(step *runStep) {
 		rp.pause.Wait()
 	}
 
+	if step.Has(skipped) {
+		return
+	}
+
+	if len(step.depends) > 0 && !rp.evaluateCondition(step) {
+		step.set(skipped)
+		return
+	}
+
 	timeout := 3 * time.Hour
 	if rp.StepTimeout != 0 {
 		timeout = rp.StepTimeout
@@ -129,6 +138,19 @@ func (rp *runProcess) startStep(step *runStep) {
 	case <-step.finish:
 		return
 	}
+}
+
+func (rp *runProcess) evaluateCondition(step *runStep) bool {
+	for _, group := range step.evalGroups {
+		named, unnamed, exist := rp.getCond(group.target)
+		if !exist {
+			return false
+		}
+		if !group.evaluate(named, unnamed) {
+			return false
+		}
+	}
+	return true
 }
 
 func (rp *runProcess) finalize() {
@@ -151,7 +173,7 @@ func (rp *runProcess) finalize() {
 	}
 
 	for _, step := range rp.flowSteps {
-		rp.add(step.status.load())
+		rp.add(step.state.load())
 	}
 
 	if rp.Normal() {
@@ -165,9 +187,10 @@ func (rp *runProcess) finalize() {
 func (rp *runProcess) startNextSteps(step *runStep) {
 	// all step not execute should cancel while process is timeout
 	cancel := !step.Normal() || !rp.Normal()
+	skip := step.Has(skipped)
 	for _, waiter := range step.waiters {
 		next := rp.flowSteps[waiter.stepName]
-		waiting := atomic.AddInt64(&next.waiting, -1)
+		waiting := next.segments.addWaiting(-1)
 		if cancel {
 			next.set(Cancel)
 		}
@@ -176,6 +199,8 @@ func (rp *runProcess) startNextSteps(step *runStep) {
 		}
 		if step.Success() {
 			next.set(Running)
+		} else if skip {
+			next.set(skipped)
 		}
 		go rp.startStep(next)
 	}
@@ -254,9 +279,9 @@ func (rp *runProcess) procCallback(flag string) {
 	info := &Process{
 		procCtx: rp.visibleContext,
 		basicInfo: basicInfo{
-			status: rp.status,
-			Id:     rp.id,
-			Name:   rp.processName,
+			state: rp.state,
+			Id:    rp.id,
+			Name:  rp.processName,
 		},
 		FlowId: rp.flowId,
 	}
@@ -274,11 +299,11 @@ func (rp *runProcess) summaryStepInfo(step *runStep) *Step {
 	}
 	info := &Step{
 		basicInfo: &basicInfo{
-			status: step.status,
-			Id:     step.id,
-			Name:   step.stepName,
+			state: step.state,
+			Id:    step.id,
+			Name:  step.stepName,
 		},
-		StepCtx:   step.visibleContext,
+		StepCtx:   step,
 		ProcessId: step.processId,
 		FlowId:    step.flowId,
 		Start:     step.Start,

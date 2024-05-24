@@ -202,9 +202,9 @@ func (fm *FlowMeta) buildRunFlow(input map[string]any) *runFlow {
 	rf := runFlow{
 		simpleContext: &ctx,
 		basicInfo: &basicInfo{
-			status: emptyStatus(),
-			Name:   fm.flowName,
-			Id:     generateId(),
+			state: emptyStatus(),
+			Name:  fm.flowName,
+			Id:    generateId(),
 		},
 		FlowMeta:  fm,
 		lock:      sync.Mutex{},
@@ -265,7 +265,7 @@ func (rf *runFlow) buildRunProcess(meta *ProcessMeta) *runProcess {
 			accessInfo:  &meta.accessInfo,
 			linkedTable: &table,
 		},
-		status:      emptyStatus(),
+		state:       emptyStatus(),
 		ProcessMeta: meta,
 		id:          generateId(),
 		flowId:      rf.Id,
@@ -289,7 +289,7 @@ func (rf *runFlow) finalize() {
 		future.Done()
 	}
 	for _, process := range rf.processes {
-		rf.add(process.status.load())
+		rf.add(process.state.load())
 	}
 	if rf.Normal() {
 		rf.set(Success)
@@ -325,9 +325,9 @@ func (rf *runFlow) Flow() []*Future {
 	rf.initialize()
 	rf.infoCache = &WorkFlow{
 		basicInfo: &basicInfo{
-			status: rf.status,
-			Id:     rf.Id,
-			Name:   rf.flowName,
+			state: rf.state,
+			Id:    rf.Id,
+			Name:  rf.flowName,
 		},
 	}
 	rf.advertise(Before)
@@ -364,7 +364,7 @@ func (rf *runFlow) Fails() []*Future {
 }
 
 // Futures returns the slice of future objects.
-// future can get the result and status of the process.
+// future can get the result and state of the process.
 func (rf *runFlow) Futures() []*Future {
 	return rf.futures
 }

@@ -114,7 +114,7 @@ func TestComparableSet(t *testing.T) {
 }
 
 func TestPopStatus(t *testing.T) {
-	status := status(0)
+	status := state(0)
 	status.set(Cancel)
 	status.set(Panic)
 	status.set(Failed)
@@ -172,42 +172,42 @@ func TestPopStatus(t *testing.T) {
 }
 
 func TestExplainStatus1(t *testing.T) {
-	if status := status(0); !status.set(Cancel) {
+	if status := state(0); !status.set(Cancel) {
 		t.Errorf("cancel status add error")
 	} else if !status.Has(Cancel) {
 		t.Errorf("cancel status not contain after add")
 	}
-	if status := status(0); !status.set(Pause) {
+	if status := state(0); !status.set(Pause) {
 		t.Errorf("panic status add error")
 	} else if !status.Has(Pause) {
 		t.Errorf("pause status not contain after add")
 	}
-	if status := status(0); !status.set(Running) {
+	if status := state(0); !status.set(Running) {
 		t.Errorf("running status add error")
 	} else if !status.Has(Running) {
 		t.Errorf("running status not contain after add")
 	}
-	if status := status(0); !status.set(Success) {
+	if status := state(0); !status.set(Success) {
 		t.Errorf("success status add error")
 	} else if !status.Has(Success) {
 		t.Errorf("success status not contain after add")
 	}
-	if status := status(0); !status.set(Failed) {
+	if status := state(0); !status.set(Failed) {
 		t.Errorf("failed status add error")
 	} else if !status.Has(Failed) {
 		t.Errorf("failed status not contain after add")
 	}
-	if status := status(0); !status.set(Timeout) {
+	if status := state(0); !status.set(Timeout) {
 		t.Errorf("timeout status add error")
 	} else if !status.Has(Timeout) {
 		t.Errorf("timeout status not contain after add")
 	}
-	if status := status(0); !status.set(Panic) {
+	if status := state(0); !status.set(Panic) {
 		t.Errorf("panic status add error")
 	} else if !status.Has(Panic) {
 		t.Errorf("panic status not contain after add")
 	}
-	if status := status(0); !status.set(Error) {
+	if status := state(0); !status.set(Error) {
 		t.Errorf("error status add error")
 	} else if !status.Has(Error) {
 		t.Errorf("error status not contain after add")
@@ -215,7 +215,7 @@ func TestExplainStatus1(t *testing.T) {
 }
 
 func TestExplainStatus2(t *testing.T) {
-	status1 := status(0)
+	status1 := state(0)
 	status1.set(Cancel)
 	status1.set(Panic)
 	status1.set(Failed)
@@ -242,7 +242,7 @@ func TestExplainStatus2(t *testing.T) {
 		t.Errorf("stop status explain error")
 	}
 
-	status1 = status(0)
+	status1 = state(0)
 	status1.set(Pause)
 	status1.set(Running)
 	status1.set(Pending)

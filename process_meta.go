@@ -154,7 +154,7 @@ func (pm *ProcessMeta) Merge(name string) {
 			depends = append(depends, depend.stepName)
 		}
 		step := pm.NameStep(merge.run, merge.stepName, depends...)
-		step.position.set(merged)
+		step.position.set(mergedE)
 	}
 
 	// ensure step index bigger than all depends index
@@ -225,7 +225,7 @@ func (pm *ProcessMeta) Step(run func(ctx StepCtx) (any, error), depends ...any) 
 func (pm *ProcessMeta) Tail(run func(ctx StepCtx) (any, error), alias ...string) *StepMeta {
 	depends := make([]any, 0)
 	for name, step := range pm.steps {
-		if step.position.Has(end) {
+		if step.position.Has(endE) {
 			depends = append(depends, name)
 		}
 	}
@@ -249,7 +249,7 @@ func (pm *ProcessMeta) NameStep(run func(ctx StepCtx) (any, error), name string,
 	}
 
 	if old, exist := pm.steps[name]; exist {
-		if !old.position.Has(merged) {
+		if !old.position.Has(mergedE) {
 			panic(fmt.Sprintf("step named [%s] already exist, can used %s to avoid stepName duplicate",
 				name, getFuncName(pm.NameStep)))
 		}
