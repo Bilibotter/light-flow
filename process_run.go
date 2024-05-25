@@ -142,11 +142,11 @@ func (rp *runProcess) startStep(step *runStep) {
 
 func (rp *runProcess) evaluateCondition(step *runStep) bool {
 	for _, group := range step.evalGroups {
-		named, unnamed, exist := rp.getCond(group.target)
+		named, unnamed, exist := rp.getCond(group.depend)
 		if !exist {
 			return false
 		}
-		if !group.evaluate(named, unnamed) {
+		if !group.evaluateConditions(named, unnamed) {
 			return false
 		}
 	}
