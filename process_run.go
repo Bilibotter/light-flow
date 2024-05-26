@@ -116,7 +116,7 @@ func (rp *runProcess) startStep(step *runStep) {
 		return
 	}
 
-	if len(step.depends) > 0 && !rp.evaluateCondition(step) {
+	if len(step.depends) > 0 && !rp.evaluate(step) {
 		step.set(skipped)
 		return
 	}
@@ -140,13 +140,13 @@ func (rp *runProcess) startStep(step *runStep) {
 	}
 }
 
-func (rp *runProcess) evaluateCondition(step *runStep) bool {
+func (rp *runProcess) evaluate(step *runStep) bool {
 	for _, group := range step.evalGroups {
 		named, unnamed, exist := rp.getCond(group.depend)
 		if !exist {
 			return false
 		}
-		if !group.evaluateConditions(named, unnamed) {
+		if !group.evaluateValues(named, unnamed) {
 			return false
 		}
 	}

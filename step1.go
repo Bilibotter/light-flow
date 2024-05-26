@@ -16,6 +16,7 @@ const (
 	floatF
 	timeF
 	equalityF
+	comparableF
 	truncateF
 	noneFlag typeFlag = 0
 )
@@ -103,9 +104,9 @@ type Equality interface {
 	Equal(other any) bool
 }
 
-type Comparable[T any] interface {
+type Comparable interface {
 	Equality
-	Less(other T) bool
+	Less(other any) bool
 }
 
 func getTypeFlag(value any) typeFlag {
@@ -122,6 +123,8 @@ func getTypeFlag(value any) typeFlag {
 		return floatF
 	case time.Time:
 		return timeF
+	case Comparable:
+		return comparableF
 	case Equality:
 		return equalityF
 	}
@@ -134,6 +137,22 @@ func (eg *evalGroup) EQ(value ...any) *evalGroup {
 
 func (eg *evalGroup) NEQ(value ...any) *evalGroup {
 	return eg.update(notEqualC, value...)
+}
+
+func (eg *evalGroup) GT(value ...any) *evalGroup {
+	return eg.update(greaterC, value...)
+}
+
+func (eg *evalGroup) GTE(value ...any) *evalGroup {
+	return eg.update(greaterAndEqualC, value...)
+}
+
+func (eg *evalGroup) LT(value ...any) *evalGroup {
+	return eg.update(lessC, value...)
+}
+
+func (eg *evalGroup) LTE(value ...any) *evalGroup {
+	return eg.update(lessAndEqualC, value...)
 }
 
 func (eg *evalGroup) update(cmp comparator, values ...any) *evalGroup {
@@ -164,6 +183,8 @@ func (eg *evalGroup) createEvaluate(flag typeFlag, cmp comparator) evaluate {
 		return eg.createStringEvaluate(cmp)
 	case timeF:
 		return eg.createTimeEvaluate(cmp)
+	case comparableF:
+		return eg.createComparableEvaluate(cmp)
 	case equalityF:
 		return eg.createEqualityEvaluate(cmp)
 	}
@@ -175,6 +196,14 @@ func (eg *evalGroup) createInt64Evaluate(cmp comparator) evaluate {
 		return func(v1, v2 any) bool { return v1.(int64) == v2.(int64) }
 	case notEqualC:
 		return func(v1, v2 any) bool { return v1.(int64) != v2.(int64) }
+	case greaterC:
+		return func(v1, v2 any) bool { return v1.(int64) > v2.(int64) }
+	case greaterAndEqualC:
+		return func(v1, v2 any) bool { return v1.(int64) >= v2.(int64) }
+	case lessC:
+		return func(v1, v2 any) bool { return v1.(int64) < v2.(int64) }
+	case lessAndEqualC:
+		return func(v1, v2 any) bool { return v1.(int64) <= v2.(int64) }
 	}
 	return defaultTrue
 }
@@ -185,6 +214,14 @@ func (eg *evalGroup) createUint64Evaluate(cmp comparator) evaluate {
 		return func(v1, v2 any) bool { return v1.(uint64) == v2.(uint64) }
 	case notEqualC:
 		return func(v1, v2 any) bool { return v1.(uint64) != v2.(uint64) }
+	case greaterC:
+		return func(v1, v2 any) bool { return v1.(uint64) > v2.(uint64) }
+	case greaterAndEqualC:
+		return func(v1, v2 any) bool { return v1.(uint64) >= v2.(uint64) }
+	case lessC:
+		return func(v1, v2 any) bool { return v1.(uint64) < v2.(uint64) }
+	case lessAndEqualC:
+		return func(v1, v2 any) bool { return v1.(uint64) <= v2.(uint64) }
 	}
 	return defaultTrue
 }
@@ -195,6 +232,14 @@ func (eg *evalGroup) createFloat64Evaluate(cmp comparator) evaluate {
 		return func(v1, v2 any) bool { return math.Abs(v1.(float64)-v2.(float64)) <= accurate }
 	case notEqualC:
 		return func(v1, v2 any) bool { return math.Abs(v1.(float64)-v2.(float64)) > accurate }
+	case greaterC:
+		return func(v1, v2 any) bool { return v1.(float64) > v2.(float64) }
+	case greaterAndEqualC:
+		return func(v1, v2 any) bool { return v1.(float64) >= v2.(float64) }
+	case lessC:
+		return func(v1, v2 any) bool { return v1.(float64) < v2.(float64) }
+	case lessAndEqualC:
+		return func(v1, v2 any) bool { return v1.(float64) <= v2.(float64) }
 	}
 	return defaultTrue
 }
@@ -205,6 +250,14 @@ func (eg *evalGroup) createBoolEvaluate(cmp comparator) evaluate {
 		return func(v1, v2 any) bool { return v1.(bool) == v2.(bool) }
 	case notEqualC:
 		return func(v1, v2 any) bool { return v1.(bool) != v2.(bool) }
+	case greaterC:
+		panic("boolean types do not support greater-than comparisons")
+	case greaterAndEqualC:
+		panic("boolean types do not support greater-than-and-equal comparisons")
+	case lessC:
+		panic("boolean types do not support less-than comparisons")
+	case lessAndEqualC:
+		panic("boolean types do not support less-than-and-equal comparisons")
 	}
 	return defaultTrue
 }
@@ -215,6 +268,18 @@ func (eg *evalGroup) createTimeEvaluate(cmp comparator) evaluate {
 		return func(v1, v2 any) bool { return v1.(time.Time).Equal(v2.(time.Time)) }
 	case notEqualC:
 		return func(v1, v2 any) bool { return !v1.(time.Time).Equal(v2.(time.Time)) }
+	case greaterC:
+		return func(v1, v2 any) bool { return v1.(time.Time).After(v2.(time.Time)) }
+	case greaterAndEqualC:
+		return func(v1, v2 any) bool {
+			return v1.(time.Time).After(v2.(time.Time)) || v1.(time.Time).Equal(v2.(time.Time))
+		}
+	case lessC:
+		return func(v1, v2 any) bool { return v1.(time.Time).Before(v2.(time.Time)) }
+	case lessAndEqualC:
+		return func(v1, v2 any) bool {
+			return v1.(time.Time).Before(v2.(time.Time)) || v1.(time.Time).Equal(v2.(time.Time))
+		}
 	}
 	return defaultTrue
 }
@@ -225,11 +290,51 @@ func (eg *evalGroup) createStringEvaluate(cmp comparator) evaluate {
 		return func(v1, v2 any) bool { return v1.(string) == v2.(string) }
 	case notEqualC:
 		return func(v1, v2 any) bool { return v1.(string) != v2.(string) }
+	case greaterC:
+		panic("string types do not support greater-than comparisons")
+	case greaterAndEqualC:
+		panic("string types do not support greater-than-and-equal comparisons")
+	case lessC:
+		panic("string types do not support less-than comparisons")
+	case lessAndEqualC:
+		panic("string types do not support less-than-and-equal comparisons")
 	}
 	return defaultTrue
 }
 
-func (eg *evalGroup) evaluateConditions(named, unnamed evalValues) bool {
+func (eg *evalGroup) createComparableEvaluate(cmp comparator) evaluate {
+	switch cmp {
+	case equalC:
+		return func(v1, v2 any) bool { return v1.(Equality).Equal(v2) }
+	case notEqualC:
+		return func(v1, v2 any) bool { return !v1.(Equality).Equal(v2) }
+	case greaterC:
+		return func(v1, v2 any) bool { return !v1.(Comparable).Less(v2) && !v1.(Comparable).Equal(v2) }
+	case greaterAndEqualC:
+		return func(v1, v2 any) bool { return !v1.(Comparable).Less(v2) }
+	case lessC:
+		return func(v1, v2 any) bool { return v1.(Comparable).Less(v2) }
+	case lessAndEqualC:
+		return func(v1, v2 any) bool { return v1.(Comparable).Less(v2) || v1.(Comparable).Equal(v2) }
+	}
+	return defaultTrue
+}
+
+func (eg *evalGroup) createEqualityEvaluate(cmp comparator) evaluate {
+	switch cmp {
+	case equalC:
+		return func(v1, v2 any) bool { return v1.(Equality).Equal(v2) }
+	case notEqualC:
+		return func(v1, v2 any) bool { return !v1.(Equality).Equal(v2) }
+	case greaterC:
+		panic("Type[Equality] not implements Comparable.")
+	case lessC:
+		panic("Type[Equality] not implements Comparable.")
+	}
+	return defaultTrue
+}
+
+func (eg *evalGroup) evaluateValues(named, unnamed evalValues) bool {
 	flag := flags(0)
 	if !eg.evaluate(&flag, named) {
 		return false
@@ -249,16 +354,6 @@ func (eg *evalGroup) meetExpect(flag flags) bool {
 		}
 	}
 	return true
-}
-
-func (eg *evalGroup) createEqualityEvaluate(cmp comparator) evaluate {
-	switch cmp {
-	case equalC:
-		return func(v1, v2 any) bool { return v1.(Equality).Equal(v2) }
-	case notEqualC:
-		return func(v1, v2 any) bool { return !v1.(Equality).Equal(v2) }
-	}
-	return defaultTrue
 }
 
 func (eg *evalGroup) evaluate(flag *flags, values evalValues) bool {
@@ -364,6 +459,26 @@ func (meta *StepMeta) NEQ(depend interface{}, value ...any) *evalGroup {
 	return meta.addEvalGroup(toStepName(depend), notEqualC, value...)
 }
 
+func (meta *StepMeta) GT(depend interface{}, value ...any) *evalGroup {
+	meta.addDepend(depend)
+	return meta.addEvalGroup(toStepName(depend), greaterC, value...)
+}
+
+func (meta *StepMeta) GTE(depend interface{}, value ...any) *evalGroup {
+	meta.addDepend(depend)
+	return meta.addEvalGroup(toStepName(depend), greaterAndEqualC, value...)
+}
+
+func (meta *StepMeta) LT(depend interface{}, value ...any) *evalGroup {
+	meta.addDepend(depend)
+	return meta.addEvalGroup(toStepName(depend), lessC, value...)
+}
+
+func (meta *StepMeta) LTE(depend interface{}, value ...any) *evalGroup {
+	meta.addDepend(depend)
+	return meta.addEvalGroup(toStepName(depend), lessAndEqualC, value...)
+}
+
 func (meta *StepMeta) addEvalGroup(depend string, cmp comparator, values ...any) *evalGroup {
 	group := &evalGroup{
 		name:           meta.stepName,
@@ -391,14 +506,16 @@ func normalizeValue(value any, cmp comparator) (any, typeFlag) {
 		return toFloat64(value), floatF
 	case time.Time:
 		return value, timeF
+	case Comparable:
+		return value, comparableF
 	case Equality:
 		return value, equalityF
 	}
 	switch cmp {
 	case equalC, notEqualC:
-		panic(fmt.Sprintf("Type[%T] not implements Equality.You can try changing the method receiver to a non-pointer object", value))
+		panic(fmt.Sprintf("Type[%T] not implements Equality.You can trying to use a pointer object as argument", value))
 	case greaterC, greaterAndEqualC, lessC, lessAndEqualC:
-		panic(fmt.Sprintf("Type[%T] not implements Comparable.You can try changing the method receiver to a non-pointer object", value))
+		panic(fmt.Sprintf("Type[%T] not implements Comparable.You can trying to use a pointer object as a argument", value))
 	default:
 		panic(fmt.Sprintf("Type[%T] not support", value))
 	}
