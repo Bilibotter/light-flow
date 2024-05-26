@@ -16,6 +16,7 @@ const (
 	floatF
 	timeF
 	equalityF
+	truncateF
 	noneFlag typeFlag = 0
 )
 
@@ -61,16 +62,17 @@ type SliceSet[T comparable] []T
 type simpleSet[T comparable] map[T]Empty
 
 type elementSet[T Element[T]] struct {
-	m map[string]T
+	m map[int64]T
 }
 
 type evalGroup struct {
-	evaluator    func(named, unnamed evalValues) bool
-	typeValues   map[typeFlag]any
-	typeEvaluate map[typeFlag]evaluate
-	name         string // only exact match evaluator has name
-	depend       string
-	expect       flags
+	evaluator      func(named, unnamed evalValues) bool
+	typeValues     map[typeFlag]any
+	typeEvaluate   map[typeFlag]evaluate
+	typeComparator map[typeFlag]comparator
+	name           string // only exact match evaluator has name
+	depend         string
+	expect         flags
 }
 
 type evaluator struct {
@@ -92,7 +94,7 @@ type Set interface {
 
 type Element[T any] interface {
 	Equality
-	String() string
+	Hash() int64
 }
 
 // Equality func (ei *EqualityImpl) Equal(other any) bool is invalid
@@ -126,7 +128,15 @@ func getTypeFlag(value any) typeFlag {
 	return noneFlag
 }
 
-func (eg *evalGroup) update(cmp comparator, values ...any) {
+func (eg *evalGroup) EQ(value ...any) *evalGroup {
+	return eg.update(equalC, value...)
+}
+
+func (eg *evalGroup) NEQ(value ...any) *evalGroup {
+	return eg.update(notEqualC, value...)
+}
+
+func (eg *evalGroup) update(cmp comparator, values ...any) *evalGroup {
 	for _, value := range values {
 		normalized, flag := normalizeValue(value, cmp)
 		if _, exist := eg.typeValues[flag]; exist {
@@ -134,8 +144,10 @@ func (eg *evalGroup) update(cmp comparator, values ...any) {
 		}
 		eg.typeValues[flag] = normalized
 		eg.typeEvaluate[flag] = eg.createEvaluate(flag, cmp)
+		eg.typeComparator[flag] = cmp
 		eg.expect.SetFlag(int64(flag))
 	}
+	return eg
 }
 
 func (eg *evalGroup) createEvaluate(flag typeFlag, cmp comparator) evaluate {
@@ -225,7 +237,18 @@ func (eg *evalGroup) evaluateConditions(named, unnamed evalValues) bool {
 	if !eg.evaluate(&flag, unnamed) {
 		return false
 	}
-	return eg.expect == flag
+	return eg.meetExpect(flag)
+}
+
+func (eg *evalGroup) meetExpect(flag flags) bool {
+	mask := flags(1)
+	for unexpect := eg.expect ^ flag; unexpect >= mask; mask <<= 1 {
+		// notEqualC should be true when the condition is missing
+		if mask&unexpect != 0 && eg.typeComparator[typeFlag(mask)] != notEqualC {
+			return false
+		}
+	}
+	return true
 }
 
 func (eg *evalGroup) createEqualityEvaluate(cmp comparator) evaluate {
@@ -301,11 +324,11 @@ func (ss SliceSet[T]) Find(element any) bool {
 }
 
 func (es *elementSet[T]) Add(element T) {
-	es.m[element.String()] = element
+	es.m[element.Hash()] = element
 }
 
 func (es *elementSet[T]) Remove(element T) {
-	delete(es.m, element.String())
+	delete(es.m, element.Hash())
 }
 
 func (es *elementSet[T]) Find(element any) bool {
@@ -313,7 +336,7 @@ func (es *elementSet[T]) Find(element any) bool {
 	if !ok {
 		return false
 	}
-	value, ok := es.m[ele.String()]
+	value, ok := es.m[ele.Hash()]
 	if !ok {
 		return false
 	}
@@ -328,7 +351,7 @@ func NewSimpleSet[T comparable]() simpleSet[T] {
 }
 
 func NewElementSet[T Element[T]]() elementSet[T] {
-	return elementSet[T]{m: make(map[string]T)}
+	return elementSet[T]{m: make(map[int64]T)}
 }
 
 func (meta *StepMeta) EQ(depend interface{}, value ...any) *evalGroup {
@@ -336,12 +359,18 @@ func (meta *StepMeta) EQ(depend interface{}, value ...any) *evalGroup {
 	return meta.addEvalGroup(toStepName(depend), equalC, value...)
 }
 
+func (meta *StepMeta) NEQ(depend interface{}, value ...any) *evalGroup {
+	meta.addDepend(depend)
+	return meta.addEvalGroup(toStepName(depend), notEqualC, value...)
+}
+
 func (meta *StepMeta) addEvalGroup(depend string, cmp comparator, values ...any) *evalGroup {
 	group := &evalGroup{
-		name:         meta.stepName,
-		depend:       depend,
-		typeValues:   make(map[typeFlag]any, 1),
-		typeEvaluate: make(map[typeFlag]evaluate, 1),
+		name:           meta.stepName,
+		depend:         depend,
+		typeValues:     make(map[typeFlag]any, 1),
+		typeEvaluate:   make(map[typeFlag]evaluate, 1),
+		typeComparator: make(map[typeFlag]comparator, 1),
 	}
 	meta.evalGroups = append(meta.evalGroups, group)
 	group.update(cmp, values...)
@@ -375,38 +404,31 @@ func normalizeValue(value any, cmp comparator) (any, typeFlag) {
 	}
 }
 
-func NEQ(depend interface{}, value any) {
-
-}
-
-func True() {}
-
-func False() {
-
-}
-
-func GT() {}
-
-func GTE() {}
-
-func LT() {}
-
-func LTE() {}
-
-func In() {}
-
-func NotIn() {}
-
 func (meta *StepMeta) addDepend(depends ...any) {
 	for _, wrap := range depends {
 		dependName := toStepName(wrap)
+		if dependName == meta.stepName {
+			panic(fmt.Sprintf("Step[%s] can't depend on itself.", meta.stepName))
+		}
+		if meta.existDepend(dependName) {
+			continue
+		}
 		depend, exist := meta.belong.steps[dependName]
 		if !exist {
-			panic(fmt.Sprintf("step[%s]'s depend[%s] not found.]", meta.stepName, dependName))
+			panic(fmt.Sprintf("Step[%s]'s depend[%s] not found.", meta.stepName, dependName))
 		}
 		meta.depends = append(meta.depends, depend)
 	}
 	meta.wireDepends()
+}
+
+func (meta *StepMeta) existDepend(name string) bool {
+	for _, depend := range meta.depends {
+		if depend.stepName == name {
+			return true
+		}
+	}
+	return false
 }
 
 func toUint64(i any) uint64 {

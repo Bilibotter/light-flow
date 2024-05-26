@@ -26,9 +26,9 @@ type StepMeta struct {
 	belong     *ProcessMeta
 	stepName   string
 	layer      int
-	position   *state      // used to record the position of the step
-	depends    []*StepMeta // prev
-	waiters    []*StepMeta // next
+	position   *state              // used to record the position of the step
+	depends    SliceSet[*StepMeta] // prev
+	waiters    SliceSet[*StepMeta] // next
 	priority   map[string]int64
 	run        func(ctx StepCtx) (any, error)
 	evalGroups evalGroups

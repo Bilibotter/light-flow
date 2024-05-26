@@ -243,7 +243,7 @@ func (pm *ProcessMeta) NameStep(run func(ctx StepCtx) (any, error), name string,
 		dependName := toStepName(wrap)
 		depend, exist := pm.steps[dependName]
 		if !exist {
-			panic(fmt.Sprintf("Step[%s]'s depend[%s] not found.]", name, dependName))
+			panic(fmt.Sprintf("Step[%s]'s depend[%s] not found.", name, dependName))
 		}
 		meta.depends = append(meta.depends, depend)
 	}

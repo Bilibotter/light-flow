@@ -228,7 +228,7 @@ func (rp *runProcess) runStep(step *runStep) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			panicErr := fmt.Errorf("panic: %v\n\n%s", r, string(debug.Stack()))
+			panicErr := fmt.Errorf("panic: %v\n\n%s\n", r, string(debug.Stack()))
 			step.set(Panic)
 			step.set(Failed)
 			step.Err = panicErr
