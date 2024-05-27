@@ -74,8 +74,8 @@ type StepCtx interface {
 	GetEndValues(key string) map[string]any
 	GetResult(key string) (value any, exist bool)
 	setResult(key string, value any)
-	SetCond(value any)
-	getCond(key string) (named, unnamed evalValues, exist bool)
+	SetCondition(value any, targets ...string) // the targets contains names of the evaluators to be matched
+	getCondition(key string) (named, unnamed evalValues, exist bool)
 }
 
 type procCtx interface {
@@ -528,7 +528,7 @@ func (vc *visibleContext) GetResult(key string) (value any, exist bool) {
 	return ptr.Result, true
 }
 
-func (vc *visibleContext) getCond(key string) (named, unnamed evalValues, exist bool) {
+func (vc *visibleContext) getCondition(key string) (named, unnamed evalValues, exist bool) {
 	ptr, find := vc.getOutCome(key)
 	defer vc.lock.RUnlock()
 	if !find {
@@ -582,7 +582,7 @@ func (vc *visibleContext) setResult(key string, value any) {
 	ptr.Result = value
 }
 
-func (vc *visibleContext) setCond(name string, value any) {
+func (vc *visibleContext) setExactCond(name string, value any, targets ...string) {
 	ptr := vc.setOutcomeIfNotExist(name)
 	defer vc.lock.Unlock()
 	switch value.(type) {
@@ -593,7 +593,12 @@ func (vc *visibleContext) setCond(name string, value any) {
 	case float32, float64:
 		value = toFloat64(value)
 	}
-	ptr.unnamed = append(ptr.unnamed, &evalValue{value: value})
+	insert := &evalValue{value: value}
+	ptr.unnamed = append(ptr.unnamed, insert)
+	if len(targets) == 0 {
+		return
+	}
+	insert.matches = createSetBySliceFunc(targets, func(value string) string { return value })
 }
 
 func (vc *visibleContext) getOutCome(name string) (*outcome, bool) {

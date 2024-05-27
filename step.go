@@ -18,7 +18,7 @@ const (
 
 type segment int64
 
-type evalGroups []*evalGroup
+type evaluators []*evaluator
 
 type StepMeta struct {
 	accessInfo
@@ -31,7 +31,7 @@ type StepMeta struct {
 	waiters    SliceSet[*StepMeta] // next
 	priority   map[string]int64
 	run        func(ctx StepCtx) (any, error)
-	evalGroups evalGroups
+	evaluators evaluators
 }
 
 type runStep struct {
@@ -194,8 +194,8 @@ func (meta *StepMeta) Retry(retry int) *StepMeta {
 	return meta
 }
 
-func (step *runStep) SetCond(value any) {
-	step.setCond(step.stepName, value)
+func (step *runStep) SetCondition(value any, targets ...string) {
+	step.setExactCond(step.stepName, value, targets...)
 }
 
 func (step *runStep) syncInfo() {

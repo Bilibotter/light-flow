@@ -141,12 +141,12 @@ func (rp *runProcess) startStep(step *runStep) {
 }
 
 func (rp *runProcess) evaluate(step *runStep) bool {
-	for _, group := range step.evalGroups {
-		named, unnamed, exist := rp.getCond(group.depend)
+	for _, group := range step.evaluators {
+		named, unnamed, exist := rp.getCondition(group.depend)
 		if !exist {
 			return false
 		}
-		if !group.evaluateValues(named, unnamed) {
+		if !group.evaluate(named, unnamed) {
 			return false
 		}
 	}

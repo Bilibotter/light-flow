@@ -66,27 +66,13 @@ type elementSet[T Element[T]] struct {
 	m map[int64]T
 }
 
-type evalGroup struct {
-	evaluator      func(named, unnamed evalValues) bool
+type evaluator struct {
 	typeValues     map[typeFlag]any
 	typeEvaluate   map[typeFlag]evaluate
 	typeComparator map[typeFlag]comparator
 	name           string // only exact match evaluator has name
 	depend         string
 	expect         flags
-}
-
-type evaluator struct {
-	op          logical    // int8 And Or Not
-	comparator  comparator // int8 EQ NE LT LE GT GE IN NOTIN
-	typeFlags   flags      // int64 bool string int uint float time
-	comparative []interface{}
-	evaluate    func(e evalValues, flags flags) (flags, bool)
-}
-
-type condStep struct {
-	*StepMeta
-	evaluators []evaluator
 }
 
 type Set interface {
@@ -131,31 +117,36 @@ func getTypeFlag(value any) typeFlag {
 	return noneFlag
 }
 
-func (eg *evalGroup) EQ(value ...any) *evalGroup {
+func (eg *evaluator) Identify(name string) *evaluator {
+	eg.name = name
+	return eg
+}
+
+func (eg *evaluator) EQ(value ...any) *evaluator {
 	return eg.update(equalC, value...)
 }
 
-func (eg *evalGroup) NEQ(value ...any) *evalGroup {
+func (eg *evaluator) NEQ(value ...any) *evaluator {
 	return eg.update(notEqualC, value...)
 }
 
-func (eg *evalGroup) GT(value ...any) *evalGroup {
+func (eg *evaluator) GT(value ...any) *evaluator {
 	return eg.update(greaterC, value...)
 }
 
-func (eg *evalGroup) GTE(value ...any) *evalGroup {
+func (eg *evaluator) GTE(value ...any) *evaluator {
 	return eg.update(greaterAndEqualC, value...)
 }
 
-func (eg *evalGroup) LT(value ...any) *evalGroup {
+func (eg *evaluator) LT(value ...any) *evaluator {
 	return eg.update(lessC, value...)
 }
 
-func (eg *evalGroup) LTE(value ...any) *evalGroup {
+func (eg *evaluator) LTE(value ...any) *evaluator {
 	return eg.update(lessAndEqualC, value...)
 }
 
-func (eg *evalGroup) update(cmp comparator, values ...any) *evalGroup {
+func (eg *evaluator) update(cmp comparator, values ...any) *evaluator {
 	for _, value := range values {
 		normalized, flag := normalizeValue(value, cmp)
 		if _, exist := eg.typeValues[flag]; exist {
@@ -169,7 +160,7 @@ func (eg *evalGroup) update(cmp comparator, values ...any) *evalGroup {
 	return eg
 }
 
-func (eg *evalGroup) createEvaluate(flag typeFlag, cmp comparator) evaluate {
+func (eg *evaluator) createEvaluate(flag typeFlag, cmp comparator) evaluate {
 	switch flag {
 	case intF:
 		return eg.createInt64Evaluate(cmp)
@@ -190,7 +181,7 @@ func (eg *evalGroup) createEvaluate(flag typeFlag, cmp comparator) evaluate {
 	}
 	panic(fmt.Sprintf("Unexpected error occurred while createEvaluate"))
 }
-func (eg *evalGroup) createInt64Evaluate(cmp comparator) evaluate {
+func (eg *evaluator) createInt64Evaluate(cmp comparator) evaluate {
 	switch cmp {
 	case equalC:
 		return func(v1, v2 any) bool { return v1.(int64) == v2.(int64) }
@@ -208,7 +199,7 @@ func (eg *evalGroup) createInt64Evaluate(cmp comparator) evaluate {
 	return defaultTrue
 }
 
-func (eg *evalGroup) createUint64Evaluate(cmp comparator) evaluate {
+func (eg *evaluator) createUint64Evaluate(cmp comparator) evaluate {
 	switch cmp {
 	case equalC:
 		return func(v1, v2 any) bool { return v1.(uint64) == v2.(uint64) }
@@ -226,7 +217,7 @@ func (eg *evalGroup) createUint64Evaluate(cmp comparator) evaluate {
 	return defaultTrue
 }
 
-func (eg *evalGroup) createFloat64Evaluate(cmp comparator) evaluate {
+func (eg *evaluator) createFloat64Evaluate(cmp comparator) evaluate {
 	switch cmp {
 	case equalC:
 		return func(v1, v2 any) bool { return math.Abs(v1.(float64)-v2.(float64)) <= accurate }
@@ -244,7 +235,7 @@ func (eg *evalGroup) createFloat64Evaluate(cmp comparator) evaluate {
 	return defaultTrue
 }
 
-func (eg *evalGroup) createBoolEvaluate(cmp comparator) evaluate {
+func (eg *evaluator) createBoolEvaluate(cmp comparator) evaluate {
 	switch cmp {
 	case equalC:
 		return func(v1, v2 any) bool { return v1.(bool) == v2.(bool) }
@@ -262,7 +253,7 @@ func (eg *evalGroup) createBoolEvaluate(cmp comparator) evaluate {
 	return defaultTrue
 }
 
-func (eg *evalGroup) createTimeEvaluate(cmp comparator) evaluate {
+func (eg *evaluator) createTimeEvaluate(cmp comparator) evaluate {
 	switch cmp {
 	case equalC:
 		return func(v1, v2 any) bool { return v1.(time.Time).Equal(v2.(time.Time)) }
@@ -284,7 +275,7 @@ func (eg *evalGroup) createTimeEvaluate(cmp comparator) evaluate {
 	return defaultTrue
 }
 
-func (eg *evalGroup) createStringEvaluate(cmp comparator) evaluate {
+func (eg *evaluator) createStringEvaluate(cmp comparator) evaluate {
 	switch cmp {
 	case equalC:
 		return func(v1, v2 any) bool { return v1.(string) == v2.(string) }
@@ -302,7 +293,7 @@ func (eg *evalGroup) createStringEvaluate(cmp comparator) evaluate {
 	return defaultTrue
 }
 
-func (eg *evalGroup) createComparableEvaluate(cmp comparator) evaluate {
+func (eg *evaluator) createComparableEvaluate(cmp comparator) evaluate {
 	switch cmp {
 	case equalC:
 		return func(v1, v2 any) bool { return v1.(Equality).Equal(v2) }
@@ -320,7 +311,7 @@ func (eg *evalGroup) createComparableEvaluate(cmp comparator) evaluate {
 	return defaultTrue
 }
 
-func (eg *evalGroup) createEqualityEvaluate(cmp comparator) evaluate {
+func (eg *evaluator) createEqualityEvaluate(cmp comparator) evaluate {
 	switch cmp {
 	case equalC:
 		return func(v1, v2 any) bool { return v1.(Equality).Equal(v2) }
@@ -334,18 +325,18 @@ func (eg *evalGroup) createEqualityEvaluate(cmp comparator) evaluate {
 	return defaultTrue
 }
 
-func (eg *evalGroup) evaluateValues(named, unnamed evalValues) bool {
+func (eg *evaluator) evaluate(named, unnamed evalValues) bool {
 	flag := flags(0)
-	if !eg.evaluate(&flag, named) {
+	if !eg.evaluateValues(&flag, named) {
 		return false
 	}
-	if !eg.evaluate(&flag, unnamed) {
+	if !eg.evaluateValues(&flag, unnamed) {
 		return false
 	}
 	return eg.meetExpect(flag)
 }
 
-func (eg *evalGroup) meetExpect(flag flags) bool {
+func (eg *evaluator) meetExpect(flag flags) bool {
 	mask := flags(1)
 	for unexpect := eg.expect ^ flag; unexpect >= mask; mask <<= 1 {
 		// notEqualC should be true when the condition is missing
@@ -356,7 +347,7 @@ func (eg *evalGroup) meetExpect(flag flags) bool {
 	return true
 }
 
-func (eg *evalGroup) evaluate(flag *flags, values evalValues) bool {
+func (eg *evaluator) evaluateValues(flag *flags, values evalValues) bool {
 	for _, v := range values {
 		if v.matches != nil && !v.matches.Contains(eg.name) {
 			continue
@@ -369,7 +360,7 @@ func (eg *evalGroup) evaluate(flag *flags, values evalValues) bool {
 	return true
 }
 
-func (eg *evalGroup) evaluateByType(current *flags, flag typeFlag, value any) bool {
+func (eg *evaluator) evaluateByType(current *flags, flag typeFlag, value any) bool {
 	if current.Exist(int64(flag)) || eg.typeEvaluate[flag] == nil {
 		return true
 	}
@@ -449,45 +440,45 @@ func NewElementSet[T Element[T]]() elementSet[T] {
 	return elementSet[T]{m: make(map[int64]T)}
 }
 
-func (meta *StepMeta) EQ(depend interface{}, value ...any) *evalGroup {
+func (meta *StepMeta) EQ(depend interface{}, value ...any) *evaluator {
 	meta.addDepend(depend)
 	return meta.addEvalGroup(toStepName(depend), equalC, value...)
 }
 
-func (meta *StepMeta) NEQ(depend interface{}, value ...any) *evalGroup {
+func (meta *StepMeta) NEQ(depend interface{}, value ...any) *evaluator {
 	meta.addDepend(depend)
 	return meta.addEvalGroup(toStepName(depend), notEqualC, value...)
 }
 
-func (meta *StepMeta) GT(depend interface{}, value ...any) *evalGroup {
+func (meta *StepMeta) GT(depend interface{}, value ...any) *evaluator {
 	meta.addDepend(depend)
 	return meta.addEvalGroup(toStepName(depend), greaterC, value...)
 }
 
-func (meta *StepMeta) GTE(depend interface{}, value ...any) *evalGroup {
+func (meta *StepMeta) GTE(depend interface{}, value ...any) *evaluator {
 	meta.addDepend(depend)
 	return meta.addEvalGroup(toStepName(depend), greaterAndEqualC, value...)
 }
 
-func (meta *StepMeta) LT(depend interface{}, value ...any) *evalGroup {
+func (meta *StepMeta) LT(depend interface{}, value ...any) *evaluator {
 	meta.addDepend(depend)
 	return meta.addEvalGroup(toStepName(depend), lessC, value...)
 }
 
-func (meta *StepMeta) LTE(depend interface{}, value ...any) *evalGroup {
+func (meta *StepMeta) LTE(depend interface{}, value ...any) *evaluator {
 	meta.addDepend(depend)
 	return meta.addEvalGroup(toStepName(depend), lessAndEqualC, value...)
 }
 
-func (meta *StepMeta) addEvalGroup(depend string, cmp comparator, values ...any) *evalGroup {
-	group := &evalGroup{
+func (meta *StepMeta) addEvalGroup(depend string, cmp comparator, values ...any) *evaluator {
+	group := &evaluator{
 		name:           meta.stepName,
 		depend:         depend,
 		typeValues:     make(map[typeFlag]any, 1),
 		typeEvaluate:   make(map[typeFlag]evaluate, 1),
 		typeComparator: make(map[typeFlag]comparator, 1),
 	}
-	meta.evalGroups = append(meta.evalGroups, group)
+	meta.evaluators = append(meta.evaluators, group)
 	group.update(cmp, values...)
 	return group
 }

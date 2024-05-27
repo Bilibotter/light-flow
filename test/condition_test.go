@@ -76,11 +76,337 @@ func GenerateGetResult(step string, check any) func(ctx flow.StepCtx) (any, erro
 func GenerateConditionStep(value ...any) func(ctx flow.StepCtx) (any, error) {
 	return func(ctx flow.StepCtx) (any, error) {
 		for _, v := range value {
-			ctx.SetCond(v)
+			ctx.SetCondition(v)
 		}
 		atomic.AddInt64(&current, 1)
 		return "disruptions", nil
 	}
+}
+
+func GenerateConditionStepByMap(m map[string]any) func(ctx flow.StepCtx) (any, error) {
+	return func(ctx flow.StepCtx) (any, error) {
+		for k, v := range m {
+			ctx.SetCondition(v, k)
+		}
+		atomic.AddInt64(&current, 1)
+		return "disruptions", nil
+	}
+}
+
+func GenerateExactConditionStep(value ...any) func(ctx flow.StepCtx) (any, error) {
+	return func(ctx flow.StepCtx) (any, error) {
+		for _, v := range value {
+			ctx.SetCondition(v, "group")
+		}
+		atomic.AddInt64(&current, 1)
+		return "disruptions", nil
+	}
+}
+
+func TestContinuousExactCondition(t *testing.T) {
+	defer resetCurrent()
+
+	var v1, v2 interface{}
+	v1 = 1
+	v2 = 1.0
+	// true true
+	workflow := flow.RegisterFlow("TestContinuousExactCondition1")
+	process := workflow.Process("TestContinuousExactCondition1")
+	process.NameStep(GenerateExactConditionStep(v1, v2), "1")
+	step2 := process.NameStep(GenerateNoDelayStep(2), "2")
+	step2.EQ("1", v1).NEQ(2.0).Identify("group")
+	process.NameStep(GenerateNoDelayStep(3), "3", "2")
+	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestContinuousExactCondition1", map[string]any{"1": -1, "2": -1})
+	resetCurrent()
+
+	v1 = 1
+	v2 = 1.0
+	// true false
+	workflow = flow.RegisterFlow("TestContinuousExactCondition2")
+	process = workflow.Process("TestContinuousExactCondition2")
+	process.NameStep(GenerateExactConditionStep(v1, v2), "1")
+	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
+	step2.EQ("1", v1).NEQ(1.0).Identify("group")
+	process.NameStep(GenerateNoDelayStep(3), "3", "2")
+	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
+	flow.DoneFlow("TestContinuousExactCondition2", map[string]any{"1": -1, "2": -1})
+	resetCurrent()
+
+	v1 = 1
+	v2 = 1.0
+	// true false
+	workflow = flow.RegisterFlow("TestContinuousExactCondition3")
+	process = workflow.Process("TestContinuousExactCondition3")
+	process.NameStep(GenerateExactConditionStep(v1, v2), "1")
+	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
+	step2.EQ("1", 2).NEQ(2.0).Identify("group")
+	process.NameStep(GenerateNoDelayStep(3), "3", "2")
+	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
+	flow.DoneFlow("TestContinuousExactCondition3", map[string]any{"1": -1, "2": -1})
+	resetCurrent()
+
+	v1 = 1
+	v2 = 1.0
+	// false false
+	workflow = flow.RegisterFlow("TestContinuousExactCondition4")
+	process = workflow.Process("TestContinuousExactCondition4")
+	process.NameStep(GenerateExactConditionStep(v1, v2), "1")
+	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
+	step2.EQ("1", 2).NEQ(1.0).Identify("group")
+	process.NameStep(GenerateNoDelayStep(3), "3", "2")
+	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
+	flow.DoneFlow("TestContinuousExactCondition4", map[string]any{"1": -1, "2": -1})
+	resetCurrent()
+}
+
+func TestReachExactCondition(t *testing.T) {
+	defer resetCurrent()
+	var check interface{}
+
+	check = "reach"
+	workflow := flow.RegisterFlow("TestReachExactCondition1")
+	process := workflow.Process("TestReachExactCondition1")
+	process.NameStep(GenerateConditionStepByMap(map[string]any{"exact": check}), "1")
+	step2 := process.NameStep(GenerateNoDelayStep(2), "2")
+	step2.EQ("1", check).Identify("exact")
+	process.NameStep(GenerateNoDelayStep(3), "3", "2")
+	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestReachExactCondition1", map[string]any{"1": "disruptions", "2": "disruptions"})
+	resetCurrent()
+
+	check = 1
+	workflow = flow.RegisterFlow("TestReachExactCondition2")
+	process = workflow.Process("TestReachExactCondition2")
+	process.NameStep(GenerateConditionStepByMap(map[string]any{"exact": check}), "1")
+	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
+	step2.EQ("1", check).Identify("exact")
+	process.NameStep(GenerateNoDelayStep(3), "3", "2")
+	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestReachExactCondition2", map[string]any{"1": -1, "2": -1})
+	resetCurrent()
+
+	check = true
+	workflow = flow.RegisterFlow("TestReachExactCondition3")
+	process = workflow.Process("TestReachExactCondition3")
+	process.NameStep(GenerateConditionStepByMap(map[string]any{"exact": check}), "1")
+	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
+	step2.EQ("1", check).Identify("exact")
+	process.NameStep(GenerateNoDelayStep(3), "3", "2")
+	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestReachExactCondition3", map[string]any{"1": false, "2": false})
+	resetCurrent()
+
+	check = float32(0.001)
+	workflow = flow.RegisterFlow("TestReachExactCondition4")
+	process = workflow.Process("TestReachExactCondition4")
+	process.NameStep(GenerateConditionStepByMap(map[string]any{"exact": check}), "1")
+	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
+	step2.EQ("1", check).Identify("exact")
+	process.NameStep(GenerateNoDelayStep(3), "3", "2")
+	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestReachExactCondition4", map[string]any{"1": -0.002, "2": -0.002})
+	resetCurrent()
+
+	timeLayout := "2006-01-02 15:04:05"
+	timeStr1 := "2022-01-15 15:04:05"
+	timeStr2 := "2022-01-15 15:04:07"
+	check, err := time.Parse(timeLayout, timeStr1)
+	if err != nil {
+		t.Errorf("parse time %s fail", timeStr1)
+	}
+	disruptions, err := time.Parse(timeLayout, timeStr2)
+	if err != nil {
+		t.Errorf("parse time %s fail", timeStr2)
+	}
+	workflow = flow.RegisterFlow("TestReachExactCondition5")
+	process = workflow.Process("TestReachExactCondition5")
+	process.NameStep(GenerateConditionStepByMap(map[string]any{"exact": check}), "1")
+	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
+	step2.EQ("1", check).Identify("exact")
+	process.NameStep(GenerateNoDelayStep(3), "3", "2")
+	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestReachExactCondition5", map[string]any{"1": disruptions, "2": disruptions})
+	resetCurrent()
+
+	check = uint(1)
+	workflow = flow.RegisterFlow("TestReachExactCondition6")
+	process = workflow.Process("TestReachExactCondition6")
+	process.NameStep(GenerateConditionStepByMap(map[string]any{"exact": check}), "1")
+	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
+	step2.EQ("1", check).Identify("exact")
+	process.NameStep(GenerateNoDelayStep(3), "3", "2")
+	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestReachExactCondition6", map[string]any{"1": uint(0), "2": uint(0)})
+	resetCurrent()
+
+	check = EqualityImpl{age: 18, name: "xxx"}
+	notEqual := EqualityImpl{age: 19, name: "xxxx"}
+	workflow = flow.RegisterFlow("TestReachExactCondition7")
+	process = workflow.Process("TestReachExactCondition7")
+	process.NameStep(GenerateConditionStepByMap(map[string]any{"exact": check}), "1")
+	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
+	step2.EQ("1", check).Identify("exact")
+	process.NameStep(GenerateNoDelayStep(3), "3", "2")
+	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestReachExactCondition7", map[string]any{"1": notEqual, "2": notEqual})
+}
+
+func TestNotReachExactCondition(t *testing.T) {
+	defer resetCurrent()
+	var check, nomatch interface{}
+	check = "reach"
+	nomatch = "noreach"
+	workflow := flow.RegisterFlow("TestNotReachExactCondition1")
+	process := workflow.Process("TestNotReachExactCondition1")
+	process.NameStep(GenerateConditionStepByMap(map[string]any{"exact": nomatch}), "1")
+	step2 := process.NameStep(GenerateNoDelayStep(2), "2")
+	step2.EQ("1", check).Identify("exact")
+	process.NameStep(GenerateNoDelayStep(3), "3", "2")
+	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
+	flow.DoneFlow("TestNotReachExactCondition1", map[string]any{"1": "disruptions", "2": "disruptions"})
+	resetCurrent()
+
+	check = int(1)
+	nomatch = int(0)
+	workflow = flow.RegisterFlow("TestNotReachExactCondition2")
+	process = workflow.Process("TestNotReachExactCondition2")
+	process.NameStep(GenerateConditionStepByMap(map[string]any{"exact": nomatch}), "1")
+	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
+	step2.EQ("1", check).Identify("exact")
+	process.NameStep(GenerateNoDelayStep(3), "3", "2")
+	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
+	flow.DoneFlow("TestNotReachExactCondition2", map[string]any{"1": int(0), "2": int(0)})
+	resetCurrent()
+
+	check = true
+	nomatch = false
+	workflow = flow.RegisterFlow("TestNotReachExactCondition3")
+	process = workflow.Process("TestNotReachExactCondition3")
+	process.NameStep(GenerateConditionStepByMap(map[string]any{"exact": nomatch}), "1")
+	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
+	step2.EQ("1", check).Identify("exact")
+	process.NameStep(GenerateNoDelayStep(3), "3", "2")
+	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
+	flow.DoneFlow("TestNotReachExactCondition3", map[string]any{"1": nomatch, "2": nomatch})
+	resetCurrent()
+
+	check = float32(0.001)
+	nomatch = float32(0.002)
+	workflow = flow.RegisterFlow("TestNotReachExactCondition4")
+	process = workflow.Process("TestNotReachExactCondition4")
+	process.NameStep(GenerateConditionStepByMap(map[string]any{"exact": nomatch}), "1")
+	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
+	step2.EQ("1", check).Identify("exact")
+	process.NameStep(GenerateNoDelayStep(3), "3", "2")
+	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
+	flow.DoneFlow("TestNotReachExactCondition4", map[string]any{"1": -0.002, "2": -0.002})
+	resetCurrent()
+
+	timeLayout := "2006-01-02 15:04:05"
+	timeStr1 := "2022-01-15 15:04:05"
+	timeStr2 := "2022-01-15 15:04:07"
+	check, err := time.Parse(timeLayout, timeStr1)
+	if err != nil {
+		t.Errorf("parse time %s fail", timeStr1)
+	}
+	disruptions, err := time.Parse(timeLayout, timeStr2)
+	if err != nil {
+		t.Errorf("parse time %s fail", timeStr2)
+	}
+	workflow = flow.RegisterFlow("TestNotReachExactCondition5")
+	process = workflow.Process("TestNotReachExactCondition5")
+	process.NameStep(GenerateConditionStepByMap(map[string]any{"exact": disruptions}), "1")
+	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
+	step2.EQ("1", check).Identify("exact")
+	process.NameStep(GenerateNoDelayStep(3), "3", "2")
+	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
+	flow.DoneFlow("TestNotReachExactCondition5", map[string]any{"1": disruptions, "2": disruptions})
+	resetCurrent()
+
+	check = uint(1)
+	nomatch = uint(0)
+	workflow = flow.RegisterFlow("TestNotReachExactCondition6")
+	process = workflow.Process("TestNotReachExactCondition6")
+	process.NameStep(GenerateConditionStepByMap(map[string]any{"exact": nomatch}), "1")
+	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
+	step2.EQ("1", check).Identify("exact")
+	process.NameStep(GenerateNoDelayStep(3), "3", "2")
+	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
+	flow.DoneFlow("TestNotReachExactCondition6", map[string]any{"1": uint(0), "2": uint(0)})
+	resetCurrent()
+
+	check = EqualityImpl{age: 18, name: "xxx"}
+	nomatch = EqualityImpl{age: 19, name: "xxxx"}
+	workflow = flow.RegisterFlow("TestNotReachExactCondition7")
+	process = workflow.Process("TestNotReachExactCondition7")
+	process.NameStep(GenerateConditionStepByMap(map[string]any{"exact": nomatch}), "1")
+	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
+	step2.EQ("1", check).Identify("exact")
+	process.NameStep(GenerateNoDelayStep(3), "3", "2")
+	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
+	flow.DoneFlow("TestNotReachExactCondition7", map[string]any{"1": EqualityImpl{age: 19, name: "xxxx"}, "2": EqualityImpl{age: 19, name: "xxxx"}})
+}
+
+func TestMultipleExactConditionGroup(t *testing.T) {
+	defer resetCurrent()
+
+	var v1, v2 interface{}
+	v1 = 1
+	v2 = 1.0
+	// true true
+	workflow := flow.RegisterFlow("TestMultipleExactConditionGroup1")
+	process := workflow.Process("TestMultipleExactConditionGroup1")
+	process.NameStep(GenerateConditionStepByMap(map[string]any{"group1": v1, "group2": v2}), "1")
+	step2 := process.NameStep(GenerateNoDelayStep(2), "2")
+	step2.EQ("1", v1).Identify("group1")
+	step2.NEQ("1", 2.0).Identify("group2")
+	process.NameStep(GenerateNoDelayStep(3), "3", "2")
+	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestMultipleExactConditionGroup1", map[string]any{"1": -1, "2": -1})
+	resetCurrent()
+
+	v1 = 1
+	v2 = 1.0
+	// true false
+	workflow = flow.RegisterFlow("TestMultipleExactConditionGroup2")
+	process = workflow.Process("TestMultipleExactConditionGroup2")
+	process.NameStep(GenerateConditionStepByMap(map[string]any{"group1": v1, "group2": v2}), "1")
+	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
+	step2.EQ("1", v1).Identify("group1")
+	step2.NEQ("1", 1.0).Identify("group2")
+	process.NameStep(GenerateNoDelayStep(3), "3", "2")
+	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
+	flow.DoneFlow("TestMultipleExactConditionGroup2", map[string]any{"1": -1, "2": -1})
+	resetCurrent()
+
+	v1 = 1
+	v2 = 1.0
+	// true false
+	workflow = flow.RegisterFlow("TestMultipleExactConditionGroup3")
+	process = workflow.Process("TestMultipleExactConditionGroup3")
+	process.NameStep(GenerateConditionStepByMap(map[string]any{"group1": v1, "group2": v2}), "1")
+	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
+	step2.EQ("1", 2).Identify("group1")
+	step2.NEQ("1", 2.0).Identify("group2")
+	process.NameStep(GenerateNoDelayStep(3), "3", "2")
+	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
+	flow.DoneFlow("TestMultipleExactConditionGroup3", map[string]any{"1": -1, "2": -1})
+	resetCurrent()
+
+	v1 = 1
+	v2 = 1.0
+	// false false
+	workflow = flow.RegisterFlow("TestMultipleExactConditionGroup4")
+	process = workflow.Process("TestMultipleExactConditionGroup4")
+	process.NameStep(GenerateConditionStepByMap(map[string]any{"group1": v1, "group2": v2}), "1")
+	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
+	step2.EQ("1", 2).Identify("group1")
+	step2.NEQ("1", 1.0).Identify("group2")
+	process.NameStep(GenerateNoDelayStep(3), "3", "2")
+	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
+	flow.DoneFlow("TestMultipleExactConditionGroup4", map[string]any{"1": -1, "2": -1})
+	resetCurrent()
 }
 
 func TestMultipleConditionGroup(t *testing.T) {
