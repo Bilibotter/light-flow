@@ -2,30 +2,46 @@ package light_flow
 
 import (
 	"fmt"
+	"sync/atomic"
 	"time"
 )
+
+const (
+	segmentSize       = 12
+	segMask     int64 = (1 << segmentSize) - 1
+)
+
+const (
+	waitingOffset int64 = segmentSize * iota
+	conditionOffset
+)
+
+type segment int64
+
+type evaluators []*evaluator
 
 type StepMeta struct {
 	accessInfo
 	StepConfig
-	belong   *ProcessMeta
-	stepName string
-	layer    int
-	position *status     // used to record the position of the step
-	depends  []*StepMeta // prev
-	waiters  []*StepMeta // next
-	priority map[string]int64
-	run      func(ctx StepCtx) (any, error)
+	belong     *ProcessMeta
+	stepName   string
+	layer      int
+	position   *state              // used to record the position of the step
+	depends    SliceSet[*StepMeta] // prev
+	waiters    SliceSet[*StepMeta] // next
+	priority   map[string]int64
+	run        func(ctx StepCtx) (any, error)
+	evaluators evaluators
 }
 
 type runStep struct {
 	*StepMeta
-	*status
+	*state
 	*visibleContext
 	id        string
 	flowId    string
 	processId string
-	waiting   int64 // the num of wait for dependent step to complete
+	segments  segment //  0-12 bits for waiting, 12-24 bits for comparator.
 	finish    chan bool
 	Start     time.Time
 	End       time.Time
@@ -46,6 +62,24 @@ type Step struct {
 type StepConfig struct {
 	StepTimeout time.Duration
 	StepRetry   int
+}
+
+func (seg *segment) loadWaiting() int64 {
+	return (atomic.LoadInt64((*int64)(seg)) >> waitingOffset) & segMask
+}
+
+func (seg *segment) loadCondition() int64 {
+	return (atomic.LoadInt64((*int64)(seg)) >> conditionOffset) & segMask
+}
+
+func (seg *segment) addWaiting(i int64) int64 {
+	current := atomic.AddInt64((*int64)(seg), i<<waitingOffset)
+	return (current >> waitingOffset) & segMask
+}
+
+func (seg *segment) addCondition(i int64) int64 {
+	current := atomic.AddInt64((*int64)(seg), i<<conditionOffset)
+	return (current >> conditionOffset) & segMask
 }
 
 func (si *Step) Error() error {
@@ -96,9 +130,9 @@ func (meta *StepMeta) wireDepends() {
 			continue
 		}
 		depend.waiters = append(depend.waiters, meta)
-		if depend.position.Has(end) {
-			depend.position.add(hasNext)
-			depend.position.remove(end)
+		if depend.position.Has(endE) {
+			depend.position.set(hasNextE)
+			depend.position.clear(endE)
 		}
 		if depend.layer+1 > meta.layer {
 			meta.layer = depend.layer + 1
@@ -106,10 +140,10 @@ func (meta *StepMeta) wireDepends() {
 	}
 
 	if len(meta.depends) == 0 {
-		meta.position.add(head)
+		meta.position.set(headE)
 	}
 
-	meta.position.add(end)
+	meta.position.set(endE)
 }
 
 // checkPriority checks if the priority key corresponds to an existing step.
@@ -160,11 +194,15 @@ func (meta *StepMeta) Retry(retry int) *StepMeta {
 	return meta
 }
 
+func (step *runStep) SetCondition(value any, targets ...string) {
+	step.setExactCond(step.stepName, value, targets...)
+}
+
 func (step *runStep) syncInfo() {
 	if step.infoCache == nil {
 		return
 	}
-	step.infoCache.status = step.status
+	step.infoCache.state = step.state
 	step.infoCache.Err = step.Err
 	step.infoCache.Start = step.Start
 	step.infoCache.End = step.End

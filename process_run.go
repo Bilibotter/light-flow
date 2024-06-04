@@ -10,7 +10,7 @@ import (
 
 type runProcess struct {
 	*ProcessMeta
-	*status
+	*state
 	*visibleContext
 	id        string
 	flowId    string
@@ -27,12 +27,12 @@ func (rp *runProcess) buildRunStep(meta *StepMeta) *runStep {
 			linkedTable: rp.linkedTable,
 			prev:        rp.visibleContext.prev,
 		},
-		status:    emptyStatus(),
+		state:     emptyStatus(),
 		StepMeta:  meta,
 		id:        generateId(),
 		processId: rp.id,
 		flowId:    rp.flowId,
-		waiting:   int64(len(meta.depends)),
+		segments:  segment(len(meta.depends)),
 		finish:    make(chan bool, 1),
 	}
 
@@ -42,41 +42,41 @@ func (rp *runProcess) buildRunStep(meta *StepMeta) *runStep {
 }
 
 func (rp *runProcess) Resume() {
-	if rp.remove(Pause) {
+	if rp.clear(Pause) {
 		rp.pause.Done()
 	}
 }
 
 func (rp *runProcess) Pause() {
-	if rp.add(Pause) {
+	if rp.set(Pause) {
 		rp.pause.Add(1)
 	}
 }
 
 func (rp *runProcess) Stop() {
-	rp.add(Stop)
-	rp.add(Failed)
+	rp.set(Stop)
+	rp.set(Failed)
 }
 
 func (rp *runProcess) schedule() (future *Future) {
 	rp.initialize()
 	future = &Future{
 		basicInfo: &basicInfo{
-			Id:     rp.id,
-			Name:   rp.processName,
-			status: rp.status,
+			Id:    rp.id,
+			Name:  rp.processName,
+			state: rp.state,
 		},
-		status: rp.status,
+		state:  rp.state,
 		finish: &rp.finish,
 	}
 
 	// CallbackFail from Flow
 	if rp.Has(CallbackFail) {
-		rp.add(Cancel)
+		rp.set(Cancel)
 		return
 	}
 
-	rp.add(Running)
+	rp.set(Running)
 	rp.procCallback(Before)
 	for _, step := range rp.flowSteps {
 		if step.layer == 1 {
@@ -93,12 +93,12 @@ func (rp *runProcess) startStep(step *runStep) {
 	defer rp.startNextSteps(step)
 
 	if _, finish := step.GetResult(step.stepName); finish {
-		step.add(Success)
+		step.set(Success)
 		return
 	}
 
 	if !rp.Normal() {
-		step.add(Cancel)
+		step.set(Cancel)
 		return
 	}
 
@@ -110,6 +110,15 @@ func (rp *runProcess) startStep(step *runStep) {
 
 	for rp.Has(Pause) {
 		rp.pause.Wait()
+	}
+
+	if step.Has(skipped) {
+		return
+	}
+
+	if len(step.depends) > 0 && !rp.evaluate(step) {
+		step.set(skipped)
+		return
 	}
 
 	timeout := 3 * time.Hour
@@ -124,11 +133,24 @@ func (rp *runProcess) startStep(step *runStep) {
 	go rp.runStep(step)
 	select {
 	case <-timer.C:
-		step.add(Timeout)
-		step.add(Failed)
+		step.set(Timeout)
+		step.set(Failed)
 	case <-step.finish:
 		return
 	}
+}
+
+func (rp *runProcess) evaluate(step *runStep) bool {
+	for _, group := range step.evaluators {
+		named, unnamed, exist := rp.getCondition(group.depend)
+		if !exist {
+			return false
+		}
+		if !group.evaluate(named, unnamed) {
+			return false
+		}
+	}
+	return true
 }
 
 func (rp *runProcess) finalize() {
@@ -145,17 +167,17 @@ func (rp *runProcess) finalize() {
 	}()
 	select {
 	case <-timer.C:
-		rp.add(Timeout)
-		rp.add(Failed)
+		rp.set(Timeout)
+		rp.set(Failed)
 	case <-finish:
 	}
 
 	for _, step := range rp.flowSteps {
-		rp.adds(step.status.load())
+		rp.add(step.state.load())
 	}
 
 	if rp.Normal() {
-		rp.add(Success)
+		rp.set(Success)
 	}
 
 	rp.procCallback(After)
@@ -165,17 +187,20 @@ func (rp *runProcess) finalize() {
 func (rp *runProcess) startNextSteps(step *runStep) {
 	// all step not execute should cancel while process is timeout
 	cancel := !step.Normal() || !rp.Normal()
+	skip := step.Has(skipped)
 	for _, waiter := range step.waiters {
 		next := rp.flowSteps[waiter.stepName]
-		waiting := atomic.AddInt64(&next.waiting, -1)
+		waiting := next.segments.addWaiting(-1)
 		if cancel {
-			next.add(Cancel)
+			next.set(Cancel)
 		}
 		if atomic.LoadInt64(&waiting) != 0 {
 			continue
 		}
 		if step.Success() {
-			next.add(Running)
+			next.set(Running)
+		} else if skip {
+			next.set(skipped)
 		}
 		go rp.startStep(next)
 	}
@@ -203,9 +228,9 @@ func (rp *runProcess) runStep(step *runStep) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			panicErr := fmt.Errorf("panic: %v\n\n%s", r, string(debug.Stack()))
-			step.add(Panic)
-			step.add(Failed)
+			panicErr := fmt.Errorf("panic: %v\n\n%s\n", r, string(debug.Stack()))
+			step.set(Panic)
+			step.set(Failed)
 			step.Err = panicErr
 			step.End = time.Now().UTC()
 		}
@@ -217,14 +242,14 @@ func (rp *runProcess) runStep(step *runStep) {
 		step.End = time.Now().UTC()
 		step.Err = err
 		if err != nil {
-			step.add(Error)
-			step.add(Failed)
+			step.set(Error)
+			step.set(Failed)
 			continue
 		}
 		if result != nil {
 			step.setResult(step.stepName, result)
 		}
-		step.add(Success)
+		step.set(Success)
 		break
 	}
 }
@@ -254,9 +279,9 @@ func (rp *runProcess) procCallback(flag string) {
 	info := &Process{
 		procCtx: rp.visibleContext,
 		basicInfo: basicInfo{
-			status: rp.status,
-			Id:     rp.id,
-			Name:   rp.processName,
+			state: rp.state,
+			Id:    rp.id,
+			Name:  rp.processName,
 		},
 		FlowId: rp.flowId,
 	}
@@ -274,11 +299,11 @@ func (rp *runProcess) summaryStepInfo(step *runStep) *Step {
 	}
 	info := &Step{
 		basicInfo: &basicInfo{
-			status: step.status,
-			Id:     step.id,
-			Name:   step.stepName,
+			state: step.state,
+			Id:    step.id,
+			Name:  step.stepName,
 		},
-		StepCtx:   step.visibleContext,
+		StepCtx:   step,
 		ProcessId: step.processId,
 		FlowId:    step.flowId,
 		Start:     step.Start,

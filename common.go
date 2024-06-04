@@ -17,46 +17,47 @@ const (
 
 // these constants are used to indicate the position of the process
 var (
-	end     = &statusEnum{0b1, "end"}
-	head    = &statusEnum{0b1 << 1, "head"}
-	hasNext = &statusEnum{0b1 << 2, "hasNext"}
-	merged  = &statusEnum{0b1 << 3, "merged"}
+	endE     = &StatusEnum{0b1, "end"}
+	headE    = &StatusEnum{0b1 << 1, "head"}
+	hasNextE = &StatusEnum{0b1 << 2, "hasNext"}
+	mergedE  = &StatusEnum{0b1 << 3, "merged"}
 )
 
-// these variable are used to indicate the status of the unit
+// these variable are used to indicate the state of the unit
 var (
-	Pending      = &statusEnum{0, "Pending"}
-	Running      = &statusEnum{0b1, "Running"}
-	Pause        = &statusEnum{0b1 << 1, "Pause"}
-	Success      = &statusEnum{0b1 << 15, "Success"}
-	NormalMask   = &statusEnum{0b1<<16 - 1, "NormalMask"}
-	Cancel       = &statusEnum{0b1 << 16, "Cancel"}
-	Timeout      = &statusEnum{0b1 << 17, "Timeout"}
-	Panic        = &statusEnum{0b1 << 18, "Panic"}
-	Error        = &statusEnum{0b1 << 19, "Error"}
-	Stop         = &statusEnum{0b1 << 20, "Stop"}
-	CallbackFail = &statusEnum{0b1 << 21, "CallbackFail"}
-	Failed       = &statusEnum{0b1 << 31, "Failed"}
-	// AbnormalMask An abnormal step status will cause the cancellation of dependent unexecuted steps.
-	AbnormalMask = &statusEnum{NormalMask.flag << 16, "AbnormalMask"}
+	Pending      = &StatusEnum{0, "Pending"}
+	Running      = &StatusEnum{0b1, "Running"}
+	Pause        = &StatusEnum{0b1 << 1, "Pause"}
+	skipped      = &StatusEnum{0b1 << 2, "skip"}
+	Success      = &StatusEnum{0b1 << 15, "Success"}
+	NormalMask   = &StatusEnum{0b1<<16 - 1, "NormalMask"}
+	Cancel       = &StatusEnum{0b1 << 16, "Cancel"}
+	Timeout      = &StatusEnum{0b1 << 17, "Timeout"}
+	Panic        = &StatusEnum{0b1 << 18, "Panic"}
+	Error        = &StatusEnum{0b1 << 19, "Error"}
+	Stop         = &StatusEnum{0b1 << 20, "Stop"}
+	CallbackFail = &StatusEnum{0b1 << 21, "CallbackFail"}
+	Failed       = &StatusEnum{0b1 << 31, "Failed"}
+	// AbnormalMask An abnormal step state will cause the cancellation of dependent unexecuted steps.
+	AbnormalMask = &StatusEnum{NormalMask.flag << 16, "AbnormalMask"}
 )
 
 var (
-	normal   = []*statusEnum{Pending, Running, Pause, Success}
-	abnormal = []*statusEnum{Cancel, Timeout, Panic, Error, Stop, CallbackFail, Failed}
+	normal   = []*StatusEnum{Pending, Running, Pause, Success}
+	abnormal = []*StatusEnum{Cancel, Timeout, Panic, Error, Stop, CallbackFail, Failed}
 )
 
-type status int64
+type state int64
 
 type statusI interface {
-	Has(enum *statusEnum) bool
+	Has(enum *StatusEnum) bool
 	Success() bool
 	Exceptions() []string
 }
 
 type basicInfoI interface {
 	statusI
-	addr() *status
+	addr() *state
 	GetId() string
 	GetName() string
 }
@@ -73,6 +74,8 @@ type StepCtx interface {
 	GetEndValues(key string) map[string]any
 	GetResult(key string) (value any, exist bool)
 	setResult(key string, value any)
+	SetCondition(value any, targets ...string) // the targets contains names of the evaluators to be matched
+	getCondition(key string) (named, unnamed evalValues, exist bool)
 }
 
 type procCtx interface {
@@ -80,13 +83,13 @@ type procCtx interface {
 	GetByStepName(stepName, key string) (value any, exist bool)
 }
 
-type statusEnum struct {
-	flag status
+type StatusEnum struct {
+	flag state
 	msg  string
 }
 
 type basicInfo struct {
-	*status
+	*state
 	Id   string
 	Name string
 }
@@ -137,17 +140,30 @@ type node struct {
 }
 
 type Future struct {
-	*status
+	*state
 	*basicInfo
 	finish *sync.WaitGroup
 }
 
-func emptyStatus() *status {
+type outcome struct {
+	Result  interface{}
+	named   evalValues
+	unnamed evalValues
+}
+
+type evalValues []*evalValue
+
+type evalValue struct {
+	matches *set[string]
+	value   interface{}
+}
+
+func emptyStatus() *state {
 	return createStatus(0)
 }
 
-func createStatus(i int64) *status {
-	s := status(i)
+func createStatus(i int64) *state {
+	s := state(i)
 	return &s
 }
 
@@ -159,45 +175,41 @@ func toStepName(value any) string {
 	case string:
 		result = value.(string)
 	default:
-		panic("value must be func(ctx context) (any, error) or string")
+		panic("depend must be func(ctx context) (any, error) or string")
 	}
 	return result
 }
 
 // Success return true if finish running and success
-func (s *status) Success() bool {
+func (s *state) Success() bool {
 	return s.Has(Success) && s.Normal()
 }
 
 // Normal return true if not exception occur
-func (s *status) Normal() bool {
+func (s *state) Normal() bool {
 	return s.load()&AbnormalMask.flag == 0
 }
 
-func (s *status) Has(enum *statusEnum) bool {
+func (s *state) Has(enum *StatusEnum) bool {
 	// can't use s.load()&enum.flag != 0, because enum.flag may be 0
 	return s.load()&enum.flag == enum.flag
 }
 
-func (s *status) contain(flag status) bool {
-	return s.load()&flag == flag
-}
-
 // Exceptions return contain exception's message
-func (s *status) Exceptions() []string {
+func (s *state) Exceptions() []string {
 	if s.Normal() {
 		return nil
 	}
 	return s.ExplainStatus()
 }
 
-// ExplainStatus function explains the status represented by the provided bitmask.
-// The function checks the status against predefined abnormal and normal flags,
+// ExplainStatus function explains the state represented by the provided bitmask.
+// The function checks the state against predefined abnormal and normal flags,
 // and returns a slice of strings containing the names of the matching flags.
-// Parameter status is the bitmask representing the status.
+// Parameter state is the bitmask representing the state.
 // The returned slice contains the names of the matching flags in the layer they were found.
 // If abnormal flags are found, normal flags will be ignored.
-func (s *status) ExplainStatus() []string {
+func (s *state) ExplainStatus() []string {
 	compress := make([]string, 0)
 
 	for _, enum := range abnormal {
@@ -222,11 +234,11 @@ func (s *status) ExplainStatus() []string {
 	return compress
 }
 
-// remove function pops a status bit from the specified address.
-// The function checks if the specified status bit exists in the current value.
-// If it exists, it removes the status bit, and returns true indicating successful removal of the status bit.
+// clear function pops a state bit from the specified address.
+// The function checks if the specified state bit exists in the current value.
+// If it exists, it removes the state bit, and returns true indicating successful removal of the state bit.
 // Otherwise, it returns false.
-func (s *status) remove(enum *statusEnum) bool {
+func (s *state) clear(enum *StatusEnum) bool {
 	for current := s.load(); enum.flag&current != 0; {
 		if s.cas(current, current^enum.flag) {
 			return true
@@ -235,17 +247,12 @@ func (s *status) remove(enum *statusEnum) bool {
 	return false
 }
 
-func (s *status) add(enum *statusEnum) bool {
-	for current := s.load(); !current.Has(enum); current = s.load() {
-		if s.cas(current, current|enum.flag) {
-			return true
-		}
-	}
-	return false
+func (s *state) set(enum *StatusEnum) bool {
+	return s.add(enum.flag)
 }
 
-func (s *status) adds(flag status) bool {
-	for current := s.load(); !current.contain(flag); current = s.load() {
+func (s *state) add(flag state) bool {
+	for current := s.load(); current.load()&flag != flag; current = s.load() {
 		if s.cas(current, current|flag) {
 			return true
 		}
@@ -253,15 +260,15 @@ func (s *status) adds(flag status) bool {
 	return false
 }
 
-func (s *status) load() status {
-	return status(atomic.LoadInt64((*int64)(s)))
+func (s *state) load() state {
+	return state(atomic.LoadInt64((*int64)(s)))
 }
 
-func (s *status) cas(old, new status) bool {
+func (s *state) cas(old, new state) bool {
 	return atomic.CompareAndSwapInt64((*int64)(s), int64(old), int64(new))
 }
 
-func (s *statusEnum) Contained(explain ...string) bool {
+func (s *StatusEnum) Contained(explain ...string) bool {
 	for _, value := range explain {
 		if value == s.msg {
 			return true
@@ -270,7 +277,7 @@ func (s *statusEnum) Contained(explain ...string) bool {
 	return false
 }
 
-func (s *statusEnum) Message() string {
+func (s *StatusEnum) Message() string {
 	return s.msg
 }
 
@@ -278,8 +285,8 @@ func (bi *basicInfo) GetName() string {
 	return bi.Name
 }
 
-func (bi *basicInfo) addr() *status {
-	return bi.status
+func (bi *basicInfo) addr() *state {
+	return bi.state
 }
 
 func (bi *basicInfo) GetId() string {
@@ -331,8 +338,8 @@ func (cc *handler[T]) handle(flag string, info T) string {
 		keepOn, err, panicStack := filter.call(flag, info)
 		if filter.must {
 			if len(panicStack) != 0 || err != nil {
-				info.addr().add(CallbackFail)
-				info.addr().add(Failed)
+				info.addr().set(CallbackFail)
+				info.addr().set(Failed)
 				return panicStack
 			}
 		}
@@ -373,7 +380,7 @@ func (c *callback[T]) OnlyFor(name ...string) *callback[T] {
 	return c
 }
 
-func (c *callback[T]) When(status ...*statusEnum) *callback[T] {
+func (c *callback[T]) When(status ...*StatusEnum) *callback[T] {
 	if c.flag == Before {
 		if len(status) > 1 || status[0] != CallbackFail {
 			panic("CallbackFail is only valid statusEnum for Before")
@@ -392,7 +399,7 @@ func (c *callback[T]) When(status ...*statusEnum) *callback[T] {
 	return c
 }
 
-func (c *callback[T]) Exclude(status ...*statusEnum) *callback[T] {
+func (c *callback[T]) Exclude(status ...*StatusEnum) *callback[T] {
 	old := c.run
 	f := func(info T) (bool, error) {
 		for _, match := range status {
@@ -414,7 +421,7 @@ func (c *callback[T]) call(flag string, info T) (keepOn bool, err error, panicSt
 	defer func() {
 		r := recover()
 		if r != nil {
-			// this will lead to turn process status to panic
+			// this will lead to turn process state to panic
 			panicStack = fmt.Sprintf("panic: %v\n\n%s", r, string(debug.Stack()))
 		}
 
@@ -460,6 +467,8 @@ func (t *linkedTable) get(passing int64, key string) (any, bool) {
 	return nil, false
 }
 
+// matchByHighest will exact search node.
+// In most cases, the position of the highest bit is the index.
 func (n *node) matchByHighest(highest int64) (any, bool) {
 	// Check if the highest set bit in "highest" is equal to the highest set bit in "n.Passing".
 	// If the condition is true, the value of node is set by the step corresponding to highest.
@@ -511,14 +520,21 @@ func (vc *visibleContext) getByName(name, key string) {
 }
 
 func (vc *visibleContext) GetResult(key string) (value any, exist bool) {
-	vc.lock.RLock()
+	ptr, find := vc.getOutCome(key)
 	defer vc.lock.RUnlock()
-	head, find := vc.nodes[key]
 	if !find {
 		return nil, false
 	}
-	// head.search may find process set value
-	return head.matchByHighest(resultMark)
+	return ptr.Result, true
+}
+
+func (vc *visibleContext) getCondition(key string) (named, unnamed evalValues, exist bool) {
+	ptr, find := vc.getOutCome(key)
+	defer vc.lock.RUnlock()
+	if !find {
+		return nil, nil, false
+	}
+	return ptr.named, ptr.unnamed, true
 }
 
 func (vc *visibleContext) GetEndValues(key string) map[string]any {
@@ -561,14 +577,62 @@ func (vc *visibleContext) GetByStepName(stepName, key string) (value any, exist 
 }
 
 func (vc *visibleContext) setResult(key string, value any) {
-	vc.lock.Lock()
+	ptr := vc.setOutcomeIfNotExist(key)
 	defer vc.lock.Unlock()
+	ptr.Result = value
+}
+
+func (vc *visibleContext) setExactCond(name string, value any, targets ...string) {
+	ptr := vc.setOutcomeIfNotExist(name)
+	defer vc.lock.Unlock()
+	switch value.(type) {
+	case int8, int16, int32, int64, int:
+		value = toInt64(value)
+	case uint8, uint16, uint32, uint64, uint:
+		value = toUint64(value)
+	case float32, float64:
+		value = toFloat64(value)
+	}
+	insert := &evalValue{value: value}
+	ptr.unnamed = append(ptr.unnamed, insert)
+	if len(targets) == 0 {
+		return
+	}
+	insert.matches = createSetBySliceFunc(targets, func(value string) string { return value })
+}
+
+func (vc *visibleContext) getOutCome(name string) (*outcome, bool) {
+	// make sure panic will never occur,
+	// otherwise lock will never be released and will block permanently
+	vc.lock.RLock()
+	find, ok := vc.nodes[name]
+	if !ok {
+		return nil, false
+	}
+	wrap, ok := find.matchByHighest(resultMark)
+	if !ok {
+		return nil, false
+	}
+	return wrap.(*outcome), true
+}
+
+func (vc *visibleContext) setOutcomeIfNotExist(key string) *outcome {
+	vc.lock.Lock()
+	if find, exist := vc.nodes[key]; exist {
+		wrap, ok := find.matchByHighest(resultMark)
+		if ok {
+			unwrap := wrap.(*outcome)
+			return unwrap
+		}
+	}
+	ptr := &outcome{}
 	head := &node{
-		Value:   value,
+		Value:   ptr,
 		Passing: resultMark,
 		Next:    vc.nodes[key],
 	}
 	vc.nodes[key] = head
+	return ptr
 }
 
 func (vc *visibleContext) Set(key string, value any) {
