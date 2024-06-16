@@ -72,7 +72,7 @@ func AfterProcProcessor(info *flow.Process) (bool, error) {
 	if len(info.Id) == 0 {
 		panic("process id is empty")
 	}
-	if len(info.FlowId) == 0 {
+	if len(info.GetFlowId()) == 0 {
 		panic("process flow id is empty")
 	}
 	atomic.AddInt64(&current, 1)

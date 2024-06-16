@@ -15,18 +15,17 @@ const (
 type ProcessMeta struct {
 	ProcessConfig
 	accessInfo
-	belong      *FlowMeta
-	init        sync.Once
-	processName string
-	steps       map[string]*StepMeta
-	tailStep    string
-	nodeNum     int
+	belong   *FlowMeta
+	init     sync.Once
+	name     string
+	steps    map[string]*StepMeta
+	tailStep string
+	nodeNum  int
 }
 
 type Process struct {
 	basicInfo
 	procCtx
-	FlowId string
 }
 
 type ProcessConfig struct {
@@ -43,24 +42,8 @@ func newProcessConfig() ProcessConfig {
 }
 
 // Fix ContextName return first step name
-func (pi *Process) ContextName() string {
-	return pi.Name
-}
-
-func (pc *ProcessConfig) clone() ProcessConfig {
-	config := ProcessConfig{}
-	copyPropertiesSkipNotEmpty(pc, config)
-	config.StepConfig = pc.StepConfig.clone()
-	config.stepChain = pc.stepChain.clone()
-	config.procChain = pc.procChain.clone()
-	return config
-}
-
-func (pc *ProcessConfig) combine(config *ProcessConfig) {
-	copyPropertiesSkipNotEmpty(pc, config)
-	pc.StepConfig.combine(&config.StepConfig)
-	pc.stepChain.combine(&config.stepChain)
-	pc.procChain.combine(&config.procChain)
+func (p *Process) ContextName() string {
+	return p.Name
 }
 
 func (pc *ProcessConfig) ProcessTimeout(timeout time.Duration) *ProcessConfig {
@@ -99,25 +82,10 @@ func (pc *ProcessConfig) AfterProcess(must bool, callback func(*Process) (keepOn
 }
 
 func (pm *ProcessMeta) register() {
-	_, load := allProcess.LoadOrStore(pm.processName, pm)
+	_, load := allProcess.LoadOrStore(pm.name, pm)
 	if load {
-		panic(fmt.Sprintf("Process[%s] has exist", pm.processName))
+		panic(fmt.Sprintf("Process[%s] has exist", pm.name))
 	}
-}
-
-func (pm *ProcessMeta) clone() *ProcessMeta {
-	meta := &ProcessMeta{
-		ProcessConfig: pm.ProcessConfig.clone(),
-		init:          sync.Once{},
-		processName:   pm.processName,
-		tailStep:      pm.tailStep,
-		nodeNum:       pm.nodeNum,
-	}
-	meta.steps = make(map[string]*StepMeta, len(pm.steps))
-	for k, v := range pm.steps {
-		meta.steps[k] = v
-	}
-	return meta
 }
 
 // todo:delete it
@@ -133,7 +101,6 @@ func (pm *ProcessMeta) constructVisible() {
 			waiter.passing = step.passing | waiter.passing
 		}
 	}
-	return
 }
 
 // Merge will not merge config,
@@ -145,15 +112,15 @@ func (pm *ProcessMeta) Merge(name string) {
 	}
 	mergedProcess := wrap.(*ProcessMeta)
 	for _, merge := range mergedProcess.sortedSteps() {
-		if _, exist = pm.steps[merge.stepName]; exist {
+		if _, exist = pm.steps[merge.name]; exist {
 			pm.mergeStep(merge)
 			continue
 		}
 		depends := make([]any, 0, len(merge.depends))
 		for _, depend := range merge.depends {
-			depends = append(depends, depend.stepName)
+			depends = append(depends, depend.name)
 		}
-		step := pm.NameStep(merge.run, merge.stepName, depends...)
+		step := pm.NameStep(merge.run, merge.name, depends...)
 		step.position.set(mergedE)
 	}
 
@@ -161,13 +128,13 @@ func (pm *ProcessMeta) Merge(name string) {
 	for index, step := range pm.sortedSteps() {
 		step.index = int64(index)
 		step.passing = 1 << index
-		pm.names[step.index] = step.stepName
-		pm.indexes[step.stepName] = step.index
+		pm.names[step.index] = step.name
+		pm.indexes[step.name] = step.index
 	}
 }
 
 func (pm *ProcessMeta) mergeStep(merge *StepMeta) {
-	target := pm.steps[merge.stepName]
+	target := pm.steps[merge.name]
 
 	for k, v := range merge.priority {
 		if _, exist := target.priority[k]; exist {
@@ -178,11 +145,11 @@ func (pm *ProcessMeta) mergeStep(merge *StepMeta) {
 
 	// create a set contains all depended on target flowName
 	current := createSetBySliceFunc[*StepMeta](target.depends,
-		func(meta *StepMeta) string { return meta.stepName })
+		func(meta *StepMeta) string { return meta.name })
 
 	stepNames := make([]string, 0, len(merge.depends))
 	for _, step := range merge.depends {
-		stepNames = append(stepNames, step.stepName)
+		stepNames = append(stepNames, step.name)
 	}
 	// Can't use sort stepNames instead, because stepNames order is context access order.
 	sort.Slice(stepNames, func(i, j int) bool {
@@ -196,7 +163,7 @@ func (pm *ProcessMeta) mergeStep(merge *StepMeta) {
 		depend := pm.steps[name]
 		if depend.layer > target.layer && target.forwardSearch(name) {
 			panic(fmt.Sprintf("merge failed, a circle is formed between Step[%s] and Step[%s].",
-				depend.stepName, target.stepName))
+				depend.name, target.name))
 		}
 		if depend.layer+1 > target.layer {
 			target.layer = depend.layer + 1
@@ -206,7 +173,7 @@ func (pm *ProcessMeta) mergeStep(merge *StepMeta) {
 	}
 
 	target.wireDepends()
-	pm.tailStep = target.stepName
+	pm.tailStep = target.name
 }
 
 func (pm *ProcessMeta) updateWaitersLayer(step *StepMeta) {
@@ -237,7 +204,7 @@ func (pm *ProcessMeta) Tail(run func(ctx StepCtx) (any, error), alias ...string)
 
 func (pm *ProcessMeta) NameStep(run func(ctx StepCtx) (any, error), name string, depends ...any) *StepMeta {
 	meta := &StepMeta{
-		stepName: name,
+		name: name,
 	}
 	for _, wrap := range depends {
 		dependName := toStepName(wrap)
@@ -250,7 +217,7 @@ func (pm *ProcessMeta) NameStep(run func(ctx StepCtx) (any, error), name string,
 
 	if old, exist := pm.steps[name]; exist {
 		if !old.position.Has(mergedE) {
-			panic(fmt.Sprintf("Step[%s] already exist, can used %s to avoid stepName duplicate",
+			panic(fmt.Sprintf("Step[%s] already exist, can used %s to avoid name duplicate",
 				name, getFuncName(pm.NameStep)))
 		}
 		pm.mergeStep(meta)
@@ -263,7 +230,7 @@ func (pm *ProcessMeta) NameStep(run func(ctx StepCtx) (any, error), name string,
 	meta.wireDepends()
 	pm.addPassingInfo(meta)
 
-	pm.tailStep = meta.stepName
+	pm.tailStep = meta.name
 	pm.steps[name] = meta
 
 	return meta
@@ -271,7 +238,7 @@ func (pm *ProcessMeta) NameStep(run func(ctx StepCtx) (any, error), name string,
 
 func (pm *ProcessMeta) addPassingInfo(step *StepMeta) {
 	if pm.nodeNum == 62 {
-		panic(fmt.Sprintf("Process[%s] exceeds max nodes num, max node num is 62", pm.processName))
+		panic(fmt.Sprintf("Process[%s] exceeds max nodes num, max node num is 62", pm.name))
 	}
 	step.accessInfo = accessInfo{
 		passing: 1 << pm.nodeNum,
@@ -279,9 +246,9 @@ func (pm *ProcessMeta) addPassingInfo(step *StepMeta) {
 		names:   pm.names,
 		indexes: pm.indexes,
 	}
-	pm.names[step.index] = step.stepName
-	pm.indexes[step.stepName] = step.index
 	pm.nodeNum++
+	pm.names[step.index] = step.name
+	pm.indexes[step.name] = step.index
 }
 
 func (pm *ProcessMeta) sortedSteps() []*StepMeta {

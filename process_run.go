@@ -12,8 +12,8 @@ type runProcess struct {
 	*ProcessMeta
 	*state
 	*visibleContext
+	belong    *runFlow
 	id        string
-	flowId    string
 	flowSteps map[string]*runStep
 	pause     sync.WaitGroup
 	running   sync.WaitGroup
@@ -23,22 +23,37 @@ type runProcess struct {
 func (rp *runProcess) buildRunStep(meta *StepMeta) *runStep {
 	step := runStep{
 		visibleContext: &visibleContext{
-			accessInfo:  &meta.accessInfo,
+			info:        &meta.accessInfo,
 			linkedTable: rp.linkedTable,
 			prev:        rp.visibleContext.prev,
 		},
-		state:     emptyStatus(),
-		StepMeta:  meta,
-		id:        generateId(),
-		processId: rp.id,
-		flowId:    rp.flowId,
-		segments:  segment(len(meta.depends)),
-		finish:    make(chan bool, 1),
+		belong:   rp,
+		state:    emptyStatus(),
+		StepMeta: meta,
+		id:       generateId(),
+		segments: segment(len(meta.depends)),
+		finish:   make(chan bool, 1),
 	}
 
-	rp.flowSteps[meta.stepName] = &step
+	rp.flowSteps[meta.name] = &step
 
 	return &step
+}
+
+func (rp *runProcess) clearExecutedFromRoot(root string) {
+	current := rp.flowSteps[root]
+	current.clear(executed)
+	for _, meta := range current.waiters {
+		rp.clearExecutedFromRoot(meta.name)
+	}
+}
+
+func (rp *runProcess) GetFlowId() string {
+	return rp.belong.Id
+}
+
+func (rp *runProcess) GetByStepName(stepName, key string) (value any, exist bool) {
+	return rp.getByStepName(stepName, key)
 }
 
 func (rp *runProcess) Resume() {
@@ -63,7 +78,7 @@ func (rp *runProcess) schedule() (future *Future) {
 	future = &Future{
 		basicInfo: &basicInfo{
 			Id:    rp.id,
-			Name:  rp.processName,
+			Name:  rp.name,
 			state: rp.state,
 		},
 		state:  rp.state,
@@ -92,19 +107,18 @@ func (rp *runProcess) schedule() (future *Future) {
 func (rp *runProcess) startStep(step *runStep) {
 	defer rp.startNextSteps(step)
 
-	if _, finish := step.GetResult(step.stepName); finish {
-		step.set(Success)
-		return
-	}
-
-	if !rp.Normal() {
-		step.set(Cancel)
+	if step.Has(executed) {
 		return
 	}
 
 	// If prev step is abnormal, the current step will mark as cancel
 	// But other tasks that do not depend on the failed task will continue to execute
 	if !step.Normal() {
+		return
+	}
+
+	if !rp.Normal() {
+		step.set(Stop)
 		return
 	}
 
@@ -189,7 +203,7 @@ func (rp *runProcess) startNextSteps(step *runStep) {
 	cancel := !step.Normal() || !rp.Normal()
 	skip := step.Has(skipped)
 	for _, waiter := range step.waiters {
-		next := rp.flowSteps[waiter.stepName]
+		next := rp.flowSteps[waiter.name]
 		waiting := next.segments.addWaiting(-1)
 		if cancel {
 			next.set(Cancel)
@@ -247,7 +261,7 @@ func (rp *runProcess) runStep(step *runStep) {
 			continue
 		}
 		if result != nil {
-			step.setResult(step.stepName, result)
+			step.setResult(step.name, result)
 		}
 		step.set(Success)
 		break
@@ -277,13 +291,12 @@ func (rp *runProcess) stepCallback(step *runStep, flag string) {
 
 func (rp *runProcess) procCallback(flag string) {
 	info := &Process{
-		procCtx: rp.visibleContext,
+		procCtx: rp,
 		basicInfo: basicInfo{
 			state: rp.state,
 			Id:    rp.id,
-			Name:  rp.processName,
+			Name:  rp.name,
 		},
-		FlowId: rp.flowId,
 	}
 	if !rp.belong.ProcNotUseDefault && !rp.ProcNotUseDefault && defaultConfig != nil {
 		defaultConfig.procChain.handle(flag, info)
@@ -301,14 +314,12 @@ func (rp *runProcess) summaryStepInfo(step *runStep) *Step {
 		basicInfo: &basicInfo{
 			state: step.state,
 			Id:    step.id,
-			Name:  step.stepName,
+			Name:  step.name,
 		},
-		StepCtx:   step,
-		ProcessId: step.processId,
-		FlowId:    step.flowId,
-		Start:     step.Start,
-		End:       step.End,
-		Err:       step.Err,
+		StepCtx: step,
+		Start:   step.Start,
+		End:     step.End,
+		Err:     step.Err,
 	}
 
 	step.infoCache = info

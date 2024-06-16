@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	publicKey   int64 = 0
+	publicIndex int64 = 0
 	resultIndex int64 = 62
 	visibleAll  int64 = 1<<62 - 1
 	resultMark  int64 = 1 << resultIndex
@@ -29,6 +29,7 @@ var (
 	Running      = &StatusEnum{0b1, "Running"}
 	Pause        = &StatusEnum{0b1 << 1, "Pause"}
 	skipped      = &StatusEnum{0b1 << 2, "skip"}
+	executed     = &StatusEnum{0b1 << 3, "executed"}
 	Success      = &StatusEnum{0b1 << 15, "Success"}
 	NormalMask   = &StatusEnum{0b1<<16 - 1, "NormalMask"}
 	Cancel       = &StatusEnum{0b1 << 16, "Cancel"}
@@ -38,7 +39,7 @@ var (
 	Stop         = &StatusEnum{0b1 << 20, "Stop"}
 	CallbackFail = &StatusEnum{0b1 << 21, "CallbackFail"}
 	Failed       = &StatusEnum{0b1 << 31, "Failed"}
-	// AbnormalMask An abnormal step state will cause the cancellation of dependent unexecuted steps.
+	// An abnormal step state will cause the cancellation of dependent unexecuted steps.
 	AbnormalMask = &StatusEnum{NormalMask.flag << 16, "AbnormalMask"}
 )
 
@@ -57,7 +58,7 @@ type statusI interface {
 
 type basicInfoI interface {
 	statusI
-	addr() *state
+	setStatus(enum *StatusEnum) (updated bool)
 	GetId() string
 	GetName() string
 }
@@ -71,16 +72,29 @@ type context interface {
 
 type StepCtx interface {
 	context
+	GetFlowId() string
+	GetProcessId() string
 	GetEndValues(key string) map[string]any
 	GetResult(key string) (value any, exist bool)
 	setResult(key string, value any)
-	SetCondition(value any, targets ...string) // the targets contains names of the evaluators to be matched
-	getCondition(key string) (named, unnamed evalValues, exist bool)
+	SetCondition(value any, targets ...string) // the targets contain names of the evaluators to be matched
+	getCondition(key string) (named, unnamed []evalValue, exist bool)
 }
 
 type procCtx interface {
 	context
+	GetFlowId() string
 	GetByStepName(stepName, key string) (value any, exist bool)
+}
+
+type PanicError interface {
+	Error() string
+	GetRecover() any
+}
+
+type panicWrap struct {
+	msg string
+	r   any
 }
 
 type StatusEnum struct {
@@ -109,15 +123,14 @@ type callback[T basicInfoI] struct {
 }
 
 type simpleContext struct {
-	m    map[string]any
-	name string
+	table map[string]any
+	name  string
 }
 
 type visibleContext struct {
 	*linkedTable
-	*accessInfo // step accessInfo will update when mergeConfig, so using pointer
-	prev        context
-	next        context
+	info *accessInfo // step accessInfo will update when mergeConfig, so using pointer
+	prev context
 }
 
 type accessInfo struct {
@@ -147,15 +160,13 @@ type Future struct {
 
 type outcome struct {
 	Result  interface{}
-	named   evalValues
-	unnamed evalValues
+	Named   []evalValue
+	Unnamed []evalValue
 }
 
-type evalValues []*evalValue
-
 type evalValue struct {
-	matches *set[string]
-	value   interface{}
+	Matches *set[string]
+	Value   interface{}
 }
 
 func emptyStatus() *state {
@@ -168,16 +179,18 @@ func createStatus(i int64) *state {
 }
 
 func toStepName(value any) string {
-	var result string
-	switch value.(type) {
+	switch result := value.(type) {
 	case func(ctx StepCtx) (any, error):
-		result = getFuncName(value)
+		return getFuncName(value)
 	case string:
-		result = value.(string)
+		return result
 	default:
 		panic("depend must be func(ctx context) (any, error) or string")
 	}
-	return result
+}
+
+func newPanicError(msg string, r any) PanicError {
+	return &panicWrap{msg: msg, r: r}
 }
 
 // Success return true if finish running and success
@@ -247,17 +260,17 @@ func (s *state) clear(enum *StatusEnum) bool {
 	return false
 }
 
-func (s *state) set(enum *StatusEnum) bool {
+func (s *state) set(enum *StatusEnum) (updated bool) {
 	return s.add(enum.flag)
 }
 
-func (s *state) add(flag state) bool {
+func (s *state) add(flag state) (updated bool) {
 	for current := s.load(); current.load()&flag != flag; current = s.load() {
 		if s.cas(current, current|flag) {
 			return true
 		}
 	}
-	return false
+	return
 }
 
 func (s *state) load() state {
@@ -285,33 +298,19 @@ func (bi *basicInfo) GetName() string {
 	return bi.Name
 }
 
-func (bi *basicInfo) addr() *state {
-	return bi.state
-}
-
 func (bi *basicInfo) GetId() string {
 	return bi.Id
 }
 
-func (cc *handler[T]) clone() handler[T] {
-	config := handler[T]{}
-	config.filter = cc.copyFilters()
-	return config
-}
-
-func (cc *handler[T]) copyFilters() []*callback[T] {
-	result := make([]*callback[T], 0, len(cc.filter))
-	for _, filter := range cc.filter {
-		result = append(result, filter)
-	}
-	return result
+func (bi *basicInfo) setStatus(enum *StatusEnum) (updated bool) {
+	return bi.state.set(enum)
 }
 
 func (cc *handler[T]) addCallback(flag string, must bool, run func(info T) (bool, error)) *callback[T] {
 	if len(cc.filter) > 0 {
 		last := cc.filter[len(cc.filter)-1]
 		// essential callback depend on non-essential callback is against Dependency Inversion Principle
-		if last.flag == flag && last.must != must && last.must != true {
+		if last.flag == flag && last.must != must && !last.must {
 			panic("essential callback should before non-essential callback")
 		}
 	}
@@ -326,20 +325,14 @@ func (cc *handler[T]) addCallback(flag string, must bool, run func(info T) (bool
 	return filter
 }
 
-func (cc *handler[T]) combine(chain *handler[T]) {
-	for _, filter := range chain.filter {
-		cc.filter = append(cc.filter, filter)
-	}
-}
-
 // don't want to raise error not deal hint, so return string
 func (cc *handler[T]) handle(flag string, info T) string {
 	for _, filter := range cc.filter {
 		keepOn, err, panicStack := filter.call(flag, info)
 		if filter.must {
 			if len(panicStack) != 0 || err != nil {
-				info.addr().set(CallbackFail)
-				info.addr().set(Failed)
+				info.setStatus(CallbackFail)
+				info.setStatus(Failed)
 				return panicStack
 			}
 		}
@@ -376,6 +369,18 @@ func (c *callback[T]) OnlyFor(name ...string) *callback[T] {
 		return old(info)
 	}
 
+	c.run = f
+	return c
+}
+
+func (c *callback[T]) If(condition func() bool) *callback[T] {
+	old := c.run
+	f := func(info T) (bool, error) {
+		if !condition() {
+			return true, nil
+		}
+		return old(info)
+	}
 	c.run = f
 	return c
 }
@@ -450,6 +455,9 @@ func (t *linkedTable) matchByIndex(index int64, key string) (any, bool) {
 	if !exist {
 		return nil, false
 	}
+	if index == resultMark {
+		return head.matchByHighest(0)
+	}
 	return head.matchByHighest(1 << index)
 }
 
@@ -492,14 +500,14 @@ func (n *node) search(passing int64) (any, bool) {
 }
 
 func (vc *visibleContext) ContextName() string {
-	return vc.names[vc.index]
+	return vc.info.names[vc.info.index]
 }
 
 func (vc *visibleContext) Get(key string) (value any, exist bool) {
-	if index, match := vc.priority[key]; match {
+	if index, match := vc.info.priority[key]; match {
 		return vc.matchByIndex(index, key)
 	}
-	if value, exist = vc.get(vc.passing, key); exist {
+	if value, exist = vc.get(vc.info.passing, key); exist {
 		return
 	}
 	if vc.prev != nil {
@@ -509,10 +517,10 @@ func (vc *visibleContext) Get(key string) (value any, exist bool) {
 }
 
 func (vc *visibleContext) getByName(name, key string) {
-	if vc.indexes == nil {
+	if vc.info.indexes == nil {
 		panic("This method is not supported.")
 	}
-	index, ok := vc.indexes[name]
+	index, ok := vc.info.indexes[name]
 	if !ok {
 		panic("Invalid node name.")
 	}
@@ -528,17 +536,17 @@ func (vc *visibleContext) GetResult(key string) (value any, exist bool) {
 	return ptr.Result, true
 }
 
-func (vc *visibleContext) getCondition(key string) (named, unnamed evalValues, exist bool) {
+func (vc *visibleContext) getCondition(key string) (named, unnamed []evalValue, exist bool) {
 	ptr, find := vc.getOutCome(key)
 	defer vc.lock.RUnlock()
 	if !find {
 		return nil, nil, false
 	}
-	return ptr.named, ptr.unnamed, true
+	return ptr.Named, ptr.Unnamed, true
 }
 
 func (vc *visibleContext) GetEndValues(key string) map[string]any {
-	if vc.names == nil {
+	if vc.info.names == nil {
 		panic("This method is not supported.")
 	}
 	vc.lock.RLock()
@@ -550,12 +558,12 @@ func (vc *visibleContext) GetEndValues(key string) map[string]any {
 	m := make(map[string]any)
 	exist := int64(0)
 	for current.Next != nil {
-		if vc.passing&current.Passing != current.Passing || exist|current.Passing == exist {
+		if vc.info.passing&current.Passing != current.Passing || exist|current.Passing == exist {
 			current = current.Next
 			continue
 		}
 		length := bits.Len64(uint64(current.Passing))
-		name := vc.names[int64(length)-1]
+		name := vc.info.names[int64(length)-1]
 		m[name] = current.Value
 		exist |= current.Passing
 		current = current.Next
@@ -563,13 +571,13 @@ func (vc *visibleContext) GetEndValues(key string) map[string]any {
 	return m
 }
 
-func (vc *visibleContext) GetByStepName(stepName, key string) (value any, exist bool) {
-	if vc.indexes == nil {
+func (vc *visibleContext) getByStepName(stepName, key string) (value any, exist bool) {
+	if vc.info.indexes == nil {
 		panic("This method is not supported.")
 	}
 	vc.lock.RLock()
 	defer vc.lock.RUnlock()
-	index, ok := vc.indexes[stepName]
+	index, ok := vc.info.indexes[stepName]
 	if !ok {
 		panic(fmt.Sprintf("Step[%s] not found.", stepName))
 	}
@@ -577,13 +585,13 @@ func (vc *visibleContext) GetByStepName(stepName, key string) (value any, exist 
 }
 
 func (vc *visibleContext) setResult(key string, value any) {
-	ptr := vc.setOutcomeIfNotExist(key)
+	ptr := vc.setOutcomeIfAbsent(key)
 	defer vc.lock.Unlock()
 	ptr.Result = value
 }
 
 func (vc *visibleContext) setExactCond(name string, value any, targets ...string) {
-	ptr := vc.setOutcomeIfNotExist(name)
+	ptr := vc.setOutcomeIfAbsent(name)
 	defer vc.lock.Unlock()
 	switch value.(type) {
 	case int8, int16, int32, int64, int:
@@ -593,12 +601,11 @@ func (vc *visibleContext) setExactCond(name string, value any, targets ...string
 	case float32, float64:
 		value = toFloat64(value)
 	}
-	insert := &evalValue{value: value}
-	ptr.unnamed = append(ptr.unnamed, insert)
-	if len(targets) == 0 {
-		return
+	insert := evalValue{Value: value}
+	if len(targets) != 0 {
+		insert.Matches = createSetBySliceFunc(targets, func(value string) string { return value })
 	}
-	insert.matches = createSetBySliceFunc(targets, func(value string) string { return value })
+	ptr.Unnamed = append(ptr.Unnamed, insert)
 }
 
 func (vc *visibleContext) getOutCome(name string) (*outcome, bool) {
@@ -616,7 +623,18 @@ func (vc *visibleContext) getOutCome(name string) (*outcome, bool) {
 	return wrap.(*outcome), true
 }
 
-func (vc *visibleContext) setOutcomeIfNotExist(key string) *outcome {
+func (vc *visibleContext) restoreOutcome(key string, o *outcome) {
+	vc.lock.Lock()
+	defer vc.lock.Unlock()
+	head := &node{
+		Value:   o,
+		Passing: resultMark,
+		Next:    vc.nodes[key],
+	}
+	vc.nodes[key] = head
+}
+
+func (vc *visibleContext) setOutcomeIfAbsent(key string) *outcome {
 	vc.lock.Lock()
 	if find, exist := vc.nodes[key]; exist {
 		wrap, ok := find.matchByHighest(resultMark)
@@ -636,11 +654,11 @@ func (vc *visibleContext) setOutcomeIfNotExist(key string) *outcome {
 }
 
 func (vc *visibleContext) Set(key string, value any) {
-	if vc.passing == visibleAll {
-		vc.set(publicKey, key, value)
+	if vc.info.passing == visibleAll {
+		vc.set(publicIndex, key, value)
 		return
 	}
-	vc.set(vc.passing, key, value)
+	vc.set(vc.info.passing, key, value)
 }
 
 func (sc *simpleContext) ContextName() string {
@@ -648,16 +666,24 @@ func (sc *simpleContext) ContextName() string {
 }
 
 func (sc *simpleContext) Get(key string) (value any, exist bool) {
-	value, exist = sc.m[key]
+	value, exist = sc.table[key]
 	return
 }
 
-func (sc *simpleContext) getByName(name, key string) {
+func (sc *simpleContext) getByName(_, _ string) {
 	panic("This method is not supported.")
 }
 
 func (sc *simpleContext) Set(key string, value any) {
-	sc.m[key] = value
+	sc.table[key] = value
+}
+
+func (pw *panicWrap) Error() string {
+	return pw.msg
+}
+
+func (pw *panicWrap) GetRecover() any {
+	return pw.r
 }
 
 // Done method waits for the corresponding process to complete.

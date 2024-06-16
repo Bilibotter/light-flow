@@ -45,16 +45,25 @@ func (ci *ComparableImpl) Less(other any) bool {
 
 func CheckResult(t *testing.T, check int64, statuses ...*flow.StatusEnum) func(*flow.WorkFlow) (keepOn bool, err error) {
 	return func(workFlow *flow.WorkFlow) (keepOn bool, err error) {
-		t.Logf("start check result")
+		ss := make([]string, len(statuses))
+		for i, status := range statuses {
+			ss[i] = status.Message()
+		}
+		t.Logf("start check, expected current=%d, status include %s", check, strings.Join(ss, ","))
 		if current != check {
 			t.Errorf("execute %d step, but current = %d\n", check, current)
 		}
 		for _, status := range statuses {
+			if status == flow.Success && !workFlow.Success() {
+				t.Errorf("workFlow not success\n")
+			}
 			if !workFlow.Has(status) {
 				t.Errorf("workFlow has not %s status\n", status.Message())
 			}
 		}
 		t.Logf("status expalin=%s", strings.Join(workFlow.ExplainStatus(), ","))
+		t.Logf("finish check")
+		println()
 		return true, nil
 	}
 }
