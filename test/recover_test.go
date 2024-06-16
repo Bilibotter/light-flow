@@ -2,6 +2,7 @@ package test
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	flow "github.com/Bilibotter/light-flow"
 	"gorm.io/driver/mysql"
@@ -27,6 +28,24 @@ var (
 
 type StepFuncBuilder struct {
 	f func(ctx flow.StepCtx) (any, error)
+}
+
+type simpleContext struct {
+	table map[string]any
+	name  string
+}
+
+func (s *simpleContext) Get(key string) (value any, exist bool) {
+	value, exist = s.table[key]
+	return
+}
+
+func (s *simpleContext) Set(key string, value any) {
+	s.table[key] = value
+}
+
+func (s *simpleContext) ContextName() string {
+	return s.name
 }
 
 func (s *StepFuncBuilder) Do(f func(ctx flow.StepCtx) (any, error)) *StepFuncBuilder {
@@ -591,6 +610,16 @@ func GenerateAfter(t *testing.T, preview string, setValue func(c Ctx), checks ..
 	}
 }
 
+func PreviewProcessRecover(process *flow.Process) (keepOn bool, err error) {
+	if !executeSuc {
+		StepSet(process)
+		return true, nil
+	}
+	StepCheck(process.ContextName(), process)
+	atomic.AddInt64(&current, 1)
+	return true, nil
+}
+
 func GeneratePreview(t *testing.T, preview string, setValue func(c Ctx), checks ...func(p string, ctx Ctx) (string, bool)) func(ctx flow.StepCtx) (any, error) {
 	return func(ctx flow.StepCtx) (any, error) {
 		t.Logf("step[%s] start\n", ctx.ContextName())
@@ -867,6 +896,104 @@ func TestParallelStepRecover(t *testing.T) {
 	flow.DoneFlow("TestParallelStepRecover", nil)
 	executeSuc = true
 	flowId, err := getId("TestParallelStepRecover")
+	if err != nil {
+		panic(err)
+	}
+	resetCurrent()
+	if err = flow.RecoverFlow(flowId); err != nil {
+		panic(err)
+	}
+}
+
+func TestFlowRecover(t *testing.T) {
+	defer resetCurrent()
+	executeSuc = false
+	wf := flow.RegisterFlow("TestFlowRecover")
+	wf.EnableRecover()
+	proc := wf.Process("TestFlowRecover")
+	proc.NameStep(func(ctx flow.StepCtx) (any, error) {
+		StepCheck("TestFlowRecover", ctx)
+		if !executeSuc {
+			StepSet(ctx)
+			return nil, errors.New("error")
+		}
+		atomic.AddInt64(&current, 1)
+		return ctx.ContextName(), nil
+	}, "step1")
+	proc.NameStep(GenerateAfter(t, "step1", StepSet, StepCheck), "step2", "step1")
+	proc.NameStep(GenerateAfter(t, "step2", StepSet, StepCheck), "step3", "step2")
+	wf.AfterFlow(false, CheckResult(t, 0, flow.Error)).If(execFail)
+	wf.AfterFlow(false, CheckResult(t, 3, flow.Success)).If(execSuc)
+	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
+	m := simpleContext{
+		name:  "TestFlowRecover",
+		table: make(map[string]any),
+	}
+	StepSet(&m)
+	flow.DoneFlow("TestFlowRecover", m.table)
+	executeSuc = true
+	flowId, err := getId("TestFlowRecover")
+	if err != nil {
+		panic(err)
+	}
+	resetCurrent()
+	if err = flow.RecoverFlow(flowId); err != nil {
+		panic(err)
+	}
+}
+
+func TestProcessRecover(t *testing.T) {
+	defer resetCurrent()
+	executeSuc = false
+	wf := flow.RegisterFlow("TestProcessRecover")
+	wf.EnableRecover()
+	proc := wf.Process("TestProcessRecover")
+	proc.NameStep(func(ctx flow.StepCtx) (any, error) {
+		fmt.Printf("step[%s] start\n", ctx.ContextName())
+		atomic.AddInt64(&current, 1)
+		return ctx.ContextName(), nil
+	}, "step1")
+	proc.NameStep(func(ctx flow.StepCtx) (any, error) {
+		fmt.Printf("step[%s] start\n", ctx.ContextName())
+		atomic.AddInt64(&current, 1)
+		return ctx.ContextName(), nil
+	}, "step2", "step1")
+	proc.NameStep(func(ctx flow.StepCtx) (any, error) {
+		fmt.Printf("step[%s] start\n", ctx.ContextName())
+		if executeSuc {
+			if res, exist := ctx.GetResult("step1"); exist {
+				if res.(string) != "step1" {
+					panic(fmt.Sprintf("step[%s] get result failed, step[%s] reuslt is not equal to %s", ctx.ContextName(), "step1", "step1"))
+				}
+			} else {
+				panic(fmt.Sprintf("step[%s] get result failed, step[%s] reuslt is missing.", ctx.ContextName(), "step1"))
+			}
+			if res, exist := ctx.GetResult("step2"); exist {
+				if res.(string) != "step2" {
+					panic(fmt.Sprintf("step[%s] get result failed, step[%s] reuslt is not equal to %s", ctx.ContextName(), "step2", "step2"))
+				}
+			} else {
+				panic(fmt.Sprintf("step[%s] get result failed, step[%s] reuslt is missing.", ctx.ContextName(), "step2"))
+			}
+			StepCheck("TestProcessRecover", ctx)
+			atomic.AddInt64(&current, 1)
+			return ctx.ContextName(), nil
+		}
+		fmt.Printf("step[%s] failed\n", ctx.ContextName())
+		return nil, fmt.Errorf("error")
+	}, "step3", "step1", "step2")
+	proc.NameStep(func(ctx flow.StepCtx) (any, error) {
+		fmt.Printf("step[%s] start\n", ctx.ContextName())
+		atomic.AddInt64(&current, 1)
+		return ctx.ContextName(), nil
+	}, "step4", "step3")
+	wf.AfterFlow(false, CheckResult(t, 2, flow.Error)).If(execFail)
+	wf.AfterFlow(false, CheckResult(t, 3, flow.Success)).If(execSuc)
+	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
+	wf.BeforeProcess(false, PreviewProcessRecover)
+	flow.DoneFlow("TestProcessRecover", nil)
+	executeSuc = true
+	flowId, err := getId("TestProcessRecover")
 	if err != nil {
 		panic(err)
 	}

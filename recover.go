@@ -31,7 +31,7 @@ const (
 var (
 	maxSize                          = 2048
 	enableEncrypt                    = true
-	pwdEncryptor  SymmetricEncryptor = newBcryptEncryptor()
+	pwdEncryptor  SymmetricEncryptor = &aes256Encryptor{newRoutineUnsafeSet[string]("pwd", "password")}
 	enableRecover                    = false
 	persister     Persist
 )
@@ -189,6 +189,7 @@ func RecoverFlow(flowId string) (err error) {
 		return
 	}
 	persister.UpdateRecordStatus(&recoverRecord{RecoverId: record.GetRecoverId(), Status: RecoverRunning})
+	flow.set(recovering)
 	flow.Done()
 	if flow.Success() {
 		persister.UpdateRecordStatus(&recoverRecord{RecoverId: record.GetRecoverId(), Status: RecoverSuccess})
@@ -322,11 +323,6 @@ func deserialize[T any](data []byte) (result T, err error) {
 	}
 	unwrapIfNeed(result)
 	return result, nil
-}
-
-func newBcryptEncryptor() *aes256Encryptor {
-	s := newRoutineUnsafeSet[string]("pwd", "password")
-	return &aes256Encryptor{s}
 }
 
 func encryptIfNeed(snapshot map[string]any, secret []byte) error {
@@ -584,6 +580,9 @@ func (rf *runFlow) loadCheckpoint(checkpoint CheckPoint) error {
 }
 
 func (rf *runFlow) shallRecover() bool {
+	if rf.Has(recovering) {
+		return false
+	}
 	if rf.enableRecover < 0 || rf.Success() {
 		return false
 	}

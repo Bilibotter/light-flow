@@ -23,6 +23,10 @@ var (
 	mergedE  = &StatusEnum{0b1 << 3, "merged"}
 )
 
+var (
+	methodNoSupport = "This method is not supported."
+)
+
 // these variable are used to indicate the state of the unit
 var (
 	Pending      = &StatusEnum{0, "Pending"}
@@ -30,6 +34,7 @@ var (
 	Pause        = &StatusEnum{0b1 << 1, "Pause"}
 	skipped      = &StatusEnum{0b1 << 2, "skip"}
 	executed     = &StatusEnum{0b1 << 3, "executed"}
+	recovering   = &StatusEnum{0b1 << 4, "recovering"}
 	Success      = &StatusEnum{0b1 << 15, "Success"}
 	NormalMask   = &StatusEnum{0b1<<16 - 1, "NormalMask"}
 	Cancel       = &StatusEnum{0b1 << 16, "Cancel"}
@@ -518,7 +523,7 @@ func (vc *visibleContext) Get(key string) (value any, exist bool) {
 
 func (vc *visibleContext) getByName(name, key string) {
 	if vc.info.indexes == nil {
-		panic("This method is not supported.")
+		panic(methodNoSupport)
 	}
 	index, ok := vc.info.indexes[name]
 	if !ok {
@@ -547,7 +552,7 @@ func (vc *visibleContext) getCondition(key string) (named, unnamed []evalValue, 
 
 func (vc *visibleContext) GetEndValues(key string) map[string]any {
 	if vc.info.names == nil {
-		panic("This method is not supported.")
+		panic(methodNoSupport)
 	}
 	vc.lock.RLock()
 	defer vc.lock.RUnlock()
@@ -573,7 +578,7 @@ func (vc *visibleContext) GetEndValues(key string) map[string]any {
 
 func (vc *visibleContext) getByStepName(stepName, key string) (value any, exist bool) {
 	if vc.info.indexes == nil {
-		panic("This method is not supported.")
+		panic(methodNoSupport)
 	}
 	vc.lock.RLock()
 	defer vc.lock.RUnlock()
@@ -671,7 +676,7 @@ func (sc *simpleContext) Get(key string) (value any, exist bool) {
 }
 
 func (sc *simpleContext) getByName(_, _ string) {
-	panic("This method is not supported.")
+	panic(methodNoSupport)
 }
 
 func (sc *simpleContext) Set(key string, value any) {
