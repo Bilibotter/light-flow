@@ -57,6 +57,9 @@ func CheckResult(t *testing.T, check int64, statuses ...*flow.StatusEnum) func(*
 			if status == flow.Success && !workFlow.Success() {
 				t.Errorf("workFlow not success\n")
 			}
+			if status == flow.Timeout {
+				time.Sleep(50 * time.Millisecond)
+			}
 			if !workFlow.Has(status) {
 				t.Errorf("workFlow has not %s status\n", status.Message())
 			}

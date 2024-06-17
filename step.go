@@ -26,8 +26,8 @@ type StepMeta struct {
 	name       string
 	layer      int
 	position   *state              // used to record the position of the step
-	depends    SliceSet[*StepMeta] // prev
-	waiters    SliceSet[*StepMeta] // next
+	depends    sliceSet[*StepMeta] // prev
+	waiters    sliceSet[*StepMeta] // next
 	priority   map[string]int64
 	run        func(ctx StepCtx) (any, error)
 	evaluators evaluators

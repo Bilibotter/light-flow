@@ -28,6 +28,34 @@ func resetCtx() {
 	atomic.StoreInt64(&ctx6, 0)
 }
 
+func CheckCtxResult(t *testing.T, check int64, statuses ...*flow.StatusEnum) func(*flow.WorkFlow) (keepOn bool, err error) {
+	return func(workFlow *flow.WorkFlow) (keepOn bool, err error) {
+		ss := make([]string, len(statuses))
+		for i, status := range statuses {
+			ss[i] = status.Message()
+		}
+		t.Logf("start check, expected current=%d, status include %s", check, strings.Join(ss, ","))
+		if ctx1 != check {
+			t.Errorf("execute %d step, but current = %d\n", check, current)
+		}
+		for _, status := range statuses {
+			if status == flow.Success && !workFlow.Success() {
+				t.Errorf("workFlow not success\n")
+			}
+			if status == flow.Timeout {
+				time.Sleep(50 * time.Millisecond)
+			}
+			if !workFlow.Has(status) {
+				t.Errorf("workFlow has not %s status\n", status.Message())
+			}
+		}
+		t.Logf("status expalin=%s", strings.Join(workFlow.ExplainStatus(), ","))
+		t.Logf("finish check")
+		println()
+		return true, nil
+	}
+}
+
 func GenerateSleep(duration time.Duration, args ...any) func(ctx flow.StepCtx) (any, error) {
 	return func(ctx flow.StepCtx) (any, error) {
 		addrWrap, ok := ctx.Get(addrKey)
@@ -70,14 +98,6 @@ func GenerateStepIncAddr(i int, args ...any) func(ctx flow.StepCtx) (any, error)
 	}
 }
 
-//func ExposeAddrFunc(addr *int64) func(ctx flow.StepCtx) (any, error) {
-//	return func(ctx flow.StepCtx) (any, error) {
-//		ctx.Exposed(addrKey, addr)
-//		atomic.AddInt64(addr, 1)
-//		return nil, nil
-//	}
-//}
-
 func getUnExist(ctx flow.StepCtx) (any, error) {
 	println("start")
 	ctx.Get("unExist")
@@ -89,26 +109,6 @@ func invalidUse(ctx flow.StepCtx) (any, error) {
 	return nil, nil
 }
 
-//func getAllAndSet(value string, history ...string) func(ctx flow.StepCtx) (any, error) {
-//	return func(ctx flow.StepCtx) (any, error) {
-//		ctx.set("all", value)
-//		ks := flow.newRoutineUnsafeSet[string]()
-//		vs := flow.newRoutineUnsafeSet[string]()
-//		m := ctx.GetAll("all")
-//		for k, v := range m {
-//			ks.Add(k)
-//			vs.Add(v.(string))
-//		}
-//		for _, v := range history {
-//			if !vs.Contains(v) {
-//				panic(fmt.Sprintf("ctx[%s] not contain %s", ctx.ContextName(), v))
-//			}
-//		}
-//		fmt.Printf("ctx[%s] get all keys=%s\n", ctx.ContextName(), strings.Join(ks.Slice(), ", "))
-//		return nil, nil
-//	}
-//}
-
 func TestSearch(t *testing.T) {
 	defer resetCtx()
 	workflow := flow.RegisterFlow("TestSearch")
@@ -117,14 +117,8 @@ func TestSearch(t *testing.T) {
 	process.NameStep(invalidUse, "2", "1")
 	process.NameStep(invalidUse, "3", "1")
 	process.NameStep(getUnExist, "4", "2", "3")
-	features := flow.DoneFlow("TestSearch", nil)
-	for _, feature := range features.Futures() {
-		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", feature.GetName(), explain)
-		if !feature.Success() {
-			t.Errorf("process[%s] fail", feature.GetName())
-		}
-	}
+	workflow.AfterFlow(false, CheckCtxResult(t, 0, flow.Success))
+	flow.DoneFlow("TestSearch", nil)
 }
 
 func TestPriorityWithSelf(t *testing.T) {
@@ -171,49 +165,12 @@ func TestPriority(t *testing.T) {
 	process.NameStep(ChangeCtxStepFunc(&ctx2), "3", "1")
 	step := process.NameStep(GenerateStepIncAddr(1), "4", "2", "3")
 	step.Priority(map[string]any{addrKey: "3"})
-	features := flow.DoneFlow("TestPriority", nil)
-	for _, feature := range features.Futures() {
-		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", feature.GetName(), explain)
-		if !feature.Success() {
-			t.Errorf("process[%s] fail", feature.GetName())
-		}
-	}
-	if ctx1 != 2 {
-		t.Errorf("execute 2 step, but ctx1 = %d", ctx1)
-	}
+	workflow.AfterFlow(false, CheckCtxResult(t, 2, flow.Success))
+	flow.DoneFlow("TestPriority", nil)
 	if atomic.LoadInt64(&ctx2) != 2 {
 		t.Errorf("execute 2 step, but ctx2 = %d", ctx2)
 	}
 }
-
-//func TestExpose(t *testing.T) {
-//	defer resetCtx()
-//	workflow := flow.RegisterFlow("TestExpose")
-//	process := workflow.Process("TestExpose1", nil)
-//	process.AfterStep(true, ErrorResultPrinter)
-//	process.NameStep(ExposeAddrFunc(&ctx1), "1")
-//	process.NameStep(GenerateStepIncAddr(2,"ms"), "2")
-//	process.NameStep(GenerateStepIncAddr(3,"ms"), "3")
-//	process = workflow.Process("TestExpose2", nil)
-//	process.NameStep(ExposeAddrFunc(&ctx2), "11")
-//	process.NameStep(GenerateStepIncAddr(12,"ms"), "12")
-//	process.NameStep(GenerateStepIncAddr(13,"ms"), "13")
-//	features := flow.DoneFlow("TestExpose", nil)
-//	for _, feature := range features.Futures() {
-//		explain := strings.Join(feature.ExplainStatus(), ", ")
-//		fmt.Printf("process[%s] explain=%s\n", feature.GetName(), explain)
-//		if !feature.Success() {
-//			t.Errorf("process[%s] fail", feature.GetName())
-//		}
-//	}
-//	if ctx1 != 3 {
-//		t.Errorf("execute 3 step, but ctx1 = %d", ctx1)
-//	}
-//	if atomic.LoadInt64(&ctx2) != 3 {
-//		t.Errorf("execute 3 step, but ctx2 = %d", ctx2)
-//	}
-//}
 
 func TestPtrReuse(t *testing.T) {
 	defer resetCtx()
@@ -226,17 +183,8 @@ func TestPtrReuse(t *testing.T) {
 	process1.NameStep(GenerateStepIncAddr(11), "11")
 	process1.NameStep(GenerateStepIncAddr(12), "12", "11")
 	process1.NameStep(GenerateStepIncAddr(13), "13", "12")
-	features := flow.DoneFlow("TestPtrReuse", map[string]any{addrKey: &ctx1})
-	for _, feature := range features.Futures() {
-		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", feature.GetName(), explain)
-		if !feature.Success() {
-			t.Errorf("process[%s] fail", feature.GetName())
-		}
-	}
-	if ctx1 != 6 {
-		t.Errorf("execute 6 step, but ctx1 = %d", ctx1)
-	}
+	workflow.AfterFlow(false, CheckCtxResult(t, 6, flow.Success))
+	flow.DoneFlow("TestPtrReuse", map[string]any{addrKey: &ctx1})
 }
 
 func TestWaitToDoneInMultiple(t *testing.T) {
@@ -251,17 +199,8 @@ func TestWaitToDoneInMultiple(t *testing.T) {
 	process2.NameStep(GenerateStepIncAddr(12), "12", "11")
 	process2.NameStep(GenerateStepIncAddr(13), "13", "12")
 	process2.NameStep(GenerateSleep(100*time.Millisecond), "14", "13")
-	features := flow.DoneFlow("TestWaitToDoneInMultiple", map[string]any{addrKey: &ctx1})
-	for _, feature := range features.Futures() {
-		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", feature.GetName(), explain)
-		if !feature.Success() {
-			t.Errorf("process[%s] fail", feature.GetName())
-		}
-	}
-	if ctx1 != 7 {
-		t.Errorf("execute 7 step, but ctx1 = %d", ctx1)
-	}
+	workflow.AfterFlow(false, CheckCtxResult(t, 7, flow.Success))
+	flow.DoneFlow("TestWaitToDoneInMultiple", map[string]any{addrKey: &ctx1})
 }
 
 func TestWorkFlowCtx(t *testing.T) {
@@ -275,17 +214,8 @@ func TestWorkFlowCtx(t *testing.T) {
 	process2.NameStep(GenerateStepIncAddr(11), "11")
 	process2.NameStep(GenerateStepIncAddr(12), "12", "11")
 	process2.NameStep(GenerateStepIncAddr(13), "13", "12")
-	features := flow.DoneFlow("TestWorkFlowCtx", map[string]any{addrKey: &ctx1})
-	for _, feature := range features.Futures() {
-		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", feature.GetName(), explain)
-		if !feature.Success() {
-			t.Errorf("process[%s] fail", feature.GetName())
-		}
-	}
-	if ctx1 != 6 {
-		t.Errorf("execute 6 step, but ctx1 = %d", ctx1)
-	}
+	workflow.AfterFlow(false, CheckCtxResult(t, 6, flow.Success))
+	flow.DoneFlow("TestWorkFlowCtx", map[string]any{addrKey: &ctx1})
 }
 
 func TestProcessAndWorkflowCtx(t *testing.T) {
@@ -301,17 +231,8 @@ func TestProcessAndWorkflowCtx(t *testing.T) {
 	process.NameStep(GenerateStepIncAddr(11), "11")
 	process.NameStep(GenerateStepIncAddr(12), "12", "11")
 	process.NameStep(GenerateStepIncAddr(13), "13", "12")
-	features := flow.DoneFlow("TestProcessAndWorkflowCtx", map[string]any{addrKey: &ctx1})
-	for _, feature := range features.Futures() {
-		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", feature.GetName(), explain)
-		if !feature.Success() {
-			t.Errorf("process[%s] fail", feature.GetName())
-		}
-	}
-	if ctx1 != 6 {
-		t.Errorf("execute 6 step, but ctx2 = %d", ctx2)
-	}
+	workflow.AfterFlow(false, CheckCtxResult(t, 6, flow.Success))
+	flow.DoneFlow("TestProcessAndWorkflowCtx", map[string]any{addrKey: &ctx1})
 }
 
 func TestStepCtx(t *testing.T) {
@@ -325,14 +246,8 @@ func TestStepCtx(t *testing.T) {
 	process.NameStep(ChangeCtxStepFunc(&ctx4), "11")
 	process.NameStep(GenerateStepIncAddr(12), "12", "11")
 	process.NameStep(GenerateStepIncAddr(13), "13", "12")
-	features := flow.DoneFlow("TestStepCtx", map[string]any{addrKey: &ctx1})
-	for _, feature := range features.Futures() {
-		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", feature.GetName(), explain)
-		if !feature.Success() {
-			t.Errorf("process[%s] fail", feature.GetName())
-		}
-	}
+	workflow.AfterFlow(false, CheckCtxResult(t, 0, flow.Success))
+	flow.DoneFlow("TestStepCtx", map[string]any{addrKey: &ctx1})
 	if ctx1 != 0 {
 		t.Errorf("workflow ctx has effective with duplicate key in step")
 	}
@@ -359,14 +274,8 @@ func TestDependStepCtx(t *testing.T) {
 	process.NameStep(ChangeCtxStepFunc(&ctx4), "11")
 	process.NameStep(ChangeCtxStepFunc(&ctx6), "12", "11")
 	process.NameStep(GenerateStepIncAddr(13), "13", "12")
-	features := flow.DoneFlow("TestDependStepCtx", map[string]any{addrKey: &ctx1})
-	for _, feature := range features.Futures() {
-		explain := strings.Join(feature.ExplainStatus(), ", ")
-		fmt.Printf("process[%s] explain=%s\n", feature.GetName(), explain)
-		if !feature.Success() {
-			t.Errorf("process[%s] fail", feature.GetName())
-		}
-	}
+	workflow.AfterFlow(false, CheckCtxResult(t, 0, flow.Success))
+	flow.DoneFlow("TestDependStepCtx", map[string]any{addrKey: &ctx1})
 	if ctx1 != 0 {
 		t.Errorf("workflow ctx has effective with duplicate key in step")
 	}
@@ -430,25 +339,6 @@ func TestFlowMultipleAsyncExecute(t *testing.T) {
 	}
 }
 
-//func TestGetAll(t *testing.T) {
-//	workflow := flow.RegisterFlow("TestGetAll")
-//	process := workflow.Process("TestGetAll")
-//	process.AfterStep(true, ErrorResultPrinter)
-//	process.NameStep(getAllAndSet("1", "0"), "1")
-//	process.NameStep(getAllAndSet("2", "0", "1"), "2", "1")
-//	process.NameStep(getAllAndSet("3", "0", "1", "2"), "3", "2")
-//	result := flow.DoneFlow("TestGetAll", map[string]any{"all": "0"})
-//	if !result.Success() {
-//		t.Errorf("flow[%s] failed, explain=%v", result.GetName(), result.Exceptions())
-//	}
-//	for _, feature := range result.Futures() {
-//		t.Logf("process[%s] explain=%v", feature.GetName(), feature.ExplainStatus())
-//		if !feature.Success() {
-//			t.Errorf("process[%s] failed, exceptions=%v", feature.GetName(), feature.Exceptions())
-//		}
-//	}
-//}
-
 func TestContextNameCorrect(t *testing.T) {
 	workflow := flow.RegisterFlow("TestContextNameCorrect")
 	workflow.BeforeFlow(false, func(info *flow.WorkFlow) (keepOn bool, err error) {
@@ -459,6 +349,7 @@ func TestContextNameCorrect(t *testing.T) {
 		}
 		return true, nil
 	})
+	workflow.AfterFlow(false, CheckCtxResult(t, 0, flow.Success))
 	workflow.AfterFlow(false, func(info *flow.WorkFlow) (keepOn bool, err error) {
 		if info.GetName() != "TestContextNameCorrect" {
 			fmt.Printf("afterflow workflow context name incorrect, workflow's name = %s\n", info.GetName())
@@ -508,12 +399,6 @@ func TestContextNameCorrect(t *testing.T) {
 		fmt.Printf("step name = '%s', while step running\n", ctx.ContextName())
 		return nil, nil
 	}, "Step1")
-	result := flow.DoneFlow("TestContextNameCorrect", nil)
-	if !result.Success() {
-		t.Errorf("flow[%s] failed, explain=%v", result.GetName(), result.Exceptions())
-	}
-	result = flow.DoneFlow("TestContextNameCorrect", nil)
-	if !result.Success() {
-		t.Errorf("flow[%s] failed, explain=%v", result.GetName(), result.Exceptions())
-	}
+	flow.DoneFlow("TestContextNameCorrect", nil)
+	flow.DoneFlow("TestContextNameCorrect", nil)
 }

@@ -67,7 +67,7 @@ type CheckPoint interface {
 }
 
 type associative interface {
-	GetId() string
+	GetPrimaryKey() string
 	GetName() string
 	GetParentId() string
 	GetRootId() string
@@ -208,7 +208,7 @@ func markExecuted(workflow *runFlow, checkpoints []CheckPoint) error {
 	id2Name := make(map[string]string)
 	for _, checkpoint := range checkpoints {
 		if checkpoint.GetScope() == ProcessScope {
-			id2Name[checkpoint.GetId()] = checkpoint.GetName()
+			id2Name[checkpoint.GetPrimaryKey()] = checkpoint.GetName()
 		}
 	}
 	for _, checkpoint := range checkpoints {
@@ -231,7 +231,7 @@ func loadCheckpoints(workflow *runFlow, checkpoints []CheckPoint) (err error) {
 	id2Name := make(map[string]string)
 	for _, checkpoint := range checkpoints {
 		if checkpoint.GetScope() == ProcessScope {
-			id2Name[checkpoint.GetId()] = checkpoint.GetName()
+			id2Name[checkpoint.GetPrimaryKey()] = checkpoint.GetName()
 		}
 	}
 	defer func() {
@@ -244,7 +244,7 @@ func loadCheckpoints(workflow *runFlow, checkpoints []CheckPoint) (err error) {
 		case FlowScope:
 			err = workflow.loadCheckpoint(checkpoint)
 		case ProcessScope:
-			proc := workflow.processes[id2Name[checkpoint.GetId()]]
+			proc := workflow.processes[id2Name[checkpoint.GetPrimaryKey()]]
 			err = proc.loadCheckpoint(checkpoint)
 		case StepScope:
 			belong := workflow.processes[id2Name[checkpoint.GetParentId()]]
@@ -431,6 +431,10 @@ func (b *aes256Encryptor) Decrypt(cipherText string, secret []byte) (string, err
 	return string(cipherTextBytes), nil
 }
 
+func (point *flowCheckpoint) GetPrimaryKey() string {
+	return point.Id
+}
+
 func (point *flowCheckpoint) GetParentId() string {
 	return ""
 }
@@ -464,7 +468,7 @@ func (point *flowCheckpoint) GetSnapshot() []byte {
 	return point.snapshot
 }
 
-func (point *procCheckpoint) GetId() string {
+func (point *procCheckpoint) GetPrimaryKey() string {
 	return point.id
 }
 
@@ -520,7 +524,7 @@ func (point *procCheckpoint) GetSnapshot() []byte {
 	return point.snapshot
 }
 
-func (point *stepCheckpoint) GetId() string {
+func (point *stepCheckpoint) GetPrimaryKey() string {
 	return point.id
 }
 
@@ -575,7 +579,7 @@ func (rf *runFlow) loadCheckpoint(checkpoint CheckPoint) error {
 		return err
 	}
 	rf.table = snapshot
-	rf.Id = checkpoint.GetId()
+	rf.Id = checkpoint.GetPrimaryKey()
 	return nil
 }
 
@@ -628,7 +632,7 @@ func (rf *runFlow) saveCheckpoints() {
 }
 
 func (rp *runProcess) loadCheckpoint(checkpoint CheckPoint) error {
-	rp.id = checkpoint.GetId()
+	rp.id = checkpoint.GetPrimaryKey()
 	snapshot, err := deserialize[map[string]any](checkpoint.GetSnapshot())
 	if err != nil {
 		return err
@@ -650,7 +654,7 @@ func (rp *runProcess) loadCheckpoint(checkpoint CheckPoint) error {
 }
 
 func (step *runStep) loadCheckpoint(checkpoint CheckPoint) error {
-	step.id = checkpoint.GetId()
+	step.id = checkpoint.GetPrimaryKey()
 	snapshot, err := deserialize[map[string]any](checkpoint.GetSnapshot())
 	if err != nil {
 		return err

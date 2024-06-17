@@ -110,15 +110,8 @@ func TestDependConnectAndIsolated(t *testing.T) {
 	process.NameStep(CtxChecker(false, []string{"1", "2", "3"}, []string{}, "a", "b", "c"), "1").
 		Next(CtxChecker(false, []string{"a", "b", "c"}, []string{}, "d", "e", "f"), "2").
 		Same(CtxChecker(true, []string{"a", "b", "c"}, []string{"d", "e", "f"}, "g", "h", "i"), "3")
-	result := flow.DoneFlow("TestDependConnectAndIsolated", map[string]any{"1": "1", "2": "2", "3": "3"})
-	if !result.Success() {
-		for _, exception := range result.Exceptions() {
-			t.Errorf("%s failed: %s\n", result.GetName(), exception)
-		}
-	}
-	if atomic.LoadInt64(&current) != 3 {
-		t.Errorf("execute 3 step, but current = %d", current)
-	}
+	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestDependConnectAndIsolated", map[string]any{"1": "1", "2": "2", "3": "3"})
 }
 
 func TestFlowCallbackValid(t *testing.T) {
@@ -130,15 +123,8 @@ func TestFlowCallbackValid(t *testing.T) {
 	process.NameStep(CtxChecker(false, []string{}, []string{}, "a", "b", "c"), "1").
 		Next(CtxChecker(false, []string{"a", "b", "c"}, []string{}, "d", "e", "f"), "2").
 		Same(CtxChecker(true, []string{"a", "b", "c"}, []string{"d", "e", "f"}, "g", "h", "i"), "3")
-	result := flow.DoneFlow("TestFlowCallbackValid", map[string]any{"4": "1", "5": "2", "6": "3"})
-	if !result.Success() {
-		for _, exception := range result.Exceptions() {
-			t.Errorf("%s failed: %s\n", result.GetName(), exception)
-		}
-	}
-	if atomic.LoadInt64(&current) != 5 {
-		t.Errorf("execute 5 step, but current = %d", current)
-	}
+	workflow.AfterFlow(false, CheckResult(t, 5, flow.Success))
+	flow.DoneFlow("TestFlowCallbackValid", map[string]any{"4": "1", "5": "2", "6": "3"})
 }
 
 func TestProcCallbackValid(t *testing.T) {
@@ -150,15 +136,8 @@ func TestProcCallbackValid(t *testing.T) {
 	process.NameStep(CtxChecker(false, []string{"1", "2", "3"}, []string{}, "a", "b", "c"), "1").
 		Next(CtxChecker(false, []string{"a", "b", "c"}, []string{}, "d", "e", "f"), "2").
 		Same(CtxChecker(true, []string{"a", "b", "c"}, []string{"d", "e", "f"}, "g", "h", "i"), "3")
-	result := flow.DoneFlow("TestProcCallbackValid", map[string]any{"4": "1", "5": "2", "6": "3"})
-	if !result.Success() {
-		for _, exception := range result.Exceptions() {
-			t.Errorf("%s failed: %s\n", result.GetName(), exception)
-		}
-	}
-	if atomic.LoadInt64(&current) != 5 {
-		t.Errorf("execute 5 step, but current = %d", current)
-	}
+	workflow.AfterFlow(false, CheckResult(t, 5, flow.Success))
+	flow.DoneFlow("TestProcCallbackValid", map[string]any{"4": "1", "5": "2", "6": "3"})
 }
 
 func TestStepCallbackValid(t *testing.T) {
@@ -171,15 +150,8 @@ func TestStepCallbackValid(t *testing.T) {
 	process.NameStep(CtxChecker(false, []string{"1", "2", "3"}, []string{}, "a", "b", "c"), "1").
 		Next(CtxChecker(false, []string{"a", "b", "c"}, []string{}, "d", "e", "f"), "2").
 		Same(CtxChecker(true, []string{"a", "b", "c"}, []string{"d", "e", "f"}, "g", "h", "i"), "3")
-	result := flow.DoneFlow("TestStepCallbackValid", map[string]any{"4": "1", "5": "2", "6": "3"})
-	if !result.Success() {
-		for _, exception := range result.Exceptions() {
-			t.Errorf("%s failed: %s\n", result.GetName(), exception)
-		}
-	}
-	if atomic.LoadInt64(&current) != 9 {
-		t.Errorf("execute 9 step, but current = %d", current)
-	}
+	workflow.AfterFlow(false, CheckResult(t, 9, flow.Success))
+	flow.DoneFlow("TestStepCallbackValid", map[string]any{"4": "1", "5": "2", "6": "3"})
 }
 
 func TestAllCallbackConnect(t *testing.T) {
@@ -192,13 +164,6 @@ func TestAllCallbackConnect(t *testing.T) {
 	process.BeforeStep(true, StepCallback(false, []string{"3"}, []string{}, "4"))
 	process.AfterStep(true, StepCallback(false, []string{"1", "3", "4", "6"}, []string{}))
 	process.NameStep(CtxChecker(false, []string{"1", "3", "4"}, []string{}, "6"), "1")
-	result := flow.DoneFlow("TestAllCallbackConnect", map[string]any{"1": "1"})
-	if !result.Success() {
-		for _, exception := range result.Exceptions() {
-			t.Errorf("%s failed: %s\n", result.GetName(), exception)
-		}
-	}
-	if atomic.LoadInt64(&current) != 5 {
-		t.Errorf("execute 5 step, but current = %d", current)
-	}
+	workflow.AfterFlow(false, CheckResult(t, 5, flow.Success))
+	flow.DoneFlow("TestAllCallbackConnect", map[string]any{"1": "1"})
 }

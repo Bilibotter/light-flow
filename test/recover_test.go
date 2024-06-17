@@ -98,7 +98,7 @@ func (p *Person) name() string {
 	return p.Name
 }
 
-func (c Checkpoints) GetId() string {
+func (c Checkpoints) GetPrimaryKey() string {
 	return c.Id
 }
 
@@ -203,7 +203,7 @@ func (p persisitImpl) SaveCheckpointAndRecord(cps []flow.CheckPoint, records flo
 	checkpoints := make([]Checkpoints, len(cps))
 	for i, cp := range cps {
 		checkpoints[i] = Checkpoints{
-			Id:        cp.GetId(),
+			Id:        cp.GetPrimaryKey(),
 			Name:      cp.GetName(),
 			RecoverId: cp.GetRecoverId(),
 			ParentId:  cp.GetParentId(),
@@ -231,44 +231,6 @@ func (p persisitImpl) SaveCheckpointAndRecord(cps []flow.CheckPoint, records flo
 		panic(err)
 	}
 	return nil
-}
-
-type checkpoint struct {
-	Id        string
-	Name      string
-	ParentId  string
-	RootId    string
-	RecoverId string
-	Scope     uint8
-	Snapshot  []byte
-}
-
-func (c checkpoint) GetId() string {
-	return c.Id
-}
-
-func (c checkpoint) GetName() string {
-	return c.Name
-}
-
-func (c checkpoint) GetParentId() string {
-	return c.ParentId
-}
-
-func (c checkpoint) GetRootId() string {
-	return c.RootId
-}
-
-func (c checkpoint) GetScope() uint8 {
-	return c.Scope
-}
-
-func (c checkpoint) GetRecoverId() string {
-	return c.RecoverId
-}
-
-func (c checkpoint) GetSnapshot() []byte {
-	return c.Snapshot
 }
 
 type Ctx interface {
@@ -820,6 +782,39 @@ func TestSingleStepRecover(t *testing.T) {
 	}
 }
 
+func TestPanicStepRecover(t *testing.T) {
+	defer resetCurrent()
+	executeSuc = false
+	wf := flow.RegisterFlow("TestPanicStepRecover")
+	wf.EnableRecover()
+	proc := wf.Process("TestPanicStepRecover")
+	proc.NameStep(func(ctx flow.StepCtx) (any, error) {
+		if !executeSuc {
+			StepSet(ctx)
+			panic("panic")
+		}
+		t.Logf("step[%s] start\n", ctx.ContextName())
+		StepCheck(ctx.ContextName(), ctx)
+		atomic.AddInt64(&current, 1)
+		return ctx.ContextName(), nil
+	}, "step1").
+		Next(GenerateAfter(t, "step1", StepSet, StepCheck), "step2").
+		Next(GenerateAfter(t, "step2", StepSet, StepCheck), "step3")
+	wf.AfterFlow(false, CheckResult(t, 0, flow.Panic)).If(execFail)
+	wf.AfterFlow(false, CheckResult(t, 3, flow.Success)).If(execSuc)
+	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
+	flow.DoneFlow("TestPanicStepRecover", nil)
+	executeSuc = true
+	flowId, err := getId("TestPanicStepRecover")
+	if err != nil {
+		panic(err)
+	}
+	resetCurrent()
+	if err = flow.RecoverFlow(flowId); err != nil {
+		panic(err)
+	}
+}
+
 func TestMultipleStepRecover(t *testing.T) {
 	defer resetCurrent()
 	executeSuc = false
@@ -994,6 +989,45 @@ func TestProcessRecover(t *testing.T) {
 	flow.DoneFlow("TestProcessRecover", nil)
 	executeSuc = true
 	flowId, err := getId("TestProcessRecover")
+	if err != nil {
+		panic(err)
+	}
+	resetCurrent()
+	if err = flow.RecoverFlow(flowId); err != nil {
+		panic(err)
+	}
+}
+
+func TestStepInterruptRecover(t *testing.T) {
+	defer resetCurrent()
+	executeSuc = false
+	wf := flow.RegisterFlow("TestStepInterruptRecover")
+	wf.EnableRecover()
+	proc := wf.Process("TestStepInterruptRecover")
+	proc.NameStep(func(ctx flow.StepCtx) (any, error) {
+		fmt.Printf("step[%s] start\n", ctx.ContextName())
+		StepSet0(ctx)
+		atomic.AddInt64(&current, 1)
+		return ctx.ContextName(), nil
+	}, "step1")
+	proc.NameStep(func(ctx flow.StepCtx) (any, error) {
+		fmt.Printf("step[%s] start\n", ctx.ContextName())
+		if !executeSuc {
+			StepSet(ctx)
+			return ctx.ContextName(), fmt.Errorf("error")
+		}
+		StepCheck0("step1", ctx)
+		StepCheck("step2", ctx)
+		atomic.AddInt64(&current, 1)
+		return ctx.ContextName(), nil
+	}, "step2", "step1")
+	proc.NameStep(GenerateStep(3), "step3", "step2")
+	wf.AfterFlow(false, CheckResult(t, 1, flow.Error)).If(execFail)
+	wf.AfterFlow(false, CheckResult(t, 2, flow.Success)).If(execSuc)
+	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
+	flow.DoneFlow("TestStepInterruptRecover", nil)
+	executeSuc = true
+	flowId, err := getId("TestStepInterruptRecover")
 	if err != nil {
 		panic(err)
 	}

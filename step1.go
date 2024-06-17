@@ -12,9 +12,7 @@ type comparator int8
 
 type flags int64
 
-type Empty struct{}
-
-type SliceSet[T comparable] []T
+type sliceSet[T comparable] []T
 
 const (
 	boolF typeFlag = 1 << iota
@@ -55,15 +53,6 @@ type evaluator struct {
 	name           string // only exact match evaluator has name
 	depend         string
 	expect         flags
-}
-
-type Set interface {
-	Find(key any) bool
-}
-
-type Element[T any] interface {
-	Equality
-	Hash() int64
 }
 
 // Equality func (ei *EqualityImpl) Equal(other any) bool is invalid
@@ -407,7 +396,7 @@ func (tf *flags) Exist(flag int64) bool {
 	return *tf&flags(flag) != 0
 }
 
-func (ss SliceSet[T]) Find(element any) bool {
+func (ss sliceSet[T]) Find(element any) bool {
 	convert, ok := element.(T)
 	if !ok {
 		return false
