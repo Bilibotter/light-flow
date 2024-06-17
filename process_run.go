@@ -11,7 +11,7 @@ import (
 type runProcess struct {
 	*ProcessMeta
 	*state
-	*visibleContext
+	*dependentContext
 	belong    *runFlow
 	id        string
 	flowSteps map[string]*runStep
@@ -22,10 +22,10 @@ type runProcess struct {
 
 func (rp *runProcess) buildRunStep(meta *StepMeta) *runStep {
 	step := runStep{
-		visibleContext: &visibleContext{
-			info:        &meta.accessInfo,
+		dependentContext: &dependentContext{
+			routing:     &meta.nodeRouter,
 			linkedTable: rp.linkedTable,
-			prev:        rp.visibleContext.prev,
+			prev:        rp.dependentContext.prev,
 		},
 		belong:   rp,
 		state:    emptyStatus(),

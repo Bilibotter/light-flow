@@ -20,7 +20,7 @@ type segment int64
 type evaluators []*evaluator
 
 type StepMeta struct {
-	accessInfo
+	nodeRouter
 	StepConfig
 	belong     *ProcessMeta
 	name       string
@@ -36,7 +36,7 @@ type StepMeta struct {
 type runStep struct {
 	*StepMeta
 	*state
-	*visibleContext
+	*dependentContext
 	belong    *runProcess
 	id        string
 	segments  segment // 0-12 bits for waiting
@@ -133,7 +133,7 @@ func (meta *StepMeta) wireDepends() {
 // If not it will panic.
 func (meta *StepMeta) checkPriority() {
 	for _, index := range meta.priority {
-		stepName := meta.names[index]
+		stepName := meta.toName[index]
 		if meta.backSearch(stepName) {
 			continue
 		}

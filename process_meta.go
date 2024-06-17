@@ -14,7 +14,7 @@ const (
 
 type ProcessMeta struct {
 	ProcessConfig
-	accessInfo
+	nodeRouter
 	belong   *FlowMeta
 	init     sync.Once
 	name     string
@@ -98,7 +98,7 @@ func (pm *ProcessMeta) initialize() {
 func (pm *ProcessMeta) constructVisible() {
 	for _, step := range pm.sortedSteps() {
 		for _, waiter := range step.waiters {
-			waiter.passing = step.passing | waiter.passing
+			waiter.nodePath = step.nodePath | waiter.nodePath
 		}
 	}
 }
@@ -127,9 +127,9 @@ func (pm *ProcessMeta) Merge(name string) {
 	// ensure step index bigger than all depends index
 	for index, step := range pm.sortedSteps() {
 		step.index = int64(index)
-		step.passing = 1 << index
-		pm.names[step.index] = step.name
-		pm.indexes[step.name] = step.index
+		step.nodePath = 1 << index
+		pm.toName[step.index] = step.name
+		pm.toIndex[step.name] = step.index
 	}
 }
 
@@ -228,7 +228,7 @@ func (pm *ProcessMeta) NameStep(run func(ctx StepCtx) (any, error), name string,
 	meta.run = run
 	meta.layer = 1
 	meta.wireDepends()
-	pm.addPassingInfo(meta)
+	pm.addRouterInfo(meta)
 
 	pm.tailStep = meta.name
 	pm.steps[name] = meta
@@ -236,19 +236,19 @@ func (pm *ProcessMeta) NameStep(run func(ctx StepCtx) (any, error), name string,
 	return meta
 }
 
-func (pm *ProcessMeta) addPassingInfo(step *StepMeta) {
+func (pm *ProcessMeta) addRouterInfo(step *StepMeta) {
 	if pm.nodeNum == 62 {
 		panic(fmt.Sprintf("Process[%s] exceeds max nodes num, max node num is 62", pm.name))
 	}
-	step.accessInfo = accessInfo{
-		passing: 1 << pm.nodeNum,
-		index:   int64(pm.nodeNum),
-		names:   pm.names,
-		indexes: pm.indexes,
+	step.nodeRouter = nodeRouter{
+		nodePath: 1 << pm.nodeNum,
+		index:    int64(pm.nodeNum),
+		toName:   pm.toName,
+		toIndex:  pm.toIndex,
 	}
 	pm.nodeNum++
-	pm.names[step.index] = step.name
-	pm.indexes[step.name] = step.index
+	pm.toName[step.index] = step.name
+	pm.toIndex[step.name] = step.index
 }
 
 func (pm *ProcessMeta) sortedSteps() []*StepMeta {

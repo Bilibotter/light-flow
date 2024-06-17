@@ -214,11 +214,11 @@ func (fm *FlowMeta) buildRunFlow(input map[string]any) *runFlow {
 
 func (fm *FlowMeta) Process(name string) *ProcessMeta {
 	pm := ProcessMeta{
-		accessInfo: accessInfo{
-			passing: visibleAll,
-			index:   0,
-			names:   map[int64]string{0: name},
-			indexes: map[string]int64{name: 0},
+		nodeRouter: nodeRouter{
+			nodePath: fullAccess,
+			index:    0,
+			toName:   map[int64]string{0: name},
+			toIndex:  map[string]int64{name: 0},
 		},
 		belong: fm,
 		name:   name,
@@ -237,9 +237,9 @@ func (rf *runFlow) buildRunProcess(meta *ProcessMeta) *runProcess {
 		nodes: map[string]*node{},
 	}
 	process := runProcess{
-		visibleContext: &visibleContext{
+		dependentContext: &dependentContext{
 			prev:        rf.simpleContext,
-			info:        &meta.accessInfo,
+			routing:     &meta.nodeRouter,
 			linkedTable: &table,
 		},
 		state:       emptyStatus(),
