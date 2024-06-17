@@ -8,6 +8,14 @@ import (
 
 type typeFlag int64
 
+type comparator int8
+
+type flags int64
+
+type Empty struct{}
+
+type SliceSet[T comparable] []T
+
 const (
 	boolF typeFlag = 1 << iota
 	strF
@@ -24,10 +32,6 @@ var (
 	accurate = 1e-9
 )
 
-type comparator int8
-
-type flags int64
-
 const (
 	noneC comparator = iota // Avoiding the effects of default values
 	equalC
@@ -41,12 +45,8 @@ const (
 type evaluate func(value1, value2 any) bool
 
 var (
-	defaultTrue evaluate = func(value1, value2 any) bool { return true }
+	alwaysTrue evaluate = func(value1, value2 any) bool { return true }
 )
-
-type Empty struct{}
-
-type SliceSet[T comparable] []T
 
 type evaluator struct {
 	typeValues     map[typeFlag]any
@@ -97,6 +97,48 @@ func getTypeFlag(value any) typeFlag {
 		return equalityF
 	}
 	return noneFlag
+}
+
+func toUint64(i any) uint64 {
+	switch v := i.(type) {
+	case uint8:
+		return uint64(v)
+	case uint16:
+		return uint64(v)
+	case uint32:
+		return uint64(v)
+	case uint64:
+		return v
+	case uint:
+		return uint64(v)
+	}
+	return 0
+}
+
+func toInt64(i any) int64 {
+	switch v := i.(type) {
+	case int8:
+		return int64(v)
+	case int16:
+		return int64(v)
+	case int32:
+		return int64(v)
+	case int64:
+		return v
+	case int:
+		return int64(v)
+	}
+	return 0
+}
+
+func toFloat64(i any) float64 {
+	switch v := i.(type) {
+	case float32:
+		return float64(v)
+	case float64:
+		return v
+	}
+	return 0
 }
 
 func (eg *evaluator) Identify(name string) *evaluator {
@@ -178,7 +220,7 @@ func (eg *evaluator) createInt64Evaluate(cmp comparator) evaluate {
 	case lessAndEqualC:
 		return func(v1, v2 any) bool { return v1.(int64) <= v2.(int64) }
 	}
-	return defaultTrue
+	return alwaysTrue
 }
 
 func (eg *evaluator) createUint64Evaluate(cmp comparator) evaluate {
@@ -196,7 +238,7 @@ func (eg *evaluator) createUint64Evaluate(cmp comparator) evaluate {
 	case lessAndEqualC:
 		return func(v1, v2 any) bool { return v1.(uint64) <= v2.(uint64) }
 	}
-	return defaultTrue
+	return alwaysTrue
 }
 
 func (eg *evaluator) createFloat64Evaluate(cmp comparator) evaluate {
@@ -214,7 +256,7 @@ func (eg *evaluator) createFloat64Evaluate(cmp comparator) evaluate {
 	case lessAndEqualC:
 		return func(v1, v2 any) bool { return v1.(float64) <= v2.(float64) }
 	}
-	return defaultTrue
+	return alwaysTrue
 }
 
 func (eg *evaluator) createBoolEvaluate(cmp comparator) evaluate {
@@ -232,7 +274,7 @@ func (eg *evaluator) createBoolEvaluate(cmp comparator) evaluate {
 	case lessAndEqualC:
 		panic("boolean types do not support less-than-and-equal comparisons")
 	}
-	return defaultTrue
+	return alwaysTrue
 }
 
 func (eg *evaluator) createTimeEvaluate(cmp comparator) evaluate {
@@ -254,7 +296,7 @@ func (eg *evaluator) createTimeEvaluate(cmp comparator) evaluate {
 			return v1.(time.Time).Before(v2.(time.Time)) || v1.(time.Time).Equal(v2.(time.Time))
 		}
 	}
-	return defaultTrue
+	return alwaysTrue
 }
 
 func (eg *evaluator) createStringEvaluate(cmp comparator) evaluate {
@@ -272,7 +314,7 @@ func (eg *evaluator) createStringEvaluate(cmp comparator) evaluate {
 	case lessAndEqualC:
 		panic("string types do not support less-than-and-equal comparisons")
 	}
-	return defaultTrue
+	return alwaysTrue
 }
 
 func (eg *evaluator) createComparableEvaluate(cmp comparator) evaluate {
@@ -290,7 +332,7 @@ func (eg *evaluator) createComparableEvaluate(cmp comparator) evaluate {
 	case lessAndEqualC:
 		return func(v1, v2 any) bool { return v1.(Comparable).Less(v2) || v1.(Comparable).Equal(v2) }
 	}
-	return defaultTrue
+	return alwaysTrue
 }
 
 func (eg *evaluator) createEqualityEvaluate(cmp comparator) evaluate {
@@ -304,7 +346,7 @@ func (eg *evaluator) createEqualityEvaluate(cmp comparator) evaluate {
 	case lessC:
 		panic("Type[Equality] not implements Comparable.")
 	}
-	return defaultTrue
+	return alwaysTrue
 }
 
 func (eg *evaluator) evaluate(named, unnamed []evalValue) bool {
@@ -475,46 +517,4 @@ func (meta *StepMeta) existDepend(name string) bool {
 		}
 	}
 	return false
-}
-
-func toUint64(i any) uint64 {
-	switch v := i.(type) {
-	case uint8:
-		return uint64(v)
-	case uint16:
-		return uint64(v)
-	case uint32:
-		return uint64(v)
-	case uint64:
-		return v
-	case uint:
-		return uint64(v)
-	}
-	return 0
-}
-
-func toInt64(i any) int64 {
-	switch v := i.(type) {
-	case int8:
-		return int64(v)
-	case int16:
-		return int64(v)
-	case int32:
-		return int64(v)
-	case int64:
-		return v
-	case int:
-		return int64(v)
-	}
-	return 0
-}
-
-func toFloat64(i any) float64 {
-	switch v := i.(type) {
-	case float32:
-		return float64(v)
-	case float64:
-		return v
-	}
-	return 0
 }
