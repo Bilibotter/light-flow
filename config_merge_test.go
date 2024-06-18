@@ -13,8 +13,8 @@ var (
 	current int64
 )
 
-func CheckResult(t *testing.T, check int64, statuses ...*StatusEnum) func(*WorkFlow) (keepOn bool, err error) {
-	return func(workFlow *WorkFlow) (keepOn bool, err error) {
+func CheckResult(t *testing.T, check int64, statuses ...*StatusEnum) func(WorkFlow) (keepOn bool, err error) {
+	return func(workFlow WorkFlow) (keepOn bool, err error) {
 		ss := make([]string, len(statuses))
 		for i, status := range statuses {
 			ss[i] = status.Message()
@@ -100,8 +100,8 @@ func ProcIncr(info Process) (bool, error) {
 	return true, nil
 }
 
-func FlowIncr(prefix string) func(info *WorkFlow) (bool, error) {
-	return func(info *WorkFlow) (bool, error) {
+func FlowIncr(prefix string) func(info WorkFlow) (bool, error) {
+	return func(info WorkFlow) (bool, error) {
 		fmt.Printf("%s flow inc current\n", prefix)
 		atomic.AddInt64(&current, 1)
 		return true, nil
@@ -141,8 +141,8 @@ func ProcessCurrentChecker(i int64, flag int) func(info Process) (bool, error) {
 	}
 }
 
-func FlowCurrentChecker(i int64, flag int) func(info *WorkFlow) (bool, error) {
-	return func(info *WorkFlow) (bool, error) {
+func FlowCurrentChecker(i int64, flag int) func(info WorkFlow) (bool, error) {
+	return func(info WorkFlow) (bool, error) {
 		if flag == 0 {
 			fmt.Printf("execute before flow checker\n")
 		} else {
