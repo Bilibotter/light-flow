@@ -7,27 +7,27 @@ import (
 	"testing"
 )
 
-func AfterFlowProcessor(info *flow.WorkFlow) (bool, error) {
-	if info.Name == "" {
+func AfterFlowProcessor(info flow.WorkFlow) (bool, error) {
+	if info.Name() == "" {
 		panic("flow name is empty")
 	}
-	if len(info.Id) == 0 {
+	if len(info.Id()) == 0 {
 		panic("flow id is empty")
 	}
 	atomic.AddInt64(&current, 1)
-	fmt.Printf("..process[%s] AfterFlowProcessor execute \n", info.Name)
+	fmt.Printf("..process[%s] AfterFlowProcessor execute \n", info.Name())
 	return true, nil
 }
 
-func BeforeFlowProcessor(info *flow.WorkFlow) (bool, error) {
-	if info.Name == "" {
+func BeforeFlowProcessor(info flow.WorkFlow) (bool, error) {
+	if info.Name() == "" {
 		panic("flow name is empty")
 	}
-	if len(info.Id) == 0 {
+	if len(info.Id()) == 0 {
 		panic("flow id is empty")
 	}
 	atomic.AddInt64(&current, 1)
-	fmt.Printf("..process[%s] BeforeFlowProcessor execute \n", info.Name)
+	fmt.Printf("..process[%s] BeforeFlowProcessor execute \n", info.Name())
 	return true, nil
 }
 

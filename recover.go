@@ -81,10 +81,10 @@ type scene interface {
 }
 
 type RecoverRecord interface {
+	GetName() string
 	GetRootId() string // root id is equal to workflow id
 	GetRecoverId() string
 	GetStatus() uint8
-	GetName() string
 }
 
 type recoverCode uint8
@@ -189,7 +189,7 @@ func RecoverFlow(flowId string) (err error) {
 		return
 	}
 	persister.UpdateRecordStatus(&recoverRecord{RecoverId: record.GetRecoverId(), Status: RecoverRunning})
-	flow.set(recovering)
+	flow.append(recovering)
 	flow.Done()
 	if flow.Success() {
 		persister.UpdateRecordStatus(&recoverRecord{RecoverId: record.GetRecoverId(), Status: RecoverSuccess})
@@ -202,7 +202,7 @@ func RecoverFlow(flowId string) (err error) {
 func markExecuted(workflow *runFlow, checkpoints []CheckPoint) error {
 	for _, proc := range workflow.processes {
 		for _, step := range proc.flowSteps {
-			step.set(executed)
+			step.append(executed)
 		}
 	}
 	id2Name := make(map[string]string)
@@ -432,7 +432,11 @@ func (b *aes256Encryptor) Decrypt(cipherText string, secret []byte) (string, err
 }
 
 func (point *flowCheckpoint) GetPrimaryKey() string {
-	return point.Id
+	return point.id
+}
+
+func (point *flowCheckpoint) GetName() string {
+	return point.name
 }
 
 func (point *flowCheckpoint) GetParentId() string {
@@ -440,7 +444,7 @@ func (point *flowCheckpoint) GetParentId() string {
 }
 
 func (point *flowCheckpoint) GetRootId() string {
-	return point.Id
+	return point.id
 }
 
 func (point *flowCheckpoint) GetScope() uint8 {
@@ -477,11 +481,11 @@ func (point *procCheckpoint) GetName() string {
 }
 
 func (point *procCheckpoint) GetParentId() string {
-	return point.GetFlowId()
+	return point.FlowId()
 }
 
 func (point *procCheckpoint) GetRootId() string {
-	return point.GetFlowId()
+	return point.FlowId()
 }
 
 func (point *procCheckpoint) GetScope() uint8 {
@@ -533,11 +537,11 @@ func (point *stepCheckpoint) GetName() string {
 }
 
 func (point *stepCheckpoint) GetParentId() string {
-	return point.GetProcessId()
+	return point.ProcessId()
 }
 
 func (point *stepCheckpoint) GetRootId() string {
-	return point.GetFlowId()
+	return point.FlowId()
 }
 
 func (point *stepCheckpoint) GetScope() uint8 {
@@ -579,7 +583,7 @@ func (rf *runFlow) loadCheckpoint(checkpoint CheckPoint) error {
 		return err
 	}
 	rf.table = snapshot
-	rf.Id = checkpoint.GetPrimaryKey()
+	rf.id = checkpoint.GetPrimaryKey()
 	return nil
 }
 
@@ -624,15 +628,15 @@ func (rf *runFlow) saveCheckpoints() {
 	}
 	record := &recoverRecord{
 		RecoverId: recoverId,
-		RootId:    rf.Id,
+		RootId:    rf.id,
 		Status:    RecoverIdle,
-		Name:      rf.Name,
+		Name:      rf.name,
 	}
 	persister.SaveCheckpointAndRecord(checkpoints, record)
 }
 
-func (rp *runProcess) loadCheckpoint(checkpoint CheckPoint) error {
-	rp.id = checkpoint.GetPrimaryKey()
+func (process *runProcess) loadCheckpoint(checkpoint CheckPoint) error {
+	process.id = checkpoint.GetPrimaryKey()
 	snapshot, err := deserialize[map[string]any](checkpoint.GetSnapshot())
 	if err != nil {
 		return err
@@ -642,13 +646,13 @@ func (rp *runProcess) loadCheckpoint(checkpoint CheckPoint) error {
 	}
 	for k, v := range snapshot {
 		if unwrap, ok := v.(outcomeValue); ok {
-			rp.restoreOutcome(k, &unwrap.O)
+			process.restoreOutcome(k, &unwrap.O)
 			if unwrap.Value != nil {
-				rp.Set(k, unwrap.Value)
+				process.Set(k, unwrap.Value)
 			}
 			continue
 		}
-		rp.Set(k, v)
+		process.Set(k, v)
 	}
 	return nil
 }

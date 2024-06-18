@@ -29,30 +29,21 @@ type StepMeta struct {
 	depends    sliceSet[*StepMeta] // prev
 	waiters    sliceSet[*StepMeta] // next
 	priority   map[string]int64
-	run        func(ctx StepCtx) (any, error)
+	run        func(ctx Step) (any, error)
 	evaluators evaluators
 }
 
 type runStep struct {
-	*StepMeta
 	*state
+	*StepMeta
 	*dependentContext
 	belong    *runProcess
 	id        string
 	segments  segment // 0-12 bits for waiting
 	finish    chan bool
-	Start     time.Time
-	End       time.Time
-	infoCache *Step // Step is needed for both before and post callbacks, so caching it down
-	Err       error
-}
-
-type Step struct {
-	*basicInfo
-	StepCtx
-	Start time.Time
-	End   time.Time
-	Err   error
+	start     time.Time
+	end       time.Time
+	exception error
 }
 
 type StepConfig struct {
@@ -65,11 +56,11 @@ func (seg *segment) addWaiting(i int64) int64 {
 	return (current >> waitingOffset) & segMask
 }
 
-func (s *Step) Error() error {
-	return s.Err
+func (meta *StepMeta) Name() string {
+	return meta.name
 }
 
-func (meta *StepMeta) Next(run func(ctx StepCtx) (any, error), alias ...string) *StepMeta {
+func (meta *StepMeta) Next(run func(ctx Step) (any, error), alias ...string) *StepMeta {
 	if len(alias) == 1 {
 		return meta.belong.NameStep(run, alias[0], meta.name)
 
@@ -77,7 +68,7 @@ func (meta *StepMeta) Next(run func(ctx StepCtx) (any, error), alias ...string) 
 	return meta.belong.Step(run, meta.name)
 }
 
-func (meta *StepMeta) Same(run func(ctx StepCtx) (any, error), alias ...string) *StepMeta {
+func (meta *StepMeta) Same(run func(ctx Step) (any, error), alias ...string) *StepMeta {
 	depends := make([]any, 0, len(meta.depends))
 	for i := 0; i < len(meta.depends); i++ {
 		depends = append(depends, meta.depends[i].name)
@@ -114,7 +105,7 @@ func (meta *StepMeta) wireDepends() {
 		}
 		depend.waiters = append(depend.waiters, meta)
 		if depend.position.Has(endE) {
-			depend.position.set(hasNextE)
+			depend.position.append(hasNextE)
 			depend.position.clear(endE)
 		}
 		if depend.layer+1 > meta.layer {
@@ -123,10 +114,10 @@ func (meta *StepMeta) wireDepends() {
 	}
 
 	if len(meta.depends) == 0 {
-		meta.position.set(headE)
+		meta.position.append(headE)
 	}
 
-	meta.position.set(endE)
+	meta.position.append(endE)
 }
 
 // checkPriority checks if the priority key corresponds to an existing step.
@@ -177,26 +168,39 @@ func (meta *StepMeta) Retry(retry int) *StepMeta {
 	return meta
 }
 
-func (step *runStep) GetFlowId() string {
-	return step.belong.GetFlowId()
+func (step *runStep) Err() error {
+	return step.exception
 }
 
-func (step *runStep) GetProcessId() string {
+func (step *runStep) Id() string {
+	return step.id
+}
+
+func (step *runStep) FlowId() string {
+	return step.belong.FlowId()
+}
+
+func (step *runStep) ProcessId() string {
 	return step.belong.id
+}
+
+func (step *runStep) StartTime() time.Time {
+	return step.start
+}
+
+func (step *runStep) EndTime() time.Time {
+	return step.end
+}
+
+func (step *runStep) CostTime() time.Duration {
+	if step.end.IsZero() {
+		return 0
+	}
+	return step.end.Sub(step.start)
 }
 
 func (step *runStep) SetCondition(value any, targets ...string) {
 	step.setExactCond(step.name, value, targets...)
-}
-
-func (step *runStep) syncInfo() {
-	if step.infoCache == nil {
-		return
-	}
-	step.infoCache.state = step.state
-	step.infoCache.Err = step.Err
-	step.infoCache.Start = step.Start
-	step.infoCache.End = step.End
 }
 
 func (step *runStep) needRecover() bool {

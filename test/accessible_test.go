@@ -9,8 +9,8 @@ import (
 	"time"
 )
 
-func FlowCallback(flag bool, visible []string, notVisible []string, keys ...string) func(*flow.WorkFlow) (keepOn bool, err error) {
-	return func(info *flow.WorkFlow) (keepOn bool, err error) {
+func FlowCallback(flag bool, visible []string, notVisible []string, keys ...string) func(flow.WorkFlow) (keepOn bool, err error) {
+	return func(info flow.WorkFlow) (keepOn bool, err error) {
 		if flag {
 			time.Sleep(10 * time.Millisecond)
 		}
@@ -20,82 +20,82 @@ func FlowCallback(flag bool, visible []string, notVisible []string, keys ...stri
 	}
 }
 
-func ProcCallback(flag bool, visible []string, notVisible []string, keys ...string) func(*flow.Process) (keepOn bool, err error) {
-	return func(info *flow.Process) (keepOn bool, err error) {
+func ProcCallback(flag bool, visible []string, notVisible []string, keys ...string) func(flow.Process) (keepOn bool, err error) {
+	return func(info flow.Process) (keepOn bool, err error) {
 		if flag {
 			time.Sleep(10 * time.Millisecond)
 		}
 		for _, k := range visible {
 			if _, ok := info.Get(k); !ok {
-				panic(fmt.Sprintf("%s not found %s", info.ContextName(), k))
+				panic(fmt.Sprintf("%s not found %s", info.Name(), k))
 			}
 		}
-		fmt.Printf("process[%s] can get all keys = %s\n", info.ContextName(), strings.Join(visible, ", "))
+		fmt.Printf("process[%s] can get all keys = %s\n", info.Name(), strings.Join(visible, ", "))
 		for _, k := range notVisible {
 			if _, ok := info.Get(k); ok {
-				panic(fmt.Sprintf("%s found %s", info.ContextName(), k))
+				panic(fmt.Sprintf("%s found %s", info.Name(), k))
 			}
 		}
-		fmt.Printf("process[%s] can't get all keys = %s\n", info.ContextName(), strings.Join(notVisible, ", "))
+		fmt.Printf("process[%s] can't get all keys = %s\n", info.Name(), strings.Join(notVisible, ", "))
 		for _, k := range keys {
 			info.Set(k, k)
 		}
-		fmt.Printf("process[%s] set all keys = %s\n", info.ContextName(), strings.Join(keys, ", "))
+		fmt.Printf("process[%s] set all keys = %s\n", info.Name(), strings.Join(keys, ", "))
 		atomic.AddInt64(&current, 1)
 		return true, nil
 	}
 }
 
-func StepCallback(flag bool, visible []string, notVisible []string, keys ...string) func(*flow.Step) (keepOn bool, err error) {
-	return func(info *flow.Step) (keepOn bool, err error) {
+func StepCallback(flag bool, visible []string, notVisible []string, keys ...string) func(flow.Step) (keepOn bool, err error) {
+	return func(info flow.Step) (keepOn bool, err error) {
 		if flag {
 			time.Sleep(10 * time.Millisecond)
 		}
-		fmt.Printf("invoke step[%s] callback, current=%d\n", info.Name, atomic.LoadInt64(&current))
+		fmt.Printf("invoke step[%s] callback, current=%d\n", info.Name(), atomic.LoadInt64(&current))
 		for _, k := range visible {
 			if _, ok := info.Get(k); !ok {
-				panic(fmt.Sprintf("%s not found %s", info.ContextName(), k))
+				panic(fmt.Sprintf("%s not found %s", info.Name(), k))
 			}
 		}
-		fmt.Printf("step[%s] can get all keys = %s\n", info.ContextName(), strings.Join(visible, ", "))
+		fmt.Printf("step[%s] can get all keys = %s\n", info.Name(), strings.Join(visible, ", "))
 		for _, k := range notVisible {
 			if _, ok := info.Get(k); ok {
-				panic(fmt.Sprintf("%s found %s", info.ContextName(), k))
+				panic(fmt.Sprintf("%s found %s", info.Name(), k))
 			}
 		}
-		fmt.Printf("step[%s] can't get all keys = %s\n", info.ContextName(), strings.Join(notVisible, ", "))
+		fmt.Printf("step[%s] can't get all keys = %s\n", info.Name(), strings.Join(notVisible, ", "))
 		for _, k := range keys {
 			info.Set(k, k)
 		}
-		fmt.Printf("step[%s] set all keys = %s\n", info.ContextName(), strings.Join(keys, ", "))
+		fmt.Printf("step[%s] set all keys = %s\n", info.Name(), strings.Join(keys, ", "))
 		atomic.AddInt64(&current, 1)
 		println()
 		return true, nil
 	}
 }
 
-func CtxChecker(flag bool, visible []string, notVisible []string, keys ...string) func(ctx flow.StepCtx) (any, error) {
-	return func(ctx flow.StepCtx) (any, error) {
-		fmt.Printf("ctx[%s] start check context, current=%d\n", ctx.ContextName(), atomic.LoadInt64(&current))
+func CtxChecker(flag bool, visible []string, notVisible []string, keys ...string) func(ctx flow.Step) (any, error) {
+	return func(ctx flow.Step) (any, error) {
+		fmt.Printf("ctx[%s] start check context, current=%d\n", ctx.Name(), atomic.LoadInt64(&current))
 		if flag {
 			time.Sleep(10 * time.Millisecond)
 		}
 		for _, k := range visible {
 			if _, ok := ctx.Get(k); !ok {
-				panic(fmt.Sprintf("%s not found %s", ctx.ContextName(), k))
+				panic(fmt.Sprintf("%s not found %s", ctx.Name(), k))
 			}
 		}
-		fmt.Printf("ctx[%s] can get all keys = %s\n", ctx.ContextName(), strings.Join(visible, ", "))
+		fmt.Printf("ctx[%s] can get all keys = %s\n", ctx.Name(), strings.Join(visible, ", "))
 		for _, k := range notVisible {
 			if _, ok := ctx.Get(k); ok {
-				panic(fmt.Sprintf("%s found %s", ctx.ContextName(), k))
+				panic(fmt.Sprintf("%s found %s", ctx.Name(), k))
 			}
 		}
-		fmt.Printf("ctx[%s] can't get all keys = %s\n", ctx.ContextName(), strings.Join(notVisible, ", "))
+		fmt.Printf("ctx[%s] can't get all keys = %s\n", ctx.Name(), strings.Join(notVisible, ", "))
 		for _, k := range keys {
 			ctx.Set(k, k)
 		}
-		fmt.Printf("ctx[%s] set all keys = %s\n", ctx.ContextName(), strings.Join(keys, ", "))
+		fmt.Printf("ctx[%s] set all keys = %s\n", ctx.Name(), strings.Join(keys, ", "))
 		atomic.AddInt64(&current, 1)
 		println()
 		return nil, nil

@@ -6,6 +6,7 @@ import (
 	"runtime/debug"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 const (
@@ -25,6 +26,7 @@ var (
 
 // these variable are used to indicate the state of the unit
 var (
+	normal       = []*StatusEnum{Pending, Running, Pause, Success}
 	Pending      = &StatusEnum{0, "Pending"}
 	Running      = &StatusEnum{0b1, "Running"}
 	Pause        = &StatusEnum{0b1 << 1, "Pause"}
@@ -33,6 +35,7 @@ var (
 	recovering   = &StatusEnum{0b1 << 4, "recovering"}
 	Success      = &StatusEnum{0b1 << 15, "Success"}
 	NormalMask   = &StatusEnum{0b1<<16 - 1, "NormalMask"}
+	abnormal     = []*StatusEnum{Cancel, Timeout, Panic, Error, Stop, CallbackFail, Failed}
 	Cancel       = &StatusEnum{0b1 << 16, "Cancel"}
 	Timeout      = &StatusEnum{0b1 << 17, "Timeout"}
 	Panic        = &StatusEnum{0b1 << 18, "Panic"}
@@ -44,47 +47,77 @@ var (
 	AbnormalMask = &StatusEnum{NormalMask.flag << 16, "AbnormalMask"}
 )
 
-var (
-	normal   = []*StatusEnum{Pending, Running, Pause, Success}
-	abnormal = []*StatusEnum{Cancel, Timeout, Panic, Error, Stop, CallbackFail, Failed}
-)
-
 type state int64
 
-type statusI interface {
-	Has(enum *StatusEnum) bool
-	Success() bool
-	Exceptions() []string
+type Step interface {
+	stepCtx
+	runtimeI
+	Err() error
 }
 
-type basicInfoI interface {
-	statusI
-	setStatus(enum *StatusEnum) (updated bool)
-	GetId() string
-	GetName() string
-}
-
-type context interface {
-	ContextName() string
-	Get(key string) (value any, exist bool)
-	Set(key string, value any)
-}
-
-type StepCtx interface {
+type stepCtx interface {
 	context
-	GetFlowId() string
-	GetProcessId() string
-	GetEndValues(key string) map[string]any
-	GetResult(key string) (value any, exist bool)
-	setResult(key string, value any)
+	FlowId() string
+	ProcessId() string
+	EndValues(key string) map[string]any
+	Result(key string) (value any, exist bool)
 	SetCondition(value any, targets ...string) // the targets contain names of the evaluators to be matched
-	getCondition(key string) (named, unnamed []evalValue, exist bool)
+}
+
+type Process interface {
+	procCtx
+	runtimeI
 }
 
 type procCtx interface {
 	context
-	GetFlowId() string
+	FlowId() string
 	GetByStepName(stepName, key string) (value any, exist bool)
+}
+
+type WorkFlow interface {
+	runtimeI
+}
+
+type runtimeI interface {
+	statusI
+	nameI
+	identifierI
+	periodI
+}
+
+type statusI interface {
+	ExplainStatus() []string
+	Has(enum ...*StatusEnum) bool
+	Success() bool
+	append(enum *StatusEnum) (updated bool)
+	add(flag state) (updated bool)
+}
+
+type nameI interface {
+	Name() string
+}
+
+type identifierI interface {
+	Id() string
+}
+
+type periodI interface {
+	StartTime() time.Time
+	EndTime() time.Time
+	CostTime() time.Duration
+}
+
+type basicInfoI interface {
+	statusI
+	GetId() string
+	GetName() string
+	setStatus(enum *StatusEnum) (updated bool)
+}
+
+type context interface {
+	Get(key string) (value any, exist bool)
+	Set(key string, value any)
 }
 
 type PanicError interface {
@@ -95,7 +128,6 @@ type PanicError interface {
 type routing interface {
 	nodeInfo
 	Prefer(key string) (index int64, exist bool)
-	RouterName() string
 	KeyPath() int64
 	KeyAccess() int64
 }
@@ -121,11 +153,11 @@ type basicInfo struct {
 	Name string
 }
 
-type handler[T basicInfoI] struct {
+type handler[T runtimeI] struct {
 	filter []*callback[T]
 }
 
-type callback[T basicInfoI] struct {
+type callback[T runtimeI] struct {
 	// If must is false, the process will continue to execute
 	// even if the processor fails
 	must bool
@@ -136,8 +168,8 @@ type callback[T basicInfoI] struct {
 }
 
 type simpleContext struct {
-	table map[string]any
-	name  string
+	table   map[string]any
+	ctxName string
 }
 
 type dependentContext struct {
@@ -193,7 +225,7 @@ func createStatus(i int64) *state {
 
 func toStepName(value any) string {
 	switch result := value.(type) {
-	case func(ctx StepCtx) (any, error):
+	case func(ctx Step) (any, error):
 		return getFuncName(value)
 	case string:
 		return result
@@ -216,9 +248,13 @@ func (s *state) Normal() bool {
 	return s.load()&AbnormalMask.flag == 0
 }
 
-func (s *state) Has(enum *StatusEnum) bool {
+func (s *state) Has(enum ...*StatusEnum) bool {
+	flag := state(0)
+	for _, e := range enum {
+		flag |= e.flag
+	}
 	// can't use s.load()&enum.flag != 0, because enum.flag may be 0
-	return s.load()&enum.flag == enum.flag
+	return s.load()&flag == flag
 }
 
 // Exceptions return contain exception's message
@@ -273,7 +309,7 @@ func (s *state) clear(enum *StatusEnum) bool {
 	return false
 }
 
-func (s *state) set(enum *StatusEnum) (updated bool) {
+func (s *state) append(enum *StatusEnum) (updated bool) {
 	return s.add(enum.flag)
 }
 
@@ -294,15 +330,6 @@ func (s *state) cas(old, new state) bool {
 	return atomic.CompareAndSwapInt64((*int64)(s), int64(old), int64(new))
 }
 
-func (s *StatusEnum) Contained(explain ...string) bool {
-	for _, value := range explain {
-		if value == s.msg {
-			return true
-		}
-	}
-	return false
-}
-
 func (s *StatusEnum) Message() string {
 	return s.msg
 }
@@ -316,7 +343,7 @@ func (bi *basicInfo) GetId() string {
 }
 
 func (bi *basicInfo) setStatus(enum *StatusEnum) (updated bool) {
-	return bi.state.set(enum)
+	return bi.state.append(enum)
 }
 
 func (cc *handler[T]) addCallback(flag string, must bool, run func(info T) (bool, error)) *callback[T] {
@@ -344,8 +371,8 @@ func (cc *handler[T]) handle(flag string, info T) string {
 		keepOn, err, panicStack := filter.call(flag, info)
 		if filter.must {
 			if len(panicStack) != 0 || err != nil {
-				info.setStatus(CallbackFail)
-				info.setStatus(Failed)
+				info.append(CallbackFail)
+				info.append(Failed)
 				return panicStack
 			}
 		}
@@ -362,7 +389,7 @@ func (c *callback[T]) NotFor(name ...string) *callback[T] {
 	s := createSetBySliceFunc(name, func(value string) string { return value })
 	old := c.run
 	f := func(info T) (bool, error) {
-		if s.Contains(info.GetName()) {
+		if s.Contains(info.Name()) {
 			return true, nil
 		}
 		return old(info)
@@ -376,7 +403,7 @@ func (c *callback[T]) OnlyFor(name ...string) *callback[T] {
 	s := createSetBySliceFunc(name, func(value string) string { return value })
 	old := c.run
 	f := func(info T) (bool, error) {
-		if !s.Contains(info.GetName()) {
+		if !s.Contains(info.Name()) {
 			return true, nil
 		}
 		return old(info)
@@ -512,10 +539,6 @@ func (n *node) search(path int64) (any, bool) {
 	return n.Next.search(path)
 }
 
-func (ctx *dependentContext) ContextName() string {
-	return ctx.RouterName()
-}
-
 func (ctx *dependentContext) Get(key string) (value any, exist bool) {
 	if index, match := ctx.Prefer(key); match {
 		return ctx.matchByIndex(index, key)
@@ -529,7 +552,7 @@ func (ctx *dependentContext) Get(key string) (value any, exist bool) {
 	return nil, false
 }
 
-func (ctx *dependentContext) GetResult(key string) (value any, exist bool) {
+func (ctx *dependentContext) Result(key string) (value any, exist bool) {
 	ptr, find := ctx.getOutCome(key)
 	defer ctx.lock.RUnlock()
 	if !find {
@@ -547,7 +570,7 @@ func (ctx *dependentContext) getCondition(key string) (named, unnamed []evalValu
 	return ptr.Named, ptr.Unnamed, true
 }
 
-func (ctx *dependentContext) GetEndValues(key string) map[string]any {
+func (ctx *dependentContext) EndValues(key string) map[string]any {
 	ctx.lock.RLock()
 	defer ctx.lock.RUnlock()
 	current, find := ctx.nodes[key]
@@ -570,7 +593,7 @@ func (ctx *dependentContext) GetEndValues(key string) map[string]any {
 	return m
 }
 
-func (ctx *dependentContext) getByStepName(stepName, key string) (value any, exist bool) {
+func (ctx *dependentContext) GetByStepName(stepName, key string) (value any, exist bool) {
 	ctx.lock.RLock()
 	defer ctx.lock.RUnlock()
 	index, ok := ctx.ToIndex(stepName)
@@ -653,10 +676,6 @@ func (ctx *dependentContext) Set(key string, value any) {
 	ctx.set(ctx.KeyPath(), key, value)
 }
 
-func (sc *simpleContext) ContextName() string {
-	return sc.name
-}
-
 func (sc *simpleContext) Get(key string) (value any, exist bool) {
 	value, exist = sc.table[key]
 	return
@@ -677,10 +696,6 @@ func (pw *panicWrap) GetRecover() any {
 func (router *nodeRouter) Prefer(key string) (index int64, exist bool) {
 	index, exist = router.priority[key]
 	return
-}
-
-func (router *nodeRouter) RouterName() string {
-	return router.toName[router.index]
 }
 
 func (router *nodeRouter) KeyPath() int64 {

@@ -9,25 +9,46 @@ import (
 )
 
 type runProcess struct {
-	*ProcessMeta
 	*state
+	*ProcessMeta
 	*dependentContext
 	belong    *runFlow
 	id        string
 	flowSteps map[string]*runStep
+	start     time.Time
+	end       time.Time
 	pause     sync.WaitGroup
 	running   sync.WaitGroup
 	finish    sync.WaitGroup
 }
 
-func (rp *runProcess) buildRunStep(meta *StepMeta) *runStep {
+func (process *runProcess) Id() string {
+	return process.id
+}
+
+func (process *runProcess) StartTime() time.Time {
+	return process.start
+}
+
+func (process *runProcess) EndTime() time.Time {
+	return process.end
+}
+
+func (process *runProcess) CostTime() time.Duration {
+	if process.end.IsZero() {
+		return 0
+	}
+	return process.end.Sub(process.start)
+}
+
+func (process *runProcess) buildRunStep(meta *StepMeta) *runStep {
 	step := runStep{
 		dependentContext: &dependentContext{
 			routing:     &meta.nodeRouter,
-			linkedTable: rp.linkedTable,
-			prev:        rp.dependentContext.prev,
+			linkedTable: process.linkedTable,
+			prev:        process.dependentContext.prev,
 		},
-		belong:   rp,
+		belong:   process,
 		state:    emptyStatus(),
 		StepMeta: meta,
 		id:       generateId(),
@@ -35,77 +56,74 @@ func (rp *runProcess) buildRunStep(meta *StepMeta) *runStep {
 		finish:   make(chan bool, 1),
 	}
 
-	rp.flowSteps[meta.name] = &step
+	process.flowSteps[meta.name] = &step
 
 	return &step
 }
 
-func (rp *runProcess) clearExecutedFromRoot(root string) {
-	current := rp.flowSteps[root]
+func (process *runProcess) clearExecutedFromRoot(root string) {
+	current := process.flowSteps[root]
 	current.clear(executed)
 	for _, meta := range current.waiters {
-		rp.clearExecutedFromRoot(meta.name)
+		process.clearExecutedFromRoot(meta.name)
 	}
 }
 
-func (rp *runProcess) GetFlowId() string {
-	return rp.belong.Id
+func (process *runProcess) FlowId() string {
+	return process.belong.id
 }
 
-func (rp *runProcess) GetByStepName(stepName, key string) (value any, exist bool) {
-	return rp.getByStepName(stepName, key)
-}
-
-func (rp *runProcess) Resume() {
-	if rp.clear(Pause) {
-		rp.pause.Done()
+func (process *runProcess) Resume() {
+	if process.clear(Pause) {
+		process.pause.Done()
 	}
 }
 
-func (rp *runProcess) Pause() {
-	if rp.set(Pause) {
-		rp.pause.Add(1)
+func (process *runProcess) Pause() {
+	if process.append(Pause) {
+		process.pause.Add(1)
 	}
 }
 
-func (rp *runProcess) Stop() {
-	rp.set(Stop)
-	rp.set(Failed)
+func (process *runProcess) Stop() {
+	process.append(Stop)
+	process.append(Failed)
 }
 
-func (rp *runProcess) schedule() (future *Future) {
-	rp.initialize()
+func (process *runProcess) schedule() (future *Future) {
+	process.initialize()
+	process.start = time.Now().UTC()
 	future = &Future{
 		basicInfo: &basicInfo{
-			Id:    rp.id,
-			Name:  rp.name,
-			state: rp.state,
+			Id:    process.id,
+			Name:  process.name,
+			state: process.state,
 		},
-		state:  rp.state,
-		finish: &rp.finish,
+		state:  process.state,
+		finish: &process.finish,
 	}
 
 	// CallbackFail from Flow
-	if rp.Has(CallbackFail) {
-		rp.set(Cancel)
+	if process.Has(CallbackFail) {
+		process.append(Cancel)
 		return
 	}
 
-	rp.set(Running)
-	rp.procCallback(Before)
-	for _, step := range rp.flowSteps {
+	process.append(Running)
+	process.procCallback(Before)
+	for _, step := range process.flowSteps {
 		if step.layer == 1 {
-			go rp.startStep(step)
+			go process.startStep(step)
 		}
 	}
 
-	rp.finish.Add(1)
-	go rp.finalize()
+	process.finish.Add(1)
+	go process.finalize()
 	return
 }
 
-func (rp *runProcess) startStep(step *runStep) {
-	defer rp.startNextSteps(step)
+func (process *runProcess) startStep(step *runStep) {
+	defer process.startNextSteps(step)
 
 	if step.Has(executed) {
 		return
@@ -117,46 +135,46 @@ func (rp *runProcess) startStep(step *runStep) {
 		return
 	}
 
-	if !rp.Normal() {
-		step.set(Stop)
+	if !process.Normal() {
+		step.append(Stop)
 		return
 	}
 
-	for rp.Has(Pause) {
-		rp.pause.Wait()
+	for process.Has(Pause) {
+		process.pause.Wait()
 	}
 
 	if step.Has(skipped) {
 		return
 	}
 
-	if len(step.depends) > 0 && !rp.evaluate(step) {
-		step.set(skipped)
+	if len(step.depends) > 0 && !process.evaluate(step) {
+		step.append(skipped)
 		return
 	}
 
 	timeout := 3 * time.Hour
-	if rp.StepTimeout != 0 {
-		timeout = rp.StepTimeout
+	if process.StepTimeout != 0 {
+		timeout = process.StepTimeout
 	}
 	if step.StepTimeout != 0 {
 		timeout = step.StepTimeout
 	}
 
 	timer := time.NewTimer(timeout)
-	go rp.runStep(step)
+	go process.runStep(step)
 	select {
 	case <-timer.C:
-		step.set(Timeout)
-		step.set(Failed)
+		step.append(Timeout)
+		step.append(Failed)
 	case <-step.finish:
 		return
 	}
 }
 
-func (rp *runProcess) evaluate(step *runStep) bool {
+func (process *runProcess) evaluate(step *runStep) bool {
 	for _, group := range step.evaluators {
-		named, unnamed, exist := rp.getCondition(group.depend)
+		named, unnamed, exist := process.getCondition(group.depend)
 		if !exist {
 			return false
 		}
@@ -167,74 +185,74 @@ func (rp *runProcess) evaluate(step *runStep) bool {
 	return true
 }
 
-func (rp *runProcess) finalize() {
+func (process *runProcess) finalize() {
 	timeout := 3 * time.Hour
-	if rp.ProcTimeout != 0 {
-		timeout = rp.ProcTimeout
+	if process.ProcTimeout != 0 {
+		timeout = process.ProcTimeout
 	}
 
 	timer := time.NewTimer(timeout)
 	finish := make(chan bool, 1)
 	go func() {
-		rp.running.Wait()
+		process.running.Wait()
 		finish <- true
 	}()
 	select {
 	case <-timer.C:
-		rp.set(Timeout)
-		rp.set(Failed)
+		process.append(Timeout)
+		process.append(Failed)
 	case <-finish:
 	}
 
-	for _, step := range rp.flowSteps {
-		rp.add(step.state.load())
+	for _, step := range process.flowSteps {
+		process.add(step.state.load())
 	}
 
-	if rp.Normal() {
-		rp.set(Success)
+	if process.Normal() {
+		process.append(Success)
 	}
-
-	rp.procCallback(After)
-	rp.finish.Done()
+	process.procCallback(After)
+	process.end = time.Now().UTC()
+	process.finish.Done()
 }
 
-func (rp *runProcess) startNextSteps(step *runStep) {
+func (process *runProcess) startNextSteps(step *runStep) {
 	// all step not execute should cancel while process is timeout
-	cancel := !step.Normal() || !rp.Normal()
+	cancel := !step.Normal() || !process.Normal()
 	skip := step.Has(skipped)
 	for _, waiter := range step.waiters {
-		next := rp.flowSteps[waiter.name]
+		next := process.flowSteps[waiter.name]
 		waiting := next.segments.addWaiting(-1)
 		if cancel {
-			next.set(Cancel)
+			next.append(Cancel)
 		}
 		if atomic.LoadInt64(&waiting) != 0 {
 			continue
 		}
 		if step.Success() {
-			next.set(Running)
+			next.append(Running)
 		} else if skip {
-			next.set(skipped)
+			next.append(skipped)
 		}
-		go rp.startStep(next)
+		go process.startStep(next)
 	}
 
-	rp.running.Done()
+	process.running.Done()
 }
 
-func (rp *runProcess) runStep(step *runStep) {
+func (process *runProcess) runStep(step *runStep) {
 	defer func() { step.finish <- true }()
 
-	step.Start = time.Now().UTC()
-	rp.stepCallback(step, Before)
+	step.start = time.Now().UTC()
+	process.stepCallback(step, Before)
 	// if beforeStep panic occur, the step will mark as panic
 	if !step.Normal() {
 		return
 	}
 
 	retry := 0
-	if rp.StepRetry > 0 {
-		retry = rp.StepRetry
+	if process.StepRetry > 0 {
+		retry = process.StepRetry
 	}
 	if step.StepRetry > 0 {
 		retry = step.StepRetry
@@ -243,85 +261,56 @@ func (rp *runProcess) runStep(step *runStep) {
 	defer func() {
 		if r := recover(); r != nil {
 			panicErr := fmt.Errorf("panic: %v\n\n%s\n", r, string(debug.Stack()))
-			step.set(Panic)
-			step.set(Failed)
-			step.Err = panicErr
-			step.End = time.Now().UTC()
+			step.append(Panic)
+			step.append(Failed)
+			step.exception = panicErr
+			step.end = time.Now().UTC()
 		}
-		rp.stepCallback(step, After)
+		process.stepCallback(step, After)
 	}()
 
 	for i := 0; i <= retry; i++ {
 		result, err := step.run(step)
-		step.End = time.Now().UTC()
-		step.Err = err
+		step.end = time.Now().UTC()
+		step.exception = err
 		if err != nil {
-			step.set(Error)
-			step.set(Failed)
+			step.append(Error)
+			step.append(Failed)
 			continue
 		}
 		if result != nil {
 			step.setResult(step.name, result)
 		}
-		step.set(Success)
+		step.append(Success)
 		break
 	}
 }
 
-func (rp *runProcess) stepCallback(step *runStep, flag string) {
-	info := rp.summaryStepInfo(step)
+func (process *runProcess) stepCallback(step *runStep, flag string) {
+	//info := process.summaryStepInfo(step)
 	panicStack := ""
 	defer func() {
-		if len(panicStack) > 0 && step.Err == nil {
-			step.Err = fmt.Errorf(panicStack)
+		if len(panicStack) > 0 && step.exception == nil {
+			step.exception = fmt.Errorf(panicStack)
 		}
 	}()
-	if !rp.belong.ProcNotUseDefault && !rp.ProcNotUseDefault && defaultConfig != nil {
-		panicStack = defaultConfig.stepChain.handle(flag, info)
+	if !process.belong.ProcNotUseDefault && !process.ProcNotUseDefault && defaultConfig != nil {
+		panicStack = defaultConfig.stepChain.handle(flag, step)
 	}
 	if len(panicStack) != 0 {
 		return
 	}
-	panicStack = rp.belong.stepChain.handle(flag, info)
+	panicStack = process.belong.stepChain.handle(flag, step)
 	if len(panicStack) != 0 {
 		return
 	}
-	panicStack = rp.stepChain.handle(flag, info)
+	panicStack = process.stepChain.handle(flag, step)
 }
 
-func (rp *runProcess) procCallback(flag string) {
-	info := &Process{
-		procCtx: rp,
-		basicInfo: basicInfo{
-			state: rp.state,
-			Id:    rp.id,
-			Name:  rp.name,
-		},
+func (process *runProcess) procCallback(flag string) {
+	if !process.belong.ProcNotUseDefault && !process.ProcNotUseDefault && defaultConfig != nil {
+		defaultConfig.procChain.handle(flag, process)
 	}
-	if !rp.belong.ProcNotUseDefault && !rp.ProcNotUseDefault && defaultConfig != nil {
-		defaultConfig.procChain.handle(flag, info)
-	}
-	rp.belong.procChain.handle(flag, info)
-	rp.procChain.handle(flag, info)
-}
-
-func (rp *runProcess) summaryStepInfo(step *runStep) *Step {
-	if step.infoCache != nil {
-		step.syncInfo()
-		return step.infoCache
-	}
-	info := &Step{
-		basicInfo: &basicInfo{
-			state: step.state,
-			Id:    step.id,
-			Name:  step.name,
-		},
-		StepCtx: step,
-		Start:   step.Start,
-		End:     step.End,
-		Err:     step.Err,
-	}
-
-	step.infoCache = info
-	return info
+	process.belong.procChain.handle(flag, process)
+	process.procChain.handle(flag, process)
 }

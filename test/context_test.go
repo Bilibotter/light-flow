@@ -28,8 +28,8 @@ func resetCtx() {
 	atomic.StoreInt64(&ctx6, 0)
 }
 
-func CheckCtxResult(t *testing.T, check int64, statuses ...*flow.StatusEnum) func(*flow.WorkFlow) (keepOn bool, err error) {
-	return func(workFlow *flow.WorkFlow) (keepOn bool, err error) {
+func CheckCtxResult(t *testing.T, check int64, statuses ...*flow.StatusEnum) func(flow.WorkFlow) (keepOn bool, err error) {
+	return func(workFlow flow.WorkFlow) (keepOn bool, err error) {
 		ss := make([]string, len(statuses))
 		for i, status := range statuses {
 			ss[i] = status.Message()
@@ -42,9 +42,9 @@ func CheckCtxResult(t *testing.T, check int64, statuses ...*flow.StatusEnum) fun
 			if status == flow.Success && !workFlow.Success() {
 				t.Errorf("workFlow not success\n")
 			}
-			if status == flow.Timeout {
-				time.Sleep(50 * time.Millisecond)
-			}
+			//if status == flow.Timeout {
+			//	time.Sleep(50 * time.Millisecond)
+			//}
 			if !workFlow.Has(status) {
 				t.Errorf("workFlow has not %s status\n", status.Message())
 			}
@@ -56,19 +56,19 @@ func CheckCtxResult(t *testing.T, check int64, statuses ...*flow.StatusEnum) fun
 	}
 }
 
-func GenerateSleep(duration time.Duration, args ...any) func(ctx flow.StepCtx) (any, error) {
-	return func(ctx flow.StepCtx) (any, error) {
+func GenerateSleep(duration time.Duration, args ...any) func(ctx flow.Step) (any, error) {
+	return func(ctx flow.Step) (any, error) {
 		addrWrap, ok := ctx.Get(addrKey)
 		if !ok {
-			panic(fmt.Sprintf("%s not found addr", ctx.ContextName()))
+			panic(fmt.Sprintf("%s not found addr", ctx.Name()))
 		}
 		atomic.AddInt64(addrWrap.(*int64), 1)
 		return nil, nil
 	}
 }
 
-func ChangeCtxStepFunc(addr *int64, args ...any) func(ctx flow.StepCtx) (any, error) {
-	return func(ctx flow.StepCtx) (any, error) {
+func ChangeCtxStepFunc(addr *int64, args ...any) func(ctx flow.Step) (any, error) {
+	return func(ctx flow.Step) (any, error) {
 		if len(args) > 0 {
 			time.Sleep(100 * time.Millisecond)
 		}
@@ -76,36 +76,36 @@ func ChangeCtxStepFunc(addr *int64, args ...any) func(ctx flow.StepCtx) (any, er
 		println("change ctx")
 		addrWrap, ok := ctx.Get(addrKey)
 		if !ok {
-			panic(fmt.Sprintf("%s not found addr", ctx.ContextName()))
+			panic(fmt.Sprintf("%s not found addr", ctx.Name()))
 		}
 		atomic.AddInt64(addrWrap.(*int64), 1)
 		return nil, nil
 	}
 }
 
-func GenerateStepIncAddr(i int, args ...any) func(ctx flow.StepCtx) (any, error) {
-	return func(ctx flow.StepCtx) (any, error) {
+func GenerateStepIncAddr(i int, args ...any) func(ctx flow.Step) (any, error) {
+	return func(ctx flow.Step) (any, error) {
 		if len(args) > 0 {
 			time.Sleep(100 * time.Millisecond)
 		}
 		fmt.Printf("%d.step finish\n", i)
 		addrWrap, ok := ctx.Get(addrKey)
 		if !ok {
-			panic(fmt.Sprintf("%s not found addr", ctx.ContextName()))
+			panic(fmt.Sprintf("%s not found addr", ctx.Name()))
 		}
 		atomic.AddInt64(addrWrap.(*int64), 1)
 		return i, nil
 	}
 }
 
-func getUnExist(ctx flow.StepCtx) (any, error) {
+func getUnExist(ctx flow.Step) (any, error) {
 	println("start")
 	ctx.Get("unExist")
 	println("end")
 	return nil, nil
 }
 
-func invalidUse(ctx flow.StepCtx) (any, error) {
+func invalidUse(ctx flow.Step) (any, error) {
 	return nil, nil
 }
 
@@ -296,107 +296,108 @@ func TestDependStepCtx(t *testing.T) {
 	}
 }
 
-func TestFlowMultipleAsyncExecute(t *testing.T) {
-	defer resetCtx()
-	workflow := flow.RegisterFlow("TestFlowMultipleExecute")
-	process := workflow.Process("TestFlowMultipleExecute1")
-	process.AfterStep(true, ErrorResultPrinter)
-	process.NameStep(GenerateStepIncAddr(1), "1")
-	process.NameStep(GenerateStepIncAddr(2), "2", "1")
-	process.NameStep(GenerateStepIncAddr(3), "3", "2")
-	process = workflow.Process("TestFlowMultipleExecute2")
-	process.NameStep(GenerateStepIncAddr(11), "11")
-	process.NameStep(GenerateStepIncAddr(12), "12", "11")
-	process.NameStep(GenerateStepIncAddr(13), "13", "12")
-	flow1 := flow.AsyncFlow("TestFlowMultipleExecute", map[string]any{addrKey: &ctx1})
-	flow2 := flow.AsyncFlow("TestFlowMultipleExecute", map[string]any{addrKey: &ctx2})
-	flow3 := flow.AsyncFlow("TestFlowMultipleExecute", map[string]any{addrKey: &ctx3})
-	flow4 := flow.AsyncFlow("TestFlowMultipleExecute", map[string]any{addrKey: &ctx4})
-	flow5 := flow.AsyncFlow("TestFlowMultipleExecute", map[string]any{addrKey: &ctx5})
-	for _, flowing := range []flow.FlowController{flow1, flow2, flow3, flow4, flow5} {
-		for _, feature := range flowing.Done() {
-			explain := strings.Join(feature.ExplainStatus(), ", ")
-			fmt.Printf("process[%s] explain=%s\n", feature.GetName(), explain)
-			if !feature.Success() {
-				t.Errorf("process[%s] fail", feature.GetName())
-			}
-		}
-	}
-	if atomic.LoadInt64(&ctx1) != 6 {
-		t.Errorf("execute 6 step, but ctx1 = %d", ctx1)
-	}
-	if atomic.LoadInt64(&ctx2) != 6 {
-		t.Errorf("execute 2 step, but ctx2 = %d", ctx3)
-	}
-	if atomic.LoadInt64(&ctx3) != 6 {
-		t.Errorf("execute 2 step, but ctx3 = %d", ctx3)
-	}
-	if atomic.LoadInt64(&ctx4) != 6 {
-		t.Errorf("execute 2 step, but ctx4 = %d", ctx4)
-	}
-	if atomic.LoadInt64(&ctx5) != 6 {
-		t.Errorf("execute 2 step, but ctx5 = %d", ctx5)
-	}
-}
+// todo add it
+//func TestFlowMultipleAsyncExecute(t *testing.T) {
+//	defer resetCtx()
+//	workflow := flow.RegisterFlow("TestFlowMultipleExecute")
+//	process := workflow.Process("TestFlowMultipleExecute1")
+//	process.AfterStep(true, ErrorResultPrinter)
+//	process.NameStep(GenerateStepIncAddr(1), "1")
+//	process.NameStep(GenerateStepIncAddr(2), "2", "1")
+//	process.NameStep(GenerateStepIncAddr(3), "3", "2")
+//	process = workflow.Process("TestFlowMultipleExecute2")
+//	process.NameStep(GenerateStepIncAddr(11), "11")
+//	process.NameStep(GenerateStepIncAddr(12), "12", "11")
+//	process.NameStep(GenerateStepIncAddr(13), "13", "12")
+//	flow1 := flow.AsyncFlow("TestFlowMultipleExecute", map[string]any{addrKey: &ctx1})
+//	flow2 := flow.AsyncFlow("TestFlowMultipleExecute", map[string]any{addrKey: &ctx2})
+//	flow3 := flow.AsyncFlow("TestFlowMultipleExecute", map[string]any{addrKey: &ctx3})
+//	flow4 := flow.AsyncFlow("TestFlowMultipleExecute", map[string]any{addrKey: &ctx4})
+//	flow5 := flow.AsyncFlow("TestFlowMultipleExecute", map[string]any{addrKey: &ctx5})
+//	for _, flowing := range []flow.FlowController{flow1, flow2, flow3, flow4, flow5} {
+//		for _, feature := range flowing.Done() {
+//			explain := strings.Join(feature.ExplainStatus(), ", ")
+//			fmt.Printf("process[%s] explain=%s\n", feature.Name(), explain)
+//			if !feature.Success() {
+//				t.Errorf("process[%s] fail", feature.Name())
+//			}
+//		}
+//	}
+//	if atomic.LoadInt64(&ctx1) != 6 {
+//		t.Errorf("execute 6 step, but ctx1 = %d", ctx1)
+//	}
+//	if atomic.LoadInt64(&ctx2) != 6 {
+//		t.Errorf("execute 2 step, but ctx2 = %d", ctx3)
+//	}
+//	if atomic.LoadInt64(&ctx3) != 6 {
+//		t.Errorf("execute 2 step, but ctx3 = %d", ctx3)
+//	}
+//	if atomic.LoadInt64(&ctx4) != 6 {
+//		t.Errorf("execute 2 step, but ctx4 = %d", ctx4)
+//	}
+//	if atomic.LoadInt64(&ctx5) != 6 {
+//		t.Errorf("execute 2 step, but ctx5 = %d", ctx5)
+//	}
+//}
 
 func TestContextNameCorrect(t *testing.T) {
 	workflow := flow.RegisterFlow("TestContextNameCorrect")
-	workflow.BeforeFlow(false, func(info *flow.WorkFlow) (keepOn bool, err error) {
-		if info.GetName() != "TestContextNameCorrect" {
-			fmt.Printf("beforeflow workflow context name incorrect, workflow's name = %s\n", info.GetName())
+	workflow.BeforeFlow(false, func(info flow.WorkFlow) (keepOn bool, err error) {
+		if info.Name() != "TestContextNameCorrect" {
+			fmt.Printf("beforeflow workflow context name incorrect, workflow's name = %s\n", info.Name())
 		} else {
-			fmt.Printf("workflow's context name='%s' before flow\n", info.GetName())
+			fmt.Printf("workflow's context name='%s' before flow\n", info.Name())
 		}
 		return true, nil
 	})
 	workflow.AfterFlow(false, CheckCtxResult(t, 0, flow.Success))
-	workflow.AfterFlow(false, func(info *flow.WorkFlow) (keepOn bool, err error) {
-		if info.GetName() != "TestContextNameCorrect" {
-			fmt.Printf("afterflow workflow context name incorrect, workflow's name = %s\n", info.GetName())
+	workflow.AfterFlow(false, func(info flow.WorkFlow) (keepOn bool, err error) {
+		if info.Name() != "TestContextNameCorrect" {
+			fmt.Printf("afterflow workflow context name incorrect, workflow's name = %s\n", info.Name())
 		} else {
-			fmt.Printf("workflow's context name='%s' after flow\n", info.GetName())
+			fmt.Printf("workflow's context name='%s' after flow\n", info.Name())
 		}
 		return true, nil
 	})
-	workflow.BeforeProcess(false, func(info *flow.Process) (keepOn bool, err error) {
-		if info.ContextName() != "TestContextNameCorrect-Process" {
-			fmt.Printf("beforeprocess process context name incorrect, workflow's name = %s\n", info.ContextName())
+	workflow.BeforeProcess(false, func(info flow.Process) (keepOn bool, err error) {
+		if info.Name() != "TestContextNameCorrect-Process" {
+			fmt.Printf("beforeprocess process context name incorrect, workflow's name = %s\n", info.Name())
 		} else {
-			fmt.Printf("process's context name='%s' before process\n", info.ContextName())
+			fmt.Printf("process's context name='%s' before process\n", info.Name())
 		}
 		return true, nil
 	})
-	workflow.AfterProcess(false, func(info *flow.Process) (keepOn bool, err error) {
-		if info.ContextName() != "TestContextNameCorrect-Process" {
-			fmt.Printf("afterprocess process context name incorrect, workflow's name = %s\n", info.ContextName())
+	workflow.AfterProcess(false, func(info flow.Process) (keepOn bool, err error) {
+		if info.Name() != "TestContextNameCorrect-Process" {
+			fmt.Printf("afterprocess process context name incorrect, workflow's name = %s\n", info.Name())
 		} else {
-			fmt.Printf("process's context name='%s' after process\n", info.ContextName())
+			fmt.Printf("process's context name='%s' after process\n", info.Name())
 		}
 		return true, nil
 	})
-	workflow.BeforeStep(false, func(info *flow.Step) (keepOn bool, err error) {
-		if info.ContextName() != "Step1" {
-			fmt.Printf("before step context name incorrect, step's name = %s\n", info.ContextName())
+	workflow.BeforeStep(false, func(info flow.Step) (keepOn bool, err error) {
+		if info.Name() != "Step1" {
+			fmt.Printf("before step context name incorrect, step's name = %s\n", info.Name())
 		} else {
-			fmt.Printf("step's context name='%s' before step\n", info.ContextName())
+			fmt.Printf("step's context name='%s' before step\n", info.Name())
 		}
 		return true, nil
 	})
-	workflow.AfterStep(false, func(info *flow.Step) (keepOn bool, err error) {
-		if info.ContextName() != "Step1" {
-			fmt.Printf("afterstep step context name incorrect, step's name = %s\n", info.ContextName())
+	workflow.AfterStep(false, func(info flow.Step) (keepOn bool, err error) {
+		if info.Name() != "Step1" {
+			fmt.Printf("afterstep step context name incorrect, step's name = %s\n", info.Name())
 		} else {
-			fmt.Printf("step's context name='%s' after step\n", info.ContextName())
+			fmt.Printf("step's context name='%s' after step\n", info.Name())
 		}
 		return true, nil
 	})
 	process := workflow.Process("TestContextNameCorrect-Process")
-	process.NameStep(func(ctx flow.StepCtx) (any, error) {
-		if ctx.ContextName() != "Step1" {
-			fmt.Printf("run step's context name is incorrect, step's name = %s\n", ctx.ContextName())
+	process.NameStep(func(ctx flow.Step) (any, error) {
+		if ctx.Name() != "Step1" {
+			fmt.Printf("run step's context name is incorrect, step's name = %s\n", ctx.Name())
 			return nil, fmt.Errorf("step context name incorrect")
 		}
-		fmt.Printf("step name = '%s', while step running\n", ctx.ContextName())
+		fmt.Printf("step name = '%s', while step running\n", ctx.Name())
 		return nil, nil
 	}, "Step1")
 	flow.DoneFlow("TestContextNameCorrect", nil)

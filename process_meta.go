@@ -23,27 +23,17 @@ type ProcessMeta struct {
 	nodeNum  int
 }
 
-type Process struct {
-	basicInfo
-	procCtx
-}
-
 type ProcessConfig struct {
 	StepConfig
 	ProcTimeout       time.Duration
 	ProcNotUseDefault bool
-	stepChain         handler[*Step]    `flow:"skip"`
-	procChain         handler[*Process] `flow:"skip"`
+	stepChain         handler[Step]    `flow:"skip"`
+	procChain         handler[Process] `flow:"skip"`
 }
 
 func newProcessConfig() ProcessConfig {
 	config := ProcessConfig{}
 	return config
-}
-
-// Fix ContextName return first step name
-func (p *Process) ContextName() string {
-	return p.Name
 }
 
 func (pc *ProcessConfig) ProcessTimeout(timeout time.Duration) *ProcessConfig {
@@ -65,20 +55,24 @@ func (pc *ProcessConfig) StepsTimeout(timeout time.Duration) *ProcessConfig {
 	return pc
 }
 
-func (pc *ProcessConfig) BeforeStep(must bool, callback func(*Step) (keepOn bool, err error)) *callback[*Step] {
+func (pc *ProcessConfig) BeforeStep(must bool, callback func(Step) (keepOn bool, err error)) *callback[Step] {
 	return pc.stepChain.addCallback(Before, must, callback)
 }
 
-func (pc *ProcessConfig) AfterStep(must bool, callback func(*Step) (keepOn bool, err error)) *callback[*Step] {
+func (pc *ProcessConfig) AfterStep(must bool, callback func(Step) (keepOn bool, err error)) *callback[Step] {
 	return pc.stepChain.addCallback(After, must, callback)
 }
 
-func (pc *ProcessConfig) BeforeProcess(must bool, callback func(*Process) (keepOn bool, err error)) *callback[*Process] {
+func (pc *ProcessConfig) BeforeProcess(must bool, callback func(i Process) (keepOn bool, err error)) *callback[Process] {
 	return pc.procChain.addCallback(Before, must, callback)
 }
 
-func (pc *ProcessConfig) AfterProcess(must bool, callback func(*Process) (keepOn bool, err error)) *callback[*Process] {
+func (pc *ProcessConfig) AfterProcess(must bool, callback func(Process) (keepOn bool, err error)) *callback[Process] {
 	return pc.procChain.addCallback(After, must, callback)
+}
+
+func (pm *ProcessMeta) Name() string {
+	return pm.name
 }
 
 func (pm *ProcessMeta) register() {
@@ -121,7 +115,7 @@ func (pm *ProcessMeta) Merge(name string) {
 			depends = append(depends, depend.name)
 		}
 		step := pm.NameStep(merge.run, merge.name, depends...)
-		step.position.set(mergedE)
+		step.position.append(mergedE)
 	}
 
 	// ensure step index bigger than all depends index
@@ -143,7 +137,7 @@ func (pm *ProcessMeta) mergeStep(merge *StepMeta) {
 		target.priority[k] = v
 	}
 
-	// create a set contains all depended on target flowName
+	// create a set contains all depended on target name
 	current := createSetBySliceFunc[*StepMeta](target.depends,
 		func(meta *StepMeta) string { return meta.name })
 
@@ -185,11 +179,11 @@ func (pm *ProcessMeta) updateWaitersLayer(step *StepMeta) {
 	}
 }
 
-func (pm *ProcessMeta) Step(run func(ctx StepCtx) (any, error), depends ...any) *StepMeta {
+func (pm *ProcessMeta) Step(run func(ctx Step) (any, error), depends ...any) *StepMeta {
 	return pm.NameStep(run, getFuncName(run), depends...)
 }
 
-func (pm *ProcessMeta) Tail(run func(ctx StepCtx) (any, error), alias ...string) *StepMeta {
+func (pm *ProcessMeta) Tail(run func(ctx Step) (any, error), alias ...string) *StepMeta {
 	depends := make([]any, 0)
 	for name, step := range pm.steps {
 		if step.position.Has(endE) {
@@ -202,7 +196,7 @@ func (pm *ProcessMeta) Tail(run func(ctx StepCtx) (any, error), alias ...string)
 	return pm.Step(run, depends...)
 }
 
-func (pm *ProcessMeta) NameStep(run func(ctx StepCtx) (any, error), name string, depends ...any) *StepMeta {
+func (pm *ProcessMeta) NameStep(run func(ctx Step) (any, error), name string, depends ...any) *StepMeta {
 	meta := &StepMeta{
 		name: name,
 	}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"sync"
+	"time"
 )
 
 var (
@@ -40,32 +41,30 @@ type FlowController interface {
 }
 
 type FlowConfig struct {
-	handler[*WorkFlow] `flow:"skip"`
-	ProcessConfig      `flow:"skip"`
-	enableRecover      int8
+	handler[WorkFlow] `flow:"skip"`
+	ProcessConfig     `flow:"skip"`
+	enableRecover     int8
 }
 
 type FlowMeta struct {
 	FlowConfig
 	init              sync.Once
-	flowName          string
+	name              string
 	flowNotUseDefault bool
 	processes         []*ProcessMeta
 }
 
 type runFlow struct {
+	*state
 	*FlowMeta
-	*basicInfo
 	*simpleContext
+	id        string
 	processes map[string]*runProcess
+	start     time.Time
+	end       time.Time
 	futures   []*Future
 	lock      sync.Mutex
 	finish    sync.WaitGroup
-	infoCache *WorkFlow
-}
-
-type WorkFlow struct {
-	*basicInfo
 }
 
 func init() {
@@ -87,54 +86,53 @@ func CreateDefaultConfig() *FlowConfig {
 
 func RegisterFlow(name string) *FlowMeta {
 	flow := FlowMeta{
-		flowName: name,
-		init:     sync.Once{},
+		name: name,
+		init: sync.Once{},
 	}
 	flow.register()
 	return &flow
 }
 
-func AsyncArgs(name string, args ...any) FlowController {
-	input := make(map[string]any, len(args))
-	for _, arg := range args {
-		input[getStructName(arg)] = arg
-	}
-	return AsyncFlow(name, input)
-}
+//func AsyncArgs(name string, args ...any) FlowController {
+//	input := make(map[string]any, len(args))
+//	for _, arg := range args {
+//		input[getStructName(arg)] = arg
+//	}
+//	return AsyncFlow(name, input)
+//}
 
-func AsyncFlow(name string, input map[string]any) FlowController {
-	factory, ok := allFlows.Load(name)
-	if !ok {
-		panic(fmt.Sprintf("Flow[%s] not found", name))
-	}
-	flow := factory.(*FlowMeta).buildRunFlow(input)
-	flow.Flow()
-	return flow
-}
+//func AsyncFlow(name string, input map[string]any) FlowController {
+//	factory, ok := allFlows.Load(name)
+//	if !ok {
+//		panic(fmt.Sprintf("Flow[%s] not found", name))
+//	}
+//	flow := factory.(*FlowMeta).buildRunFlow(input)
+//	flow.Flow()
+//	return flow
+//}
+//
+//func DoneArgs(name string, args ...any) resultI {
+//	input := make(map[string]any, len(args))
+//	for _, arg := range args {
+//		input[getStructName(arg)] = arg
+//	}
+//	return DoneFlow(name, input)
+//}
 
-func DoneArgs(name string, args ...any) resultI {
-	input := make(map[string]any, len(args))
-	for _, arg := range args {
-		input[getStructName(arg)] = arg
-	}
-	return DoneFlow(name, input)
-}
-
-func DoneFlow(name string, input map[string]any) resultI {
+func DoneFlow(name string, input map[string]any) {
 	factory, ok := allFlows.Load(name)
 	if !ok {
 		panic(fmt.Sprintf("Flow[%s] not found", name))
 	}
 	flow := factory.(*FlowMeta).buildRunFlow(input)
 	flow.Done()
-	return flow
 }
 
-func (fc *FlowConfig) BeforeFlow(must bool, callback func(*WorkFlow) (keepOn bool, err error)) *callback[*WorkFlow] {
+func (fc *FlowConfig) BeforeFlow(must bool, callback func(WorkFlow) (keepOn bool, err error)) *callback[WorkFlow] {
 	return fc.addCallback(Before, must, callback)
 }
 
-func (fc *FlowConfig) AfterFlow(must bool, callback func(*WorkFlow) (keepOn bool, err error)) *callback[*WorkFlow] {
+func (fc *FlowConfig) AfterFlow(must bool, callback func(WorkFlow) (keepOn bool, err error)) *callback[WorkFlow] {
 	return fc.addCallback(After, must, callback)
 }
 
@@ -155,16 +153,20 @@ func (fm *FlowMeta) initialize() {
 }
 
 func (fm *FlowMeta) register() *FlowMeta {
-	if len(fm.flowName) == 0 {
+	if len(fm.name) == 0 {
 		panic("can't register flow with empty name")
 	}
 
-	_, load := allFlows.LoadOrStore(fm.flowName, fm)
+	_, load := allFlows.LoadOrStore(fm.name, fm)
 	if load {
-		panic(fmt.Sprintf("Flow[%s] alraedy exists", fm.flowName))
+		panic(fmt.Sprintf("Flow[%s] alraedy exists", fm.name))
 	}
 
 	return fm
+}
+
+func (fm *FlowMeta) Name() string {
+	return fm.name
 }
 
 func (fm *FlowMeta) NoUseDefault() *FlowMeta {
@@ -184,20 +186,17 @@ func (fm *FlowMeta) DisableRecover() *FlowMeta {
 
 func (fm *FlowMeta) buildRunFlow(input map[string]any) *runFlow {
 	ctx := simpleContext{
-		table: input,
-		name:  fm.flowName,
+		table:   input,
+		ctxName: fm.name,
 	}
 	rf := runFlow{
+		state:         emptyStatus(),
+		FlowMeta:      fm,
 		simpleContext: &ctx,
-		basicInfo: &basicInfo{
-			state: emptyStatus(),
-			Name:  fm.flowName,
-			Id:    generateId(),
-		},
-		FlowMeta:  fm,
-		lock:      sync.Mutex{},
-		processes: make(map[string]*runProcess, len(fm.processes)),
-		finish:    sync.WaitGroup{},
+		id:            generateId(),
+		lock:          sync.Mutex{},
+		processes:     make(map[string]*runProcess, len(fm.processes)),
+		finish:        sync.WaitGroup{},
 	}
 
 	for k, v := range input {
@@ -229,6 +228,25 @@ func (fm *FlowMeta) Process(name string) *ProcessMeta {
 	pm.register()
 	fm.processes = append(fm.processes, &pm)
 	return &pm
+}
+
+func (rf *runFlow) Id() string {
+	return rf.id
+}
+
+func (rf *runFlow) StartTime() time.Time {
+	return rf.start
+}
+
+func (rf *runFlow) EndTime() time.Time {
+	return rf.end
+}
+
+func (rf *runFlow) CostTime() time.Duration {
+	if rf.end.IsZero() {
+		return 0
+	}
+	return rf.end.Sub(rf.start)
 }
 
 func (rf *runFlow) buildRunProcess(meta *ProcessMeta) *runProcess {
@@ -269,7 +287,7 @@ func (rf *runFlow) finalize() {
 		rf.add(process.state.load())
 	}
 	if rf.Normal() {
-		rf.set(Success)
+		rf.append(Success)
 	}
 	if rf.shallRecover() {
 		rf.saveCheckpoints()
@@ -280,6 +298,7 @@ func (rf *runFlow) finalize() {
 
 // Done function will block util all process done.
 func (rf *runFlow) Done() []*Future {
+	rf.start = time.Now().UTC()
 	futures := rf.Flow()
 	for _, future := range futures {
 		// process finish running and callback
@@ -287,6 +306,7 @@ func (rf *runFlow) Done() []*Future {
 	}
 	// workflow finish running and callback
 	rf.finish.Wait()
+	rf.end = time.Now().UTC()
 	return futures
 }
 
@@ -303,18 +323,11 @@ func (rf *runFlow) Flow() []*Future {
 		return rf.futures
 	}
 	rf.initialize()
-	rf.infoCache = &WorkFlow{
-		basicInfo: &basicInfo{
-			state: rf.state,
-			Id:    rf.Id,
-			Name:  rf.flowName,
-		},
-	}
 	rf.advertise(Before)
 	futures := make([]*Future, 0, len(rf.processes))
 	for _, process := range rf.processes {
 		if rf.Has(CallbackFail) {
-			process.set(CallbackFail)
+			process.append(CallbackFail)
 		}
 		futures = append(futures, process.schedule())
 	}
@@ -327,9 +340,9 @@ func (rf *runFlow) Flow() []*Future {
 
 func (rf *runFlow) advertise(flag string) {
 	if !rf.flowNotUseDefault && defaultConfig != nil {
-		defaultConfig.handle(flag, rf.infoCache)
+		defaultConfig.handle(flag, rf)
 	}
-	rf.handle(flag, rf.infoCache)
+	rf.handle(flag, rf)
 }
 
 // Fails returns a slice of fail result Future pointers.
