@@ -29,7 +29,7 @@ const (
 )
 
 var (
-	maxSize                          = 2048
+	maxSize                          = 4096
 	enableEncrypt                    = true
 	pwdEncryptor  SymmetricEncryptor = &aes256Encryptor{newRoutineUnsafeSet[string]("pwd", "password")}
 	enableRecover                    = false
@@ -199,6 +199,10 @@ func RecoverFlow(flowId string) (err error) {
 	return nil
 }
 
+func SetMaxSerializeSize(size int) {
+	maxSize = size
+}
+
 func markExecuted(workflow *runFlow, checkpoints []CheckPoint) error {
 	for _, proc := range workflow.processes {
 		for _, step := range proc.flowSteps {
@@ -261,10 +265,31 @@ func loadCheckpoints(workflow *runFlow, checkpoints []CheckPoint) (err error) {
 }
 
 func wrapIfNeed(data any) {
-	m, ok := data.(map[string]any)
-	if !ok {
+	switch m := data.(type) {
+	case map[string][]node:
+		wrapNodeMap(m)
+	case map[string]any:
+		wrapInterfaceMap(m)
+	default:
 		return
 	}
+}
+
+func wrapNodeMap(m map[string][]node) {
+	for k := range m {
+		for i := range m[k] {
+			if m[k][i].Value == nil {
+				continue
+			}
+			kind := reflect.TypeOf(m[k][i].Value).Kind()
+			if kind == reflect.Pointer {
+				m[k][i].Value = pointerValue{Elem: m[k][i].Value}
+			}
+		}
+	}
+}
+
+func wrapInterfaceMap(m map[string]any) {
 	for k := range m {
 		kind := reflect.TypeOf(m[k]).Kind()
 		if kind == reflect.Pointer {
@@ -274,15 +299,36 @@ func wrapIfNeed(data any) {
 }
 
 func unwrapIfNeed(data any) {
-	m, ok := data.(map[string]any)
-	if !ok {
+	switch m := data.(type) {
+	case map[string][]node:
+		unwrapNodeMap(m)
+	case map[string]any:
+		unwrapInterfaceMap(m)
+	default:
 		return
 	}
+}
+
+func unwrapNodeMap(m map[string][]node) {
 	for k := range m {
-		if pv, suc := m[k].(pointerValue); suc {
-			pointer := reflect.New(reflect.TypeOf(pv.Elem))
-			pointer.Elem().Set(reflect.ValueOf(pv.Elem))
-			m[k] = pointer.Interface()
+		for i := range m[k] {
+			if m[k][i].Value == nil {
+				continue
+			}
+			if pv, match := m[k][i].Value.(pointerValue); match {
+				pointer := reflect.New(reflect.TypeOf(pv.Elem))
+				pointer.Elem().Set(reflect.ValueOf(pv.Elem))
+				m[k][i].Value = pointer.Interface()
+			}
+		}
+	}
+}
+
+func unwrapInterfaceMap(m map[string]any) {
+	for k := range m {
+		kind := reflect.TypeOf(m[k]).Kind()
+		if kind == reflect.Pointer {
+			m[k] = pointerValue{Elem: m[k]}
 		}
 	}
 }
@@ -325,42 +371,30 @@ func deserialize[T any](data []byte) (result T, err error) {
 	return result, nil
 }
 
-func encryptIfNeed(snapshot map[string]any, secret []byte) error {
+func encryptIfNeed(key string, value any, secret []byte) (any, error) {
 	if !enableEncrypt {
-		return nil
+		return value, nil
 	}
-	for k := range snapshot {
-		if !pwdEncryptor.NeedEncrypt(k) {
-			continue
-		}
-		if v, ok := snapshot[k].(string); ok {
-			encrypted, err := pwdEncryptor.Encrypt(v, secret)
-			if err != nil {
-				return fmt.Errorf("encrypt Key[%s] failed, error: %s", k, err.Error())
-			}
-			snapshot[k] = encrypted
-		}
+	if !pwdEncryptor.NeedEncrypt(key) {
+		return value, nil
 	}
-	return nil
+	if plainText, ok := value.(string); ok {
+		return pwdEncryptor.Encrypt(plainText, secret)
+	}
+	return value, nil
 }
 
-func decryptIfNeed(snapshot map[string]any, secret []byte) error {
+func decryptIfNeed(key string, value any, secret []byte) (any, error) {
 	if !enableEncrypt {
-		return nil
+		return value, nil
 	}
-	for k := range snapshot {
-		if !pwdEncryptor.NeedEncrypt(k) {
-			continue
-		}
-		if v, ok := snapshot[k].(string); ok {
-			decrypted, err := pwdEncryptor.Decrypt(v, secret)
-			if err != nil {
-				return fmt.Errorf("decrypt Key[%s] failed, error: %s", k, err.Error())
-			}
-			snapshot[k] = decrypted
-		}
+	if !pwdEncryptor.NeedEncrypt(key) {
+		return value, nil
 	}
-	return nil
+	if cipherText, ok := value.(string); ok {
+		return pwdEncryptor.Decrypt(cipherText, secret)
+	}
+	return value, nil
 }
 
 func (r *recoverRecord) GetRootId() string {
@@ -460,9 +494,13 @@ func (point *flowCheckpoint) setRecoverId(id string) {
 }
 
 func (point *flowCheckpoint) buildSnapshot() (err error) {
+	secret := getSecret(point)
 	snapshot := make(map[string]any)
-	if err = encryptIfNeed(snapshot, getSecret(point)); err != nil {
-		return
+	for k, v := range point.table {
+		snapshot[k], err = encryptIfNeed(k, v, secret)
+		if err != nil {
+			return
+		}
 	}
 	point.snapshot, err = serialize(snapshot)
 	return
@@ -501,26 +539,19 @@ func (point *procCheckpoint) setRecoverId(id string) {
 }
 
 func (point *procCheckpoint) buildSnapshot() (err error) {
-	snapshot := make(map[string]any)
+	secret := getSecret(point)
+	snapshot := make(map[string][]node)
 	for k := range point.nodes {
-		if value, exist := point.matchByIndex(resultMark, k); exist {
-			snapshot[k] = value
+		for head := point.nodes[k]; head != nil; head = head.Next {
+			head.Value, err = encryptIfNeed(k, head.Value, secret)
+			if err != nil {
+				return
+			}
+			snapshot[k] = append(snapshot[k], *head)
 		}
-	}
-	if err = encryptIfNeed(snapshot, getSecret(point)); err != nil {
-		return
-	}
-	for name := range point.steps {
-		wrap, exist := point.getOutCome(name)
-		point.lock.RUnlock()
-		if !exist {
-			continue
-		}
-		snapshot[name] = outcomeValue{O: *wrap, Value: snapshot[name]}
 	}
 
 	point.snapshot, err = serialize(snapshot)
-
 	return
 }
 
@@ -557,17 +588,7 @@ func (point *stepCheckpoint) setRecoverId(id string) {
 }
 
 func (point *stepCheckpoint) buildSnapshot() (err error) {
-	snapshot := make(map[string]any)
-	for key := range point.nodes {
-		if value, exist := point.Get(key); exist {
-			snapshot[key] = value
-		}
-	}
-	if err = encryptIfNeed(snapshot, getSecret(point)); err != nil {
-		return
-	}
-	point.snapshot, err = serialize(snapshot)
-	return
+	return nil
 }
 
 func (point *stepCheckpoint) GetSnapshot() []byte {
@@ -579,8 +600,12 @@ func (rf *runFlow) loadCheckpoint(checkpoint CheckPoint) error {
 	if err != nil {
 		return err
 	}
-	if err = decryptIfNeed(snapshot, getSecret(checkpoint)); err != nil {
-		return err
+	for k := range snapshot {
+		v := snapshot[k]
+		snapshot[k], err = decryptIfNeed(k, v, getSecret(checkpoint))
+		if err != nil {
+			return err
+		}
 	}
 	rf.table = snapshot
 	rf.id = checkpoint.GetPrimaryKey()
@@ -588,6 +613,7 @@ func (rf *runFlow) loadCheckpoint(checkpoint CheckPoint) error {
 }
 
 func (rf *runFlow) shallRecover() bool {
+	// multiple recoveries are not supported
 	if rf.Has(recovering) {
 		return false
 	}
@@ -606,19 +632,19 @@ func (rf *runFlow) saveCheckpoints() {
 			// todo send panic event
 		}
 	}()
-	checkpoints := make([]CheckPoint, 0, 3)
+	checkpoints := make([]CheckPoint, 0)
 	recoverId := generateId()
 	checkpoints = append(checkpoints, &flowCheckpoint{runFlow: rf})
 	for _, proc := range rf.processes {
 		if proc.Success() {
 			continue
 		}
-		checkpoints = append(checkpoints, &procCheckpoint{runProcess: proc})
 		for _, step := range proc.flowSteps {
 			if step.needRecover() {
 				checkpoints = append(checkpoints, &stepCheckpoint{runStep: step})
 			}
 		}
+		checkpoints = append(checkpoints, &procCheckpoint{runProcess: proc})
 	}
 	for _, checkpoint := range checkpoints {
 		checkpoint.(checkpointBuilder).setRecoverId(recoverId)
@@ -637,37 +663,33 @@ func (rf *runFlow) saveCheckpoints() {
 
 func (process *runProcess) loadCheckpoint(checkpoint CheckPoint) error {
 	process.id = checkpoint.GetPrimaryKey()
-	snapshot, err := deserialize[map[string]any](checkpoint.GetSnapshot())
+	snapshot, err := deserialize[map[string][]node](checkpoint.GetSnapshot())
 	if err != nil {
 		return err
 	}
-	if err = decryptIfNeed(snapshot, getSecret(checkpoint)); err != nil {
-		return err
-	}
-	for k, v := range snapshot {
-		if unwrap, ok := v.(outcomeValue); ok {
-			process.restoreOutcome(k, &unwrap.O)
-			if unwrap.Value != nil {
-				process.Set(k, unwrap.Value)
+	for k := range snapshot {
+		var head, current *node
+		nodeList := snapshot[k]
+		for i := len(nodeList) - 1; i >= 0; i-- {
+			newNode := &node{
+				Path: nodeList[i].Path,
+				Next: head,
 			}
-			continue
+			newNode.Value, err = decryptIfNeed(k, nodeList[i].Value, getSecret(checkpoint))
+			if err != nil {
+				return err
+			}
+			head = newNode
+			if current == nil {
+				current = newNode
+			}
 		}
-		process.Set(k, v)
+		process.nodes[k] = head
 	}
 	return nil
 }
 
 func (step *runStep) loadCheckpoint(checkpoint CheckPoint) error {
 	step.id = checkpoint.GetPrimaryKey()
-	snapshot, err := deserialize[map[string]any](checkpoint.GetSnapshot())
-	if err != nil {
-		return err
-	}
-	if err = decryptIfNeed(snapshot, getSecret(checkpoint)); err != nil {
-		return err
-	}
-	for k, v := range snapshot {
-		step.Set(k, v)
-	}
 	return nil
 }

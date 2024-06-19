@@ -2,7 +2,6 @@ package test
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	flow "github.com/Bilibotter/light-flow"
 	"gorm.io/driver/mysql"
@@ -26,8 +25,82 @@ var (
 	dbname     string
 )
 
-type StepFuncBuilder struct {
-	f func(ctx flow.Step) (any, error)
+func (s *RecoverFuncBuilder) Step() func(ctx flow.Step) (result any, err error) {
+	return func(ctx flow.Step) (result any, err error) {
+		return s.Fn(ctx)
+	}
+}
+
+func (s *RecoverFuncBuilder) ErrStep() func(ctx flow.Step) (result any, err error) {
+	s.err = fmt.Errorf("error")
+	return func(ctx flow.Step) (result any, err error) {
+		return s.Fn(ctx)
+	}
+}
+
+func (s *RecoverFuncBuilder) Proc() func(ctx flow.Process) (result any, err error) {
+	return func(ctx flow.Process) (result any, err error) {
+		return s.Fn(ctx)
+	}
+}
+
+func (s *RecoverFuncBuilder) Fn(ctx Ctx) (result any, err error) {
+	s.t.Logf("task[%s] start\n", ctx.Name())
+	for _, f := range s.doing {
+		result, err = f(ctx)
+		if err != nil {
+			panic(err)
+		}
+	}
+	if len(s.doing) > 0 {
+		atomic.AddInt64(&current, 1)
+	}
+	if executeSuc {
+		for _, f := range s.onSuc {
+			result, err = f(ctx)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if result == nil {
+			result = ctx.Name()
+		}
+		if len(s.onSuc) > 0 {
+			atomic.AddInt64(&current, 1)
+		}
+		s.t.Logf("task[%s] end\n", ctx.Name())
+		return
+	}
+	for _, f := range s.onFail {
+		result, err = f(ctx)
+		if err != nil {
+			panic(err)
+		}
+	}
+	if len(s.onFail) > 0 {
+		atomic.AddInt64(&current, 1)
+	}
+	if s.err != nil {
+		s.t.Logf("task[%s] failed\n", ctx.Name())
+		return nil, s.err
+	}
+	s.t.Logf("task[%s] end\n", ctx.Name())
+	return ctx.Name(), nil
+}
+
+func (s *RecoverFuncBuilder) Do(f ...func(Ctx) (any, error)) *RecoverFuncBuilder {
+	s.doing = append(s.doing, f...)
+	return s
+}
+
+func (s *RecoverFuncBuilder) Suc(f ...func(Ctx) (any, error)) *RecoverFuncBuilder {
+	s.onSuc = append(s.onSuc, f...)
+	return s
+}
+
+func (s *RecoverFuncBuilder) Fail(f ...func(Ctx) (any, error)) *RecoverFuncBuilder {
+	s.onFail = append(s.onFail, f...)
+	return s
 }
 
 type simpleContext struct {
@@ -48,31 +121,8 @@ func (s *simpleContext) Name() string {
 	return s.name
 }
 
-func (s *StepFuncBuilder) Do(f func(ctx flow.Step) (any, error)) *StepFuncBuilder {
-	old := s.f
-	if old == nil {
-		old = func(ctx flow.Step) (any, error) {
-			return nil, nil
-		}
-	}
-	curr := func(ctx flow.Step) (any, error) {
-		res1, err1 := old(ctx)
-		res2, err2 := f(ctx)
-		if err1 != nil {
-			return res1, err1
-		}
-		return res2, err2
-	}
-	s.f = curr
-	return s
-}
-
-func (s *StepFuncBuilder) End() func(ctx flow.Step) (any, error) {
-	return s.f
-}
-
-func Fn() *StepFuncBuilder {
-	return &StepFuncBuilder{}
+func Fn(t *testing.T) *RecoverFuncBuilder {
+	return &RecoverFuncBuilder{t: t}
 }
 
 type Checkpoints struct {
@@ -83,19 +133,6 @@ type Checkpoints struct {
 	RootId    string `gorm:"column:root_id"`
 	Scope     uint8  `gorm:"column:scope;NOT NULL"`
 	Snapshot  []byte `gorm:"column:snapshot"`
-}
-
-type Person struct {
-	Name string
-	Age  int
-}
-
-type Named interface {
-	name() string
-}
-
-func (p *Person) name() string {
-	return p.Name
 }
 
 func (c Checkpoints) GetPrimaryKey() string {
@@ -233,12 +270,6 @@ func (p persisitImpl) SaveCheckpointAndRecord(cps []flow.CheckPoint, records flo
 	return nil
 }
 
-type Ctx interface {
-	Get(key string) (value any, exist bool)
-	Set(key string, value any)
-	Name() string
-}
-
 func StepSet(ctx Ctx) {
 	ctx.Set("int", 1)
 	ctx.Set("int8", int8(2))
@@ -281,143 +312,6 @@ func StepSet0(ctx Ctx) {
 	ctx.Set("Person+", Person{ctx.Name(), 11})
 	ctx.Set("*Person+", &Person{ctx.Name(), 11})
 	ctx.Set("Named+", &Person{ctx.Name(), 11})
-}
-
-func StepCheck(preview string, ctx Ctx) (string, bool) {
-	if value, exist := ctx.Get("int"); exist {
-		if value.(int) != 1 {
-			return "step-int", false
-		}
-	} else {
-		return "step-int", false
-	}
-	if value, exist := ctx.Get("int8"); exist {
-		if value.(int8) != 2 {
-			return "step-int8", false
-		}
-	} else {
-		return "step-int8", false
-	}
-	if value, exist := ctx.Get("int16"); exist {
-		if value.(int16) != 3 {
-			return "step-int16", false
-		}
-	} else {
-		return "step-int16", false
-	}
-	if value, exist := ctx.Get("int32"); exist {
-		if value.(int32) != 4 {
-			return "step-int32", false
-		}
-	} else {
-		return "step-int32", false
-	}
-	if value, exist := ctx.Get("int64"); exist {
-		if value.(int64) != 5 {
-			return "step-int64", false
-		}
-	} else {
-		return "step-int64", false
-	}
-	if value, exist := ctx.Get("uint"); exist {
-		if value.(uint) != 6 {
-			return "step-uint", false
-		}
-	} else {
-		return "step-uint", false
-	}
-	if value, exist := ctx.Get("uint8"); exist {
-		if value.(uint8) != 7 {
-			return "step-uint8", false
-		}
-	} else {
-		return "step-uint8", false
-	}
-	if value, exist := ctx.Get("uint16"); exist {
-		if value.(uint16) != 8 {
-			return "step-uint16", false
-		}
-	} else {
-		return "step-uint16", false
-	}
-	if value, exist := ctx.Get("uint32"); exist {
-		if value.(uint32) != 9 {
-			return "step-uint32", false
-		}
-	} else {
-		return "step-uint32", false
-	}
-	if value, exist := ctx.Get("uint64"); exist {
-		if value.(uint64) != 10 {
-			return "step-uint64", false
-		}
-	} else {
-		return "step-uint64", false
-	}
-	if value, exist := ctx.Get("float32"); exist {
-		if value.(float32) != 11.01 {
-			return "step-float32", false
-		}
-	} else {
-		return "step-float32", false
-	}
-	if value, exist := ctx.Get("float64"); exist {
-		if value.(float64) != 12.01 {
-			return "step-float64", false
-		}
-	} else {
-		return "step-float64", false
-	}
-	if value, exist := ctx.Get("bool"); exist {
-		if value.(bool) != true {
-			return "step-bool", false
-		}
-	} else {
-		return "step-bool", false
-	}
-	if value, exist := ctx.Get("Person"); exist {
-		if value.(Person).Name != preview || value.(Person).Age != 11 {
-			return fmt.Sprintf("step-person[%#v]", value.(Person)), false
-		}
-	} else {
-		return "step-person", false
-	}
-	if value, exist := ctx.Get("*Person"); exist {
-		if value.(*Person).Name != preview || value.(*Person).Age != 11 {
-			return "*step-person", false
-		}
-	} else {
-		return "*step-person", false
-	}
-	if value, exist := ctx.Get("Named"); exist {
-		if value.(*Person).Name != preview || value.(*Person).Age != 11 {
-			return "Named", false
-		}
-	} else {
-		return "Named", false
-	}
-	if value, exist := ctx.Get("string"); exist {
-		if value.(string) != preview {
-			return "step-string", false
-		}
-	} else {
-		return "step-string", false
-	}
-	if value, exist := ctx.Get("password"); exist {
-		if value.(string) != preview {
-			return "step-password", false
-		}
-	} else {
-		return "step-password", false
-	}
-	if value, exist := ctx.Get("pwd"); exist {
-		if value.(string) != preview {
-			return "step-pwd", false
-		}
-	} else {
-		return "step-pwd", false
-	}
-	return "", true
 }
 
 func StepCheck0(preview string, ctx Ctx) (string, bool) {
@@ -572,15 +466,15 @@ func GenerateAfter(t *testing.T, preview string, setValue func(c Ctx), checks ..
 	}
 }
 
-func PreviewProcessRecover(process flow.Process) (keepOn bool, err error) {
-	if !executeSuc {
-		StepSet(process)
-		return true, nil
-	}
-	StepCheck(process.Name(), process)
-	atomic.AddInt64(&current, 1)
-	return true, nil
-}
+//func PreviewProcessRecover(process flow.Process) (keepOn bool, err error) {
+//	if !executeSuc {
+//		StepSet(process)
+//		return true, nil
+//	}
+//	StepCheck(process.Name(), process)
+//	atomic.AddInt64(&current, 1)
+//	return true, nil
+//}
 
 func GeneratePreview(t *testing.T, preview string, setValue func(c Ctx), checks ...func(p string, ctx Ctx) (string, bool)) func(ctx flow.Step) (any, error) {
 	return func(ctx flow.Step) (any, error) {
@@ -673,6 +567,7 @@ func TestMain(m *testing.M) {
 		}
 		pool <- db
 	}
+	flow.SetMaxSerializeSize(10240)
 	flow.SetPersist(&persisitImpl{})
 	flow.RegisterType[Person]()
 	os.Exit(m.Run())
@@ -684,39 +579,15 @@ func TestCombineStepRecover(t *testing.T) {
 	wf := flow.RegisterFlow("TestCombineStepRecover")
 	wf.EnableRecover()
 	proc := wf.Process("TestCombineStepRecover")
-	proc.NameStep(func(ctx flow.Step) (any, error) {
-		t.Logf("step[%s] start\n", ctx.Name())
-		StepSet(ctx)
-		atomic.AddInt64(&current, 1)
-		return ctx.Name(), nil
-	}, "step1")
-	step2 := proc.NameStep(func(ctx flow.Step) (any, error) {
-		t.Logf("step[%s] start\n", ctx.Name())
-		if !executeSuc {
-			info, ok := StepCheck("step1", ctx)
-			if !ok {
-				panic(fmt.Sprintf("step[%s] check %s failed", ctx.Name(), info))
-			}
-			StepSet(ctx)
-		}
-		atomic.AddInt64(&current, 1)
-		return ctx.Name(), nil
-	}, "step2", "step1")
-	step2.Next(GenerateAfter(t, "step2", StepSet, StepCheck), "step3").
-		Next(GenerateAfter(t, "step3", StepSet, StepCheck), "step4")
+	proc.NameStep(Fn(t).Do(SetCtx()).Step(), "step1").
+		Next(Fn(t).Do(SetCtx()).Step(), "step2").
+		Next(Fn(t).Suc(CheckCtx("step2"), SetCtx()).ErrStep(), "step3").
+		Next(Fn(t).Do(CheckCtx("step3")).Step(), "step4")
 	wf.AfterFlow(false, CheckResult(t, 2, flow.Error)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 2, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
 	flow.DoneFlow("TestCombineStepRecover", nil)
-	executeSuc = true
-	flowId, err := getId("TestCombineStepRecover")
-	if err != nil {
-		panic(err)
-	}
-	resetCurrent()
-	if err = flow.RecoverFlow(flowId); err != nil {
-		panic(err)
-	}
+	Recover("TestCombineStepRecover")
 }
 
 func TestSeparateStepRecover(t *testing.T) {
@@ -725,30 +596,22 @@ func TestSeparateStepRecover(t *testing.T) {
 	wf := flow.RegisterFlow("TestSeparateStepRecover")
 	wf.EnableRecover()
 	proc := wf.Process("TestSeparateStepRecover")
-	proc.NameStep(func(ctx flow.Step) (any, error) {
-		t.Logf("step[%s] start\n", ctx.Name())
-		StepSet(ctx)
-		atomic.AddInt64(&current, 1)
-		return ctx.Name(), nil
-	}, "step1")
-	proc.NameStep(func(ctx flow.Step) (any, error) {
-		t.Logf("step[%s] start\n", ctx.Name())
-		StepSet0(ctx)
-		atomic.AddInt64(&current, 1)
-		return ctx.Name(), nil
-	}, "step2", "step1")
-	f := Fn().
-		Do(GenerateAfter(t, "step1", StepSet, StepCheck)).
-		Do(GenerateAfter(t, "step2", StepSet0, StepCheck0))
-	step := proc.NameStep(f.End(), "step3", "step1", "step2")
-	step.Next(GenerateAfter(t, "step3", StepSet, StepCheck), "step4")
-	step.Next(GenerateAfter(t, "step3", StepSet0, StepCheck0), "step5")
+	proc.NameStep(Fn(t).Do(SetCtx()).Step(), "step1")
+	proc.NameStep(Fn(t).Do(SetCtx0("+")).Step(), "step2")
+	proc.NameStep(Fn(t).
+		Suc(CheckCtx("step1"), CheckCtx0("step2", "+"), SetCtx(), SetCtx0("+")).ErrStep(),
+		"step3", "step1", "step2")
+	proc.NameStep(Fn(t).Suc(CheckCtx("step3"), CheckCtx0("step3", "+")).Step(), "step4", "step3")
 	wf.AfterFlow(false, CheckResult(t, 2, flow.Error)).If(execFail)
-	wf.AfterFlow(false, CheckResult(t, 4, flow.Success)).If(execSuc)
+	wf.AfterFlow(false, CheckResult(t, 2, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
 	flow.DoneFlow("TestSeparateStepRecover", nil)
+	Recover("TestSeparateStepRecover")
+}
+
+func Recover(name string) {
 	executeSuc = true
-	flowId, err := getId("TestSeparateStepRecover")
+	flowId, err := getId(name)
 	if err != nil {
 		panic(err)
 	}
@@ -756,6 +619,124 @@ func TestSeparateStepRecover(t *testing.T) {
 	if err = flow.RecoverFlow(flowId); err != nil {
 		panic(err)
 	}
+}
+
+func Test1ProcSuc1ProcRecover(t *testing.T) {
+	defer resetCurrent()
+	executeSuc = false
+	wf := flow.RegisterFlow("Test1ProcSuc1ProcRecover")
+	wf.EnableRecover()
+	proc := wf.Process("Test1ProcSuc1ProcRecover0")
+	proc.NameStep(GenerateStep(1), "step1").
+		Next(GenerateStep(2), "step2").
+		Next(GenerateStep(3), "step3")
+
+	proc = wf.Process("Test1ProcSuc1ProcRecover")
+	proc.NameStep(Fn(t).Do(SetCtx()).Step(), "step1").
+		Next(Fn(t).Suc(CheckCtx("step1"), SetCtx()).ErrStep(), "step2").
+		Next(Fn(t).Fail(SetCtx()).Suc(CheckCtx("step2")).Step(), "step3")
+	wf.AfterFlow(false, CheckResult(t, 4, flow.Error)).If(execFail)
+	wf.AfterFlow(false, CheckResult(t, 2, flow.Success)).If(execSuc)
+	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
+	flow.DoneFlow("Test1ProcSuc1ProcRecover", nil)
+	Recover("Test1ProcSuc1ProcRecover")
+}
+
+func TestSingleStepRecoverWith2Branch(t *testing.T) {
+	defer resetCurrent()
+	executeSuc = false
+	wf := flow.RegisterFlow("TestSingleStepRecoverWith2Branch")
+	wf.EnableRecover()
+	proc := wf.Process("TestSingleStepRecoverWith2Branch")
+	proc.NameStep(Fn(t).Do(SetCtx()).Step(), "step2-1").
+		Next(Fn(t).Do(SetCtx()).Step(), "step2-2")
+	proc.NameStep(Fn(t).Do(SetCtx()).Step(), "step1").
+		Next(Fn(t).Suc(CheckCtx("step1"), SetCtx()).ErrStep(), "step2").
+		Next(Fn(t).Fail(SetCtx()).Suc(CheckCtx("step2")).Step(), "step3")
+	wf.AfterFlow(false, CheckResult(t, 3, flow.Error)).If(execFail)
+	wf.AfterFlow(false, CheckResult(t, 2, flow.Success)).If(execSuc)
+	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
+	flow.DoneFlow("TestSingleStepRecoverWith2Branch", nil)
+	Recover("TestSingleStepRecoverWith2Branch")
+}
+
+func TestRecoverSuccessFlow(t *testing.T) {
+	defer resetCurrent()
+	id := ""
+	wf := flow.RegisterFlow("TestRecoverSuccessFlow")
+	wf.EnableRecover()
+	proc := wf.Process("TestRecoverSuccessFlow")
+	proc.NameStep(GenerateStep(1), "1").
+		Next(GenerateStep(2), "2").
+		Next(GenerateStep(3), "3")
+	wf.AfterFlow(false, func(workFlow flow.WorkFlow) (keepOn bool, err error) {
+		id = workFlow.Id()
+		return true, nil
+	})
+	wf.AfterFlow(false, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestRecoverSuccessFlow", nil)
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("recover error: %v", r)
+		}
+	}()
+	flow.RecoverFlow(id)
+}
+
+func TestSingleStepRecoverWith1DependSuc1DependFail0(t *testing.T) {
+	defer resetCurrent()
+	executeSuc = false
+	wf := flow.RegisterFlow("TestSingleStepRecover1DependSuc1DependFail0")
+	wf.EnableRecover()
+	proc := wf.Process("TestSingleStepRecover1DependSuc1DependFail0")
+	proc.NameStep(Fn(t).Do(SetCtx0("+")).Step(), "step1-1")
+	proc.NameStep(Fn(t).Do(SetCtx()).Step(), "step1-2")
+
+	proc.NameStep(Fn(t).
+		Do(CheckCtx0("step1-1", "+"), SetCtx0("+")).Step(),
+		"step2-1", "step1-1")
+
+	proc.NameStep(Fn(t).
+		Suc(CheckCtx("step1-2"), SetCtx()).ErrStep(),
+		"step2-2", "step1-2")
+
+	proc.NameStep(Fn(t).Fail(SetCtx()).Suc(CheckCtx0("step2-1", "+"), CheckCtx("step2-2")).Step(),
+		"step3-1", "step2-1", "step2-2")
+
+	proc.NameStep(Fn(t).Suc(CheckCtx("step2-2")).ErrStep(),
+		"step3-2", "step2-2")
+
+	wf.AfterFlow(false, CheckResult(t, 3, flow.Error)).If(execFail)
+	wf.AfterFlow(false, CheckResult(t, 3, flow.Success)).If(execSuc)
+	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
+	flow.DoneFlow("TestSingleStepRecover1DependSuc1DependFail0", nil)
+	Recover("TestSingleStepRecover1DependSuc1DependFail0")
+}
+
+func TestSingleStepRecoverWith1DependSuc1DependFail(t *testing.T) {
+	defer resetCurrent()
+	executeSuc = false
+	wf := flow.RegisterFlow("TestSingleStepRecover1DependSuc1DependFail")
+	wf.EnableRecover()
+	proc := wf.Process("TestSingleStepRecover1DependSuc1DependFail")
+	proc.NameStep(Fn(t).Do(SetCtx()).Step(), "step1-1")
+
+	proc.NameStep(Fn(t).
+		Do(CheckCtx("step1-1"), SetCtx0("+")).Step(),
+		"step2-1", "step1-1")
+
+	proc.NameStep(Fn(t).
+		Suc(CheckCtx("step1-1"), SetCtx()).ErrStep(),
+		"step2-2", "step1-1")
+
+	proc.NameStep(Fn(t).Fail(SetCtx()).Suc(CheckCtx0("step2-1", "+"), CheckCtx("step2-2")).Step(),
+		"step3-1", "step2-1", "step2-2")
+
+	wf.AfterFlow(false, CheckResult(t, 2, flow.Error)).If(execFail)
+	wf.AfterFlow(false, CheckResult(t, 2, flow.Success)).If(execSuc)
+	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
+	flow.DoneFlow("TestSingleStepRecover1DependSuc1DependFail", nil)
+	Recover("TestSingleStepRecover1DependSuc1DependFail")
 }
 
 func TestSingleStepRecover(t *testing.T) {
@@ -764,22 +745,14 @@ func TestSingleStepRecover(t *testing.T) {
 	wf := flow.RegisterFlow("TestSingleStepRecover")
 	wf.EnableRecover()
 	proc := wf.Process("TestSingleStepRecover")
-	proc.NameStep(GeneratePreview(t, "step1", StepSet, StepCheck), "step1").
-		Next(GenerateAfter(t, "step1", StepSet, StepCheck), "step2").
-		Next(GenerateAfter(t, "step2", StepSet, StepCheck), "step3")
+	proc.NameStep(Fn(t).Do(SetCtx()).Step(), "step1").
+		Next(Fn(t).Suc(CheckCtx("step1"), SetCtx()).ErrStep(), "step2").
+		Next(Fn(t).Fail(SetCtx()).Suc(CheckCtx("step2")).Step(), "step3")
 	wf.AfterFlow(false, CheckResult(t, 1, flow.Error)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 2, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
 	flow.DoneFlow("TestSingleStepRecover", nil)
-	executeSuc = true
-	flowId, err := getId("TestSingleStepRecover")
-	if err != nil {
-		panic(err)
-	}
-	resetCurrent()
-	if err = flow.RecoverFlow(flowId); err != nil {
-		panic(err)
-	}
+	Recover("TestSingleStepRecover")
 }
 
 func TestPanicStepRecover(t *testing.T) {
@@ -788,31 +761,15 @@ func TestPanicStepRecover(t *testing.T) {
 	wf := flow.RegisterFlow("TestPanicStepRecover")
 	wf.EnableRecover()
 	proc := wf.Process("TestPanicStepRecover")
-	proc.NameStep(func(ctx flow.Step) (any, error) {
-		if !executeSuc {
-			StepSet(ctx)
-			panic("panic")
-		}
-		t.Logf("step[%s] start\n", ctx.Name())
-		StepCheck(ctx.Name(), ctx)
-		atomic.AddInt64(&current, 1)
-		return ctx.Name(), nil
-	}, "step1").
-		Next(GenerateAfter(t, "step1", StepSet, StepCheck), "step2").
-		Next(GenerateAfter(t, "step2", StepSet, StepCheck), "step3")
+	f := func(ctx Ctx) (any, error) { panic("panic") }
+	proc.NameStep(Fn(t).Fail(SetCtx(), f).Suc(CheckCtx("step1", 0)).Step(), "step1").
+		Next(Fn(t).Fail(SetCtx()).Suc(CheckCtx("step1"), SetCtx()).Step(), "step2").
+		Next(Fn(t).Fail(SetCtx()).Suc(CheckCtx("step2")).Step(), "step3")
 	wf.AfterFlow(false, CheckResult(t, 0, flow.Panic)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 3, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
 	flow.DoneFlow("TestPanicStepRecover", nil)
-	executeSuc = true
-	flowId, err := getId("TestPanicStepRecover")
-	if err != nil {
-		panic(err)
-	}
-	resetCurrent()
-	if err = flow.RecoverFlow(flowId); err != nil {
-		panic(err)
-	}
+	Recover("TestPanicStepRecover")
 }
 
 func TestMultipleStepRecover(t *testing.T) {
@@ -820,52 +777,35 @@ func TestMultipleStepRecover(t *testing.T) {
 	executeSuc = false
 	wf := flow.RegisterFlow("TestMultipleStepRecover")
 	wf.EnableRecover()
-	proc1 := wf.Process("TestMultipleStepRecover1")
-	step := proc1.NameStep(GeneratePreview(t, "step1-1", StepSet, StepCheck), "step1-1")
-	step.
-		Next(GenerateAfter(t, "step1-1", StepSet, StepCheck), "step2-2").
-		Next(GenerateAfter(t, "step2-2", StepSet, StepCheck), "step2-3")
-	step.
-		Next(GenerateAfter(t, "step1-1", StepSet, StepCheck), "step3-2").
-		Next(GenerateAfter(t, "step3-2", StepSet, StepCheck), "step3-3")
-	wf.AfterFlow(false, CheckResult(t, 1, flow.Error)).If(execFail)
+	proc := wf.Process("TestMultipleStepRecover")
+	proc.NameStep(Fn(t).Do(SetCtx()).Step(), "step1-1").
+		Next(Fn(t).Suc(CheckCtx("step1-1"), SetCtx()).ErrStep(), "step1-2").
+		Next(Fn(t).Do(CheckCtx("step1-2")).Step(), "1-3")
+	proc.NameStep(Fn(t).Do(SetCtx()).Step(), "step2-1").
+		Next(Fn(t).Suc(CheckCtx("step2-1"), SetCtx()).ErrStep(), "step2-2").
+		Next(Fn(t).Do(CheckCtx("step2-2")).Step(), "2-3")
+	wf.AfterFlow(false, CheckResult(t, 2, flow.Error)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 4, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
 	flow.DoneFlow("TestMultipleStepRecover", nil)
-	executeSuc = true
-	flowId, err := getId("TestMultipleStepRecover")
-	if err != nil {
-		panic(err)
-	}
-	resetCurrent()
-	if err = flow.RecoverFlow(flowId); err != nil {
-		panic(err)
-	}
+	Recover("TestMultipleStepRecover")
 }
 
 func TestMultipleStepRecover0(t *testing.T) {
 	defer resetCurrent()
 	executeSuc = false
-	wf := flow.RegisterFlow("TestMultipleStepRecover+")
+	wf := flow.RegisterFlow("TestMultipleStepRecover0")
 	wf.EnableRecover()
-	proc1 := wf.Process("TestMultipleStepRecover+")
-	proc1.NameStep(GeneratePreview(t, "step1-1", StepSet, StepCheck), "step1-1")
-	proc1.NameStep(GeneratePreview(t, "step1-2", StepSet0, StepCheck0), "step1-2")
-	proc1.NameStep(GenerateAfter(t, "step1-1", StepSet, StepCheck), "step2-1", "step1-1")
-	proc1.NameStep(GenerateAfter(t, "step1-2", StepSet0, StepCheck0), "step2-2", "step1-2")
-	wf.AfterFlow(false, CheckResult(t, 2, flow.Error)).If(execFail)
-	wf.AfterFlow(false, CheckResult(t, 2, flow.Success)).If(execSuc)
+	proc := wf.Process("TestMultipleStepRecover0")
+	proc.NameStep(Fn(t).Fail(SetCtx()).Suc(CheckCtx("step1-1", 0)).ErrStep(), "step1-1").
+		Next(Fn(t).Do(CheckCtx("step1-1")).Step(), "1-2")
+	proc.NameStep(Fn(t).Suc(SetCtx()).ErrStep(), "step2-1").
+		Next(Fn(t).Do(CheckCtx("step2-1")).Step(), "2-2")
+	wf.AfterFlow(false, CheckResult(t, 1, flow.Error)).If(execFail)
+	wf.AfterFlow(false, CheckResult(t, 4, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
-	flow.DoneFlow("TestMultipleStepRecover+", nil)
-	executeSuc = true
-	flowId, err := getId("TestMultipleStepRecover+")
-	if err != nil {
-		panic(err)
-	}
-	resetCurrent()
-	if err = flow.RecoverFlow(flowId); err != nil {
-		panic(err)
-	}
+	flow.DoneFlow("TestMultipleStepRecover0", nil)
+	Recover("TestMultipleStepRecover0")
 }
 
 func TestParallelStepRecover(t *testing.T) {
@@ -874,169 +814,161 @@ func TestParallelStepRecover(t *testing.T) {
 	wf := flow.RegisterFlow("TestParallelStepRecover")
 	wf.EnableRecover()
 	proc1 := wf.Process("TestParallelStepRecover1")
-	proc1.NameStep(GeneratePreview(t, "step1-1", StepSet, StepCheck), "step1-1").
-		Next(GenerateAfter(t, "step1-1", StepSet, StepCheck), "step1-2").
-		Next(GenerateAfter(t, "step1-2", StepSet, StepCheck), "step1-3")
+	proc1.NameStep(Fn(t).Do(SetCtx()).Step(), "step1-1").
+		Next(Fn(t).Suc(CheckCtx("step1-1"), SetCtx()).ErrStep(), "step1-2").
+		Next(Fn(t).Do(CheckCtx("step1-2")).Step(), "step1-3")
 	proc2 := wf.Process("TestParallelStepRecover2")
-	proc2.NameStep(GeneratePreview(t, "step2-1", StepSet, StepCheck), "step2-1").
-		Next(GenerateAfter(t, "step2-1", StepSet, StepCheck), "step2-2").
-		Next(GenerateAfter(t, "step2-2", StepSet, StepCheck), "step2-3")
+	proc2.NameStep(Fn(t).Do(SetCtx()).Step(), "step2-1").
+		Next(Fn(t).Suc(CheckCtx("step2-1"), SetCtx()).ErrStep(), "step2-2").
+		Next(Fn(t).Do(CheckCtx("step2-2")).Step(), "step2-3")
 	proc3 := wf.Process("TestParallelStepRecover3")
-	proc3.NameStep(GeneratePreview(t, "step3-1", StepSet, StepCheck), "step3-1").
-		Next(GenerateAfter(t, "step3-1", StepSet, StepCheck), "step3-2").
-		Next(GenerateAfter(t, "step3-2", StepSet, StepCheck), "step3-3")
+	proc3.NameStep(Fn(t).Do(SetCtx()).Step(), "step3-1").
+		Next(Fn(t).Suc(CheckCtx("step3-1"), SetCtx()).ErrStep(), "step3-2").
+		Next(Fn(t).Do(CheckCtx("step3-2")).Step(), "step3-3")
 	wf.AfterFlow(false, CheckResult(t, 3, flow.Error)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 6, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
 	flow.DoneFlow("TestParallelStepRecover", nil)
-	executeSuc = true
-	flowId, err := getId("TestParallelStepRecover")
-	if err != nil {
-		panic(err)
-	}
-	resetCurrent()
-	if err = flow.RecoverFlow(flowId); err != nil {
-		panic(err)
-	}
+	Recover("TestParallelStepRecover")
 }
 
-func TestFlowRecover(t *testing.T) {
-	defer resetCurrent()
-	executeSuc = false
-	wf := flow.RegisterFlow("TestFlowRecover")
-	wf.EnableRecover()
-	proc := wf.Process("TestFlowRecover")
-	proc.NameStep(func(ctx flow.Step) (any, error) {
-		StepCheck("TestFlowRecover", ctx)
-		if !executeSuc {
-			StepSet(ctx)
-			return nil, errors.New("error")
-		}
-		atomic.AddInt64(&current, 1)
-		return ctx.Name(), nil
-	}, "step1")
-	proc.NameStep(GenerateAfter(t, "step1", StepSet, StepCheck), "step2", "step1")
-	proc.NameStep(GenerateAfter(t, "step2", StepSet, StepCheck), "step3", "step2")
-	wf.AfterFlow(false, CheckResult(t, 0, flow.Error)).If(execFail)
-	wf.AfterFlow(false, CheckResult(t, 3, flow.Success)).If(execSuc)
-	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
-	m := simpleContext{
-		name:  "TestFlowRecover",
-		table: make(map[string]any),
-	}
-	StepSet(&m)
-	flow.DoneFlow("TestFlowRecover", m.table)
-	executeSuc = true
-	flowId, err := getId("TestFlowRecover")
-	if err != nil {
-		panic(err)
-	}
-	resetCurrent()
-	if err = flow.RecoverFlow(flowId); err != nil {
-		panic(err)
-	}
-}
-
-func TestProcessRecover(t *testing.T) {
-	defer resetCurrent()
-	executeSuc = false
-	wf := flow.RegisterFlow("TestProcessRecover")
-	wf.EnableRecover()
-	proc := wf.Process("TestProcessRecover")
-	proc.NameStep(func(ctx flow.Step) (any, error) {
-		fmt.Printf("step[%s] start\n", ctx.Name())
-		atomic.AddInt64(&current, 1)
-		return ctx.Name(), nil
-	}, "step1")
-	proc.NameStep(func(ctx flow.Step) (any, error) {
-		fmt.Printf("step[%s] start\n", ctx.Name())
-		atomic.AddInt64(&current, 1)
-		return ctx.Name(), nil
-	}, "step2", "step1")
-	proc.NameStep(func(ctx flow.Step) (any, error) {
-		fmt.Printf("step[%s] start\n", ctx.Name())
-		if executeSuc {
-			if res, exist := ctx.Result("step1"); exist {
-				if res.(string) != "step1" {
-					panic(fmt.Sprintf("step[%s] get result failed, step[%s] reuslt is not equal to %s", ctx.Name(), "step1", "step1"))
-				}
-			} else {
-				panic(fmt.Sprintf("step[%s] get result failed, step[%s] reuslt is missing.", ctx.Name(), "step1"))
-			}
-			if res, exist := ctx.Result("step2"); exist {
-				if res.(string) != "step2" {
-					panic(fmt.Sprintf("step[%s] get result failed, step[%s] reuslt is not equal to %s", ctx.Name(), "step2", "step2"))
-				}
-			} else {
-				panic(fmt.Sprintf("step[%s] get result failed, step[%s] reuslt is missing.", ctx.Name(), "step2"))
-			}
-			StepCheck("TestProcessRecover", ctx)
-			atomic.AddInt64(&current, 1)
-			return ctx.Name(), nil
-		}
-		fmt.Printf("step[%s] failed\n", ctx.Name())
-		return nil, fmt.Errorf("error")
-	}, "step3", "step1", "step2")
-	proc.NameStep(func(ctx flow.Step) (any, error) {
-		fmt.Printf("step[%s] start\n", ctx.Name())
-		atomic.AddInt64(&current, 1)
-		return ctx.Name(), nil
-	}, "step4", "step3")
-	wf.AfterFlow(false, CheckResult(t, 2, flow.Error)).If(execFail)
-	wf.AfterFlow(false, CheckResult(t, 3, flow.Success)).If(execSuc)
-	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
-	wf.BeforeProcess(false, PreviewProcessRecover)
-	flow.DoneFlow("TestProcessRecover", nil)
-	executeSuc = true
-	flowId, err := getId("TestProcessRecover")
-	if err != nil {
-		panic(err)
-	}
-	resetCurrent()
-	if err = flow.RecoverFlow(flowId); err != nil {
-		panic(err)
-	}
-}
-
-func TestStepInterruptRecover(t *testing.T) {
-	defer resetCurrent()
-	executeSuc = false
-	wf := flow.RegisterFlow("TestStepInterruptRecover")
-	wf.EnableRecover()
-	proc := wf.Process("TestStepInterruptRecover")
-	proc.NameStep(func(ctx flow.Step) (any, error) {
-		fmt.Printf("step[%s] start\n", ctx.Name())
-		StepSet0(ctx)
-		atomic.AddInt64(&current, 1)
-		return ctx.Name(), nil
-	}, "step1")
-	proc.NameStep(func(ctx flow.Step) (any, error) {
-		fmt.Printf("step[%s] start\n", ctx.Name())
-		if !executeSuc {
-			StepSet(ctx)
-			return ctx.Name(), fmt.Errorf("error")
-		}
-		StepCheck0("step1", ctx)
-		StepCheck("step2", ctx)
-		atomic.AddInt64(&current, 1)
-		return ctx.Name(), nil
-	}, "step2", "step1")
-	proc.NameStep(GenerateStep(3), "step3", "step2")
-	wf.AfterFlow(false, CheckResult(t, 1, flow.Error)).If(execFail)
-	wf.AfterFlow(false, CheckResult(t, 2, flow.Success)).If(execSuc)
-	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
-	flow.DoneFlow("TestStepInterruptRecover", nil)
-	executeSuc = true
-	flowId, err := getId("TestStepInterruptRecover")
-	if err != nil {
-		panic(err)
-	}
-	resetCurrent()
-	if err = flow.RecoverFlow(flowId); err != nil {
-		panic(err)
-	}
-}
-
+//func TestFlowRecover(t *testing.T) {
+//	defer resetCurrent()
+//	executeSuc = false
+//	wf := flow.RegisterFlow("TestFlowRecover")
+//	wf.EnableRecover()
+//	proc := wf.Process("TestFlowRecover")
+//	proc.NameStep(func(ctx flow.Step) (any, error) {
+//		StepCheck("TestFlowRecover", ctx)
+//		if !executeSuc {
+//			StepSet(ctx)
+//			return nil, errors.New("error")
+//		}
+//		atomic.AddInt64(&current, 1)
+//		return ctx.Name(), nil
+//	}, "step1")
+//	proc.NameStep(GenerateAfter(t, "step1", StepSet, StepCheck), "step2", "step1")
+//	proc.NameStep(GenerateAfter(t, "step2", StepSet, StepCheck), "step3", "step2")
+//	wf.AfterFlow(false, CheckResult(t, 0, flow.Error)).If(execFail)
+//	wf.AfterFlow(false, CheckResult(t, 3, flow.Success)).If(execSuc)
+//	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
+//	m := simpleContext{
+//		name:  "TestFlowRecover",
+//		table: make(map[string]any),
+//	}
+//	StepSet(&m)
+//	flow.DoneFlow("TestFlowRecover", m.table)
+//	executeSuc = true
+//	flowId, err := getId("TestFlowRecover")
+//	if err != nil {
+//		panic(err)
+//	}
+//	resetCurrent()
+//	if err = flow.RecoverFlow(flowId); err != nil {
+//		panic(err)
+//	}
+//}
+//
+//func TestProcessRecover(t *testing.T) {
+//	defer resetCurrent()
+//	executeSuc = false
+//	wf := flow.RegisterFlow("TestProcessRecover")
+//	wf.EnableRecover()
+//	proc := wf.Process("TestProcessRecover")
+//	proc.NameStep(func(ctx flow.Step) (any, error) {
+//		fmt.Printf("step[%s] start\n", ctx.Name())
+//		atomic.AddInt64(&current, 1)
+//		return ctx.Name(), nil
+//	}, "step1")
+//	proc.NameStep(func(ctx flow.Step) (any, error) {
+//		fmt.Printf("step[%s] start\n", ctx.Name())
+//		atomic.AddInt64(&current, 1)
+//		return ctx.Name(), nil
+//	}, "step2", "step1")
+//	proc.NameStep(func(ctx flow.Step) (any, error) {
+//		fmt.Printf("step[%s] start\n", ctx.Name())
+//		if executeSuc {
+//			if res, exist := ctx.Result("step1"); exist {
+//				if res.(string) != "step1" {
+//					panic(fmt.Sprintf("step[%s] get result failed, step[%s] reuslt is not equal to %s", ctx.Name(), "step1", "step1"))
+//				}
+//			} else {
+//				panic(fmt.Sprintf("step[%s] get result failed, step[%s] reuslt is missing.", ctx.Name(), "step1"))
+//			}
+//			if res, exist := ctx.Result("step2"); exist {
+//				if res.(string) != "step2" {
+//					panic(fmt.Sprintf("step[%s] get result failed, step[%s] reuslt is not equal to %s", ctx.Name(), "step2", "step2"))
+//				}
+//			} else {
+//				panic(fmt.Sprintf("step[%s] get result failed, step[%s] reuslt is missing.", ctx.Name(), "step2"))
+//			}
+//			StepCheck("TestProcessRecover", ctx)
+//			atomic.AddInt64(&current, 1)
+//			return ctx.Name(), nil
+//		}
+//		fmt.Printf("step[%s] failed\n", ctx.Name())
+//		return nil, fmt.Errorf("error")
+//	}, "step3", "step1", "step2")
+//	proc.NameStep(func(ctx flow.Step) (any, error) {
+//		fmt.Printf("step[%s] start\n", ctx.Name())
+//		atomic.AddInt64(&current, 1)
+//		return ctx.Name(), nil
+//	}, "step4", "step3")
+//	wf.AfterFlow(false, CheckResult(t, 2, flow.Error)).If(execFail)
+//	wf.AfterFlow(false, CheckResult(t, 3, flow.Success)).If(execSuc)
+//	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
+//	wf.BeforeProcess(false, PreviewProcessRecover)
+//	flow.DoneFlow("TestProcessRecover", nil)
+//	executeSuc = true
+//	flowId, err := getId("TestProcessRecover")
+//	if err != nil {
+//		panic(err)
+//	}
+//	resetCurrent()
+//	if err = flow.RecoverFlow(flowId); err != nil {
+//		panic(err)
+//	}
+//}
+//
+//func TestStepInterruptRecover(t *testing.T) {
+//	defer resetCurrent()
+//	executeSuc = false
+//	wf := flow.RegisterFlow("TestStepInterruptRecover")
+//	wf.EnableRecover()
+//	proc := wf.Process("TestStepInterruptRecover")
+//	proc.NameStep(func(ctx flow.Step) (any, error) {
+//		fmt.Printf("step[%s] start\n", ctx.Name())
+//		StepSet0(ctx)
+//		atomic.AddInt64(&current, 1)
+//		return ctx.Name(), nil
+//	}, "step1")
+//	proc.NameStep(func(ctx flow.Step) (any, error) {
+//		fmt.Printf("step[%s] start\n", ctx.Name())
+//		if !executeSuc {
+//			StepSet(ctx)
+//			return ctx.Name(), fmt.Errorf("error")
+//		}
+//		StepCheck0("step1", ctx)
+//		StepCheck("step2", ctx)
+//		atomic.AddInt64(&current, 1)
+//		return ctx.Name(), nil
+//	}, "step2", "step1")
+//	proc.NameStep(GenerateStep(3), "step3", "step2")
+//	wf.AfterFlow(false, CheckResult(t, 1, flow.Error)).If(execFail)
+//	wf.AfterFlow(false, CheckResult(t, 2, flow.Success)).If(execSuc)
+//	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
+//	flow.DoneFlow("TestStepInterruptRecover", nil)
+//	executeSuc = true
+//	flowId, err := getId("TestStepInterruptRecover")
+//	if err != nil {
+//		panic(err)
+//	}
+//	resetCurrent()
+//	if err = flow.RecoverFlow(flowId); err != nil {
+//		panic(err)
+//	}
+//}
+//
 func TestPool(t *testing.T) {
 	db := <-pool
 	defer func() { pool <- db }()

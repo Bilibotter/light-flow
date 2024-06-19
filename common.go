@@ -33,6 +33,7 @@ var (
 	skipped      = &StatusEnum{0b1 << 2, "skip"}
 	executed     = &StatusEnum{0b1 << 3, "executed"}
 	recovering   = &StatusEnum{0b1 << 4, "recovering"}
+	skipCallback = &StatusEnum{0b1 << 5, "skipCallback"}
 	Success      = &StatusEnum{0b1 << 15, "Success"}
 	NormalMask   = &StatusEnum{0b1<<16 - 1, "NormalMask"}
 	abnormal     = []*StatusEnum{Cancel, Timeout, Panic, Error, Stop, CallbackFail, Failed}
@@ -51,28 +52,37 @@ type state int64
 
 type Step interface {
 	stepCtx
-	runtimeI
-	Err() error
+	stepRuntime
 }
 
 type stepCtx interface {
 	context
-	FlowId() string
-	ProcessId() string
 	EndValues(key string) map[string]any
 	Result(key string) (value any, exist bool)
+}
+
+type stepRuntime interface {
+	runtimeI
+	FlowId() string
+	ProcessId() string
 	SetCondition(value any, targets ...string) // the targets contain names of the evaluators to be matched
+	Dependents() (stepNames []string)
+	Err() error
 }
 
 type Process interface {
 	procCtx
-	runtimeI
+	procRuntime
 }
 
 type procCtx interface {
 	context
-	FlowId() string
 	GetByStepName(stepName, key string) (value any, exist bool)
+}
+
+type procRuntime interface {
+	runtimeI
+	FlowId() string
 }
 
 type WorkFlow interface {
@@ -640,17 +650,6 @@ func (ctx *dependentContext) getOutCome(name string) (*outcome, bool) {
 		return nil, false
 	}
 	return wrap.(*outcome), true
-}
-
-func (ctx *dependentContext) restoreOutcome(key string, o *outcome) {
-	ctx.lock.Lock()
-	defer ctx.lock.Unlock()
-	head := &node{
-		Value: o,
-		Path:  resultMark,
-		Next:  ctx.nodes[key],
-	}
-	ctx.nodes[key] = head
 }
 
 func (ctx *dependentContext) setOutcomeIfAbsent(key string) *outcome {

@@ -180,6 +180,14 @@ func (step *runStep) FlowId() string {
 	return step.belong.FlowId()
 }
 
+func (step *runStep) Dependents() (stepNames []string) {
+	s := make([]string, len(step.depends))
+	for i, depend := range step.depends {
+		s[i] = depend.name
+	}
+	return s
+}
+
 func (step *runStep) ProcessId() string {
 	return step.belong.id
 }

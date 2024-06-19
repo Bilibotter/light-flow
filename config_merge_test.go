@@ -25,7 +25,7 @@ func CheckResult(t *testing.T, check int64, statuses ...*StatusEnum) func(WorkFl
 		}
 		for _, status := range statuses {
 			if status == Success && !workFlow.Success() {
-				t.Errorf("workFlow not success\n")
+				t.Errorf("WorkFlow executed failed\n")
 			}
 			//if status == Timeout {
 			//	time.Sleep(50 * time.Millisecond)

@@ -40,7 +40,7 @@ func CheckCtxResult(t *testing.T, check int64, statuses ...*flow.StatusEnum) fun
 		}
 		for _, status := range statuses {
 			if status == flow.Success && !workFlow.Success() {
-				t.Errorf("workFlow not success\n")
+				t.Errorf("WorkFlow executed failed\n")
 			}
 			//if status == flow.Timeout {
 			//	time.Sleep(50 * time.Millisecond)

@@ -3,14 +3,9 @@ package test
 import (
 	"fmt"
 	flow "github.com/Bilibotter/light-flow"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
-)
-
-var (
-	current int64
 )
 
 type InputA struct {
@@ -26,38 +21,6 @@ func ErrorResultPrinter(info flow.Step) (bool, error) {
 		fmt.Printf("step[%s] error, explain=%v, err=%v\n", info.Name(), info.ExplainStatus(), info.Err())
 	}
 	return true, nil
-}
-
-func CheckResult(t *testing.T, check int64, statuses ...*flow.StatusEnum) func(flow.WorkFlow) (keepOn bool, err error) {
-	return func(workFlow flow.WorkFlow) (keepOn bool, err error) {
-		ss := make([]string, len(statuses))
-		for i, status := range statuses {
-			ss[i] = status.Message()
-		}
-		t.Logf("start check, expected current=%d, status include %s", check, strings.Join(ss, ","))
-		if current != check {
-			t.Errorf("execute %d step, but current = %d\n", check, current)
-		}
-		for _, status := range statuses {
-			if status == flow.Success && !workFlow.Success() {
-				t.Errorf("workFlow not success\n")
-			}
-			//if status == flow.Timeout {
-			//	time.Sleep(50 * time.Millisecond)
-			//}
-			if !workFlow.Has(status) {
-				t.Errorf("workFlow has not %s status\n", status.Message())
-			}
-		}
-		t.Logf("status expalin=%s", strings.Join(workFlow.ExplainStatus(), ","))
-		t.Logf("finish check")
-		println()
-		return true, nil
-	}
-}
-
-func resetCurrent() {
-	atomic.StoreInt64(&current, 0)
 }
 
 func NormalStep3(ctx flow.Step) (any, error) {
