@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"sync"
+	"time"
 )
 
 var (
@@ -19,52 +20,30 @@ var (
 	defaultConfig *FlowConfig
 )
 
-type controller interface {
-	Resume()
-	Pause()
-	Stop()
-}
-
-type resultI interface {
-	basicInfoI
-	Futures() []*Future
-	Fails() []*Future
-}
-
-type FlowController interface {
-	controller
-	resultI
-	Done() []*Future
-	ListProcess() []string
-	ProcessController(name string) controller
-}
-
 type FlowConfig struct {
-	handler[*WorkFlow] `flow:"skip"`
-	ProcessConfig      `flow:"skip"`
+	handler[WorkFlow] `flow:"skip"`
+	ProcessConfig     `flow:"skip"`
+	enableRecover     int8
 }
 
 type FlowMeta struct {
 	FlowConfig
 	init              sync.Once
-	flowName          string
+	name              string
 	flowNotUseDefault bool
 	processes         []*ProcessMeta
 }
 
 type runFlow struct {
+	*state
 	*FlowMeta
-	*basicInfo
 	*simpleContext
-	processes []*runProcess
-	futures   []*Future
+	id        string
+	processes map[string]*runProcess
+	start     time.Time
+	end       time.Time
 	lock      sync.Mutex
 	finish    sync.WaitGroup
-	infoCache *WorkFlow
-}
-
-type WorkFlow struct {
-	*basicInfo
 }
 
 func init() {
@@ -86,19 +65,11 @@ func CreateDefaultConfig() *FlowConfig {
 
 func RegisterFlow(name string) *FlowMeta {
 	flow := FlowMeta{
-		flowName: name,
-		init:     sync.Once{},
+		name: name,
+		init: sync.Once{},
 	}
 	flow.register()
 	return &flow
-}
-
-func AsyncArgs(name string, args ...any) FlowController {
-	input := make(map[string]any, len(args))
-	for _, arg := range args {
-		input[getStructName(arg)] = arg
-	}
-	return AsyncFlow(name, input)
 }
 
 func AsyncFlow(name string, input map[string]any) FlowController {
@@ -107,57 +78,25 @@ func AsyncFlow(name string, input map[string]any) FlowController {
 		panic(fmt.Sprintf("Flow[%s] not found", name))
 	}
 	flow := factory.(*FlowMeta).buildRunFlow(input)
-	flow.Flow()
+	go flow.Done()
 	return flow
 }
 
-func DoneArgs(name string, args ...any) resultI {
-	input := make(map[string]any, len(args))
-	for _, arg := range args {
-		input[getStructName(arg)] = arg
-	}
-	return DoneFlow(name, input)
-}
-
-func DoneFlow(name string, input map[string]any) resultI {
+func DoneFlow(name string, input map[string]any) FinishedWorkFlow {
 	factory, ok := allFlows.Load(name)
 	if !ok {
 		panic(fmt.Sprintf("Flow[%s] not found", name))
 	}
 	flow := factory.(*FlowMeta).buildRunFlow(input)
-	flow.Done()
-	return flow
+	return flow.Done()
 }
 
-func BuildRunFlow(name string, input map[string]any) *runFlow {
-	factory, ok := allFlows.Load(name)
-	if !ok {
-		panic(fmt.Sprintf("Flow[%s] not found", name))
-	}
-	return factory.(*FlowMeta).buildRunFlow(input)
-}
-
-func (fc *FlowConfig) BeforeFlow(must bool, callback func(*WorkFlow) (keepOn bool, err error)) *callback[*WorkFlow] {
+func (fc *FlowConfig) BeforeFlow(must bool, callback func(WorkFlow) (keepOn bool, err error)) *callback[WorkFlow] {
 	return fc.addCallback(Before, must, callback)
 }
 
-func (fc *FlowConfig) AfterFlow(must bool, callback func(*WorkFlow) (keepOn bool, err error)) *callback[*WorkFlow] {
+func (fc *FlowConfig) AfterFlow(must bool, callback func(WorkFlow) (keepOn bool, err error)) *callback[WorkFlow] {
 	return fc.addCallback(After, must, callback)
-}
-
-func (fc *FlowConfig) combine(config *FlowConfig) *FlowConfig {
-	copyPropertiesSkipNotEmpty(fc, config)
-	fc.handler.combine(&config.handler)
-	fc.ProcessConfig.combine(&config.ProcessConfig)
-	return fc
-}
-
-func (fc *FlowConfig) clone() FlowConfig {
-	config := FlowConfig{}
-	copyPropertiesSkipNotEmpty(fc, config)
-	config.handler = fc.handler.clone()
-	config.ProcessConfig = fc.ProcessConfig.clone()
-	return config
 }
 
 func (fm *FlowMeta) initialize() {
@@ -177,16 +116,20 @@ func (fm *FlowMeta) initialize() {
 }
 
 func (fm *FlowMeta) register() *FlowMeta {
-	if len(fm.flowName) == 0 {
+	if len(fm.name) == 0 {
 		panic("can't register flow with empty name")
 	}
 
-	_, load := allFlows.LoadOrStore(fm.flowName, fm)
+	_, load := allFlows.LoadOrStore(fm.name, fm)
 	if load {
-		panic(fmt.Sprintf("Flow[%s] alraedy exists", fm.flowName))
+		panic(fmt.Sprintf("Flow[%s] alraedy exists", fm.name))
 	}
 
 	return fm
+}
+
+func (fm *FlowMeta) Name() string {
+	return fm.name
 }
 
 func (fm *FlowMeta) NoUseDefault() *FlowMeta {
@@ -194,22 +137,29 @@ func (fm *FlowMeta) NoUseDefault() *FlowMeta {
 	return fm
 }
 
+func (fm *FlowMeta) EnableRecover() *FlowMeta {
+	fm.enableRecover = 1
+	return fm
+}
+
+func (fm *FlowMeta) DisableRecover() *FlowMeta {
+	fm.enableRecover = -1
+	return fm
+}
+
 func (fm *FlowMeta) buildRunFlow(input map[string]any) *runFlow {
 	ctx := simpleContext{
-		m:    input,
-		name: fm.flowName,
+		table:   input,
+		ctxName: fm.name,
 	}
 	rf := runFlow{
+		state:         emptyStatus(),
+		FlowMeta:      fm,
 		simpleContext: &ctx,
-		basicInfo: &basicInfo{
-			state: emptyStatus(),
-			Name:  fm.flowName,
-			Id:    generateId(),
-		},
-		FlowMeta:  fm,
-		lock:      sync.Mutex{},
-		processes: make([]*runProcess, 0, len(fm.processes)),
-		finish:    sync.WaitGroup{},
+		id:            generateId(),
+		lock:          sync.Mutex{},
+		processes:     make(map[string]*runProcess, len(fm.processes)),
+		finish:        sync.WaitGroup{},
 	}
 
 	for k, v := range input {
@@ -218,40 +168,66 @@ func (fm *FlowMeta) buildRunFlow(input map[string]any) *runFlow {
 
 	for _, processMeta := range fm.processes {
 		process := rf.buildRunProcess(processMeta)
-		rf.processes = append(rf.processes, process)
+		rf.processes[processMeta.name] = process
 	}
 
 	return &rf
 }
 
-func (fm *FlowMeta) cloneProcess(name string) *ProcessMeta {
-	pm, exist := allProcess.Load(name)
-	if !exist {
-		panic(fmt.Sprintf("Process[%s] not registered", name))
-	}
-	meta := pm.(*ProcessMeta).clone()
-	meta.belong = fm
-	fm.processes = append(fm.processes, meta)
-	return meta
-}
-
 func (fm *FlowMeta) Process(name string) *ProcessMeta {
 	pm := ProcessMeta{
-		accessInfo: accessInfo{
-			passing: visibleAll,
-			index:   0,
-			names:   map[int64]string{0: name},
-			indexes: map[string]int64{name: 0},
+		nodeRouter: nodeRouter{
+			nodePath: fullAccess,
+			index:    0,
+			toName:   map[int64]string{0: name},
+			toIndex:  map[string]int64{name: 0},
 		},
-		belong:      fm,
-		processName: name,
-		init:        sync.Once{},
-		steps:       make(map[string]*StepMeta),
+		belong: fm,
+		name:   name,
+		init:   sync.Once{},
+		steps:  make(map[string]*StepMeta),
 	}
 
 	pm.register()
 	fm.processes = append(fm.processes, &pm)
 	return &pm
+}
+
+func (rf *runFlow) Process(name string) (ProcController, bool) {
+	res, ok := rf.processes[name]
+	if ok {
+		return res, true
+	}
+	return nil, false
+}
+
+func (rf *runFlow) Exceptions() []FinishedProcess {
+	res := make([]FinishedProcess, 0)
+	for _, process := range rf.processes {
+		if !process.state.Normal() {
+			res = append(res, process)
+		}
+	}
+	return res
+}
+
+func (rf *runFlow) ID() string {
+	return rf.id
+}
+
+func (rf *runFlow) StartTime() time.Time {
+	return rf.start
+}
+
+func (rf *runFlow) EndTime() time.Time {
+	return rf.end
+}
+
+func (rf *runFlow) CostTime() time.Duration {
+	if rf.end.IsZero() {
+		return 0
+	}
+	return rf.end.Sub(rf.start)
 }
 
 func (rf *runFlow) buildRunProcess(meta *ProcessMeta) *runProcess {
@@ -260,15 +236,15 @@ func (rf *runFlow) buildRunProcess(meta *ProcessMeta) *runProcess {
 		nodes: map[string]*node{},
 	}
 	process := runProcess{
-		visibleContext: &visibleContext{
+		dependentContext: &dependentContext{
 			prev:        rf.simpleContext,
-			accessInfo:  &meta.accessInfo,
+			routing:     &meta.nodeRouter,
 			linkedTable: &table,
 		},
 		state:       emptyStatus(),
 		ProcessMeta: meta,
+		belong:      rf,
 		id:          generateId(),
-		flowId:      rf.Id,
 		flowSteps:   make(map[string]*runStep),
 		pause:       sync.WaitGroup{},
 		running:     sync.WaitGroup{},
@@ -277,7 +253,7 @@ func (rf *runFlow) buildRunProcess(meta *ProcessMeta) *runProcess {
 
 	for _, stepMeta := range meta.sortedSteps() {
 		step := process.buildRunStep(stepMeta)
-		process.flowSteps[stepMeta.stepName] = step
+		process.flowSteps[stepMeta.name] = step
 	}
 	process.running.Add(len(process.flowSteps))
 
@@ -285,125 +261,105 @@ func (rf *runFlow) buildRunProcess(meta *ProcessMeta) *runProcess {
 }
 
 func (rf *runFlow) finalize() {
-	for _, future := range rf.futures {
-		future.Done()
-	}
 	for _, process := range rf.processes {
 		rf.add(process.state.load())
 	}
 	if rf.Normal() {
-		rf.set(Success)
+		rf.append(Success)
+	}
+	if rf.shallRecover() {
+		rf.saveCheckpoints()
 	}
 	rf.advertise(After)
 	rf.finish.Done()
 }
 
 // Done function will block util all process done.
-func (rf *runFlow) Done() []*Future {
-	futures := rf.Flow()
-	for _, future := range futures {
-		// process finish running and callback
-		future.Done()
+func (rf *runFlow) Done() FinishedWorkFlow {
+	if !rf.EndTime().IsZero() {
+		return rf
 	}
-	// workflow finish running and callback
-	rf.finish.Wait()
-	return futures
-}
-
-// Flow function asynchronous execute process of workflow and return immediately.
-func (rf *runFlow) Flow() []*Future {
-	if rf.futures != nil {
-		return rf.futures
-	}
-	// avoid duplicate call
+	// Asynchronous scheduling may call Done twice,
+	// so a lock is used to ensure that it only executes once.
 	rf.lock.Lock()
 	defer rf.lock.Unlock()
 	// DCL
-	if rf.futures != nil {
-		return rf.futures
+	if !rf.EndTime().IsZero() {
+		return rf
 	}
+	rf.start = time.Now().UTC()
 	rf.initialize()
-	rf.infoCache = &WorkFlow{
-		basicInfo: &basicInfo{
-			state: rf.state,
-			Id:    rf.Id,
-			Name:  rf.flowName,
-		},
-	}
 	rf.advertise(Before)
-	futures := make([]*Future, 0, len(rf.processes))
+	wg := make([]*sync.WaitGroup, 0, len(rf.processes))
 	for _, process := range rf.processes {
 		if rf.Has(CallbackFail) {
-			process.set(CallbackFail)
+			process.append(Cancel)
 		}
-		futures = append(futures, process.schedule())
+		wg = append(wg, process.schedule())
 	}
-	rf.futures = futures
 	rf.finish.Add(1)
-	go rf.finalize()
-	return futures
+	for _, w := range wg {
+		w.Wait()
+	}
+	// execute callback and recover after all processes are done
+	rf.finalize()
+	rf.end = time.Now().UTC()
+	return rf
 }
 
 func (rf *runFlow) advertise(flag string) {
 	if !rf.flowNotUseDefault && defaultConfig != nil {
-		defaultConfig.handle(flag, rf.infoCache)
+		defaultConfig.handle(flag, rf)
 	}
-	rf.handle(flag, rf.infoCache)
+	rf.handle(flag, rf)
 }
 
 // Fails returns a slice of fail result Future pointers.
 // If all process success, return an empty slice.
-func (rf *runFlow) Fails() []*Future {
-	futures := make([]*Future, 0)
-	for _, future := range rf.futures {
-		if len(future.Exceptions()) != 0 {
-			futures = append(futures, future)
-		}
-	}
-	return futures
-}
+//func (rf *runFlow) Fails() []*Future {
+//	futures := make([]*Future, 0)
+//	for _, future := range rf.futures {
+//		if len(future.Exceptions()) != 0 {
+//			futures = append(futures, future)
+//		}
+//	}
+//	return futures
+//}
 
 // Futures returns the slice of future objects.
 // future can get the result and state of the process.
-func (rf *runFlow) Futures() []*Future {
-	return rf.futures
-}
+//func (rf *runFlow) Futures() []*Future {
+//	return rf.futures
+//}
 
 func (rf *runFlow) ListProcess() []string {
 	processes := make([]string, 0, len(rf.processes))
 	for _, process := range rf.processes {
-		processes = append(processes, process.processName)
+		processes = append(processes, process.name)
 	}
 	return processes
 }
 
-// ProcessController returns the controller of the specified process name.
-// controller can stop and resume the process.
-func (rf *runFlow) ProcessController(processName string) controller {
-	for _, process := range rf.processes {
-		if process.processName == processName {
-			return process
-		}
-	}
-	return nil
-}
-
-func (rf *runFlow) Pause() {
+func (rf *runFlow) Pause() FlowController {
+	rf.append(Pause)
 	for _, process := range rf.processes {
 		process.Pause()
 	}
+	return rf
 }
 
 // Resume resumes the execution of the workflow.
-func (rf *runFlow) Resume() {
+func (rf *runFlow) Resume() FlowController {
 	for _, process := range rf.processes {
 		process.Resume()
 	}
+	return rf
 }
 
 // Stop stops the execution of the workflow.
-func (rf *runFlow) Stop() {
+func (rf *runFlow) Stop() FlowController {
 	for _, process := range rf.processes {
 		process.Stop()
 	}
+	return rf
 }

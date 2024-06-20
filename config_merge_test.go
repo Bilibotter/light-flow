@@ -13,14 +13,42 @@ var (
 	current int64
 )
 
+func CheckResult(t *testing.T, check int64, statuses ...*StatusEnum) func(WorkFlow) (keepOn bool, err error) {
+	return func(workFlow WorkFlow) (keepOn bool, err error) {
+		ss := make([]string, len(statuses))
+		for i, status := range statuses {
+			ss[i] = status.Message()
+		}
+		t.Logf("start check, expected current=%d, status include %s", check, strings.Join(ss, ","))
+		if current != check {
+			t.Errorf("execute %d step, but current = %d\n", check, current)
+		}
+		for _, status := range statuses {
+			if status == Success && !workFlow.Success() {
+				t.Errorf("WorkFlow executed failed\n")
+			}
+			//if status == Timeout {
+			//	time.Sleep(50 * time.Millisecond)
+			//}
+			if !workFlow.Has(status) {
+				t.Errorf("workFlow has not %s status\n", status.Message())
+			}
+		}
+		t.Logf("status expalin=%s", strings.Join(workFlow.ExplainStatus(), ","))
+		t.Logf("finish check")
+		println()
+		return true, nil
+	}
+}
+
 func resetCurrent() {
 	atomic.StoreInt64(&current, 0)
 }
 
-func GenerateStep(i int, args ...any) func(ctx StepCtx) (any, error) {
-	return func(ctx StepCtx) (any, error) {
+func GenerateStep(i int, args ...any) func(ctx Step) (any, error) {
+	return func(ctx Step) (any, error) {
 		if len(args) > 0 {
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(10 * time.Millisecond)
 		}
 		fmt.Printf("%d.step finish\n", i)
 		atomic.AddInt64(&current, 1)
@@ -60,28 +88,28 @@ func CheckField(check any, fields ...string) {
 	}
 }
 
-func StepIncr(info *Step) (bool, error) {
+func StepIncr(info Step) (bool, error) {
 	println("step inc current")
 	atomic.AddInt64(&current, 1)
 	return true, nil
 }
 
-func ProcIncr(info *Process) (bool, error) {
+func ProcIncr(info Process) (bool, error) {
 	println("proc inc current")
 	atomic.AddInt64(&current, 1)
 	return true, nil
 }
 
-func FlowIncr(prefix string) func(info *WorkFlow) (bool, error) {
-	return func(info *WorkFlow) (bool, error) {
+func FlowIncr(prefix string) func(info WorkFlow) (bool, error) {
+	return func(info WorkFlow) (bool, error) {
 		fmt.Printf("%s flow inc current\n", prefix)
 		atomic.AddInt64(&current, 1)
 		return true, nil
 	}
 }
 
-func StepCurrentChecker(i int64, flag int) func(info *Step) (bool, error) {
-	return func(info *Step) (bool, error) {
+func StepCurrentChecker(i int64, flag int) func(info Step) (bool, error) {
+	return func(info Step) (bool, error) {
 		if flag == 0 {
 			fmt.Printf("execute before step checker\n")
 		} else {
@@ -97,8 +125,8 @@ func StepCurrentChecker(i int64, flag int) func(info *Step) (bool, error) {
 	}
 }
 
-func ProcessCurrentChecker(i int64, flag int) func(info *Process) (bool, error) {
-	return func(info *Process) (bool, error) {
+func ProcessCurrentChecker(i int64, flag int) func(info Process) (bool, error) {
+	return func(info Process) (bool, error) {
 		if flag == 0 {
 			fmt.Printf("execute before process checker\n")
 		} else {
@@ -113,8 +141,8 @@ func ProcessCurrentChecker(i int64, flag int) func(info *Process) (bool, error) 
 	}
 }
 
-func FlowCurrentChecker(i int64, flag int) func(info *WorkFlow) (bool, error) {
-	return func(info *WorkFlow) (bool, error) {
+func FlowCurrentChecker(i int64, flag int) func(info WorkFlow) (bool, error) {
+	return func(info WorkFlow) (bool, error) {
 		if flag == 0 {
 			fmt.Printf("execute before flow checker\n")
 		} else {
@@ -144,17 +172,8 @@ func TestExecuteDefaultOrder(t *testing.T) {
 	workflow := RegisterFlow("TestExecuteDefaultOrder")
 	process := workflow.Process("TestExecuteDefaultOrder")
 	process.NameStep(GenerateStep(1), "1")
-	features := DoneFlow("TestExecuteDefaultOrder", nil)
-	for _, feature := range features.Futures() {
-		if !feature.Success() {
-			t.Errorf("process[%s] fail", feature.GetName())
-		}
-	}
-	if atomic.LoadInt64(&current) != 7 {
-		t.Errorf("execute 7 step, but current = %d", current)
-	} else {
-		t.Logf("success")
-	}
+	workflow.AfterFlow(false, CheckResult(t, 7, Success))
+	DoneFlow("TestExecuteDefaultOrder", nil)
 }
 
 func TestExecuteOwnOrder(t *testing.T) {
@@ -172,17 +191,8 @@ func TestExecuteOwnOrder(t *testing.T) {
 	workflow.AfterFlow(true, FlowCurrentChecker(6, 1))
 	process := workflow.Process("TestExecuteOwnOrder")
 	process.NameStep(GenerateStep(1), "1")
-	features := DoneFlow("TestExecuteOwnOrder", nil)
-	for _, feature := range features.Futures() {
-		if !feature.Success() {
-			t.Errorf("process[%s] fail, explain=%#v", feature.GetName(), feature.ExplainStatus())
-		}
-	}
-	if atomic.LoadInt64(&current) != 7 {
-		t.Errorf("execute 7 step, but current = %d", current)
-	} else {
-		t.Logf("success")
-	}
+	workflow.AfterFlow(false, CheckResult(t, 7, Success))
+	DoneFlow("TestExecuteOwnOrder", nil)
 }
 
 func TestExecuteMixOrder(t *testing.T) {
@@ -206,17 +216,8 @@ func TestExecuteMixOrder(t *testing.T) {
 	workflow.AfterFlow(true, FlowCurrentChecker(12, 1))
 	process := workflow.Process("TestExecuteMixOrder")
 	process.NameStep(GenerateStep(1), "1")
-	features := DoneFlow("TestExecuteMixOrder", nil)
-	for _, feature := range features.Futures() {
-		if !feature.Success() {
-			t.Errorf("process[%s] fail", feature.GetName())
-		}
-	}
-	if atomic.LoadInt64(&current) != 13 {
-		t.Errorf("execute 13 step, but current = %d", current)
-	} else {
-		t.Logf("success")
-	}
+	workflow.AfterFlow(false, CheckResult(t, 13, Success))
+	DoneFlow("TestExecuteMixOrder", nil)
 }
 
 func TestExecuteDeepMixOrder(t *testing.T) {
@@ -244,17 +245,8 @@ func TestExecuteDeepMixOrder(t *testing.T) {
 	process.AfterProcess(true, ProcessCurrentChecker(14, 1))
 	process.BeforeStep(true, StepCurrentChecker(7, 0))
 	process.AfterStep(true, StepCurrentChecker(11, 1))
-	features := DoneFlow("TestExecuteDeepMixOrder", nil)
-	for _, feature := range features.Futures() {
-		if !feature.Success() {
-			t.Errorf("process[%s] fail", feature.GetName())
-		}
-	}
-	if atomic.LoadInt64(&current) != 17 {
-		t.Errorf("execute 17 step, but current = %d", current)
-	} else {
-		t.Logf("success")
-	}
+	workflow.AfterFlow(false, CheckResult(t, 17, Success))
+	DoneFlow("TestExecuteDeepMixOrder", nil)
 }
 
 func TestBreakWhileFlowError(t *testing.T) {
@@ -282,15 +274,8 @@ func TestBreakWhileFlowError(t *testing.T) {
 	process.AfterProcess(true, ProcIncr)
 	process.BeforeStep(true, StepIncr)
 	process.AfterStep(true, StepIncr)
-	features := DoneFlow("TestBreakWhileFlowError", nil)
-	for _, feature := range features.Futures() {
-		if !feature.Has(CallbackFail) {
-			t.Errorf("process[%s] not contain callback failed, explain=%#v", feature.GetName(), feature.ExplainStatus())
-		}
-	}
-	if atomic.LoadInt64(&current) != 4 {
-		t.Errorf("execute 4 step, but current = %d", current)
-	}
+	workflow.AfterFlow(false, CheckResult(t, 4, CallbackFail))
+	DoneFlow("TestBreakWhileFlowError", nil)
 }
 
 func TestFieldSkip(t *testing.T) {

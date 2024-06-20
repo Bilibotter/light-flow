@@ -7,27 +7,27 @@ import (
 	"testing"
 )
 
-func AfterFlowProcessor(info *flow.WorkFlow) (bool, error) {
-	if info.Name == "" {
+func AfterFlowProcessor(info flow.WorkFlow) (bool, error) {
+	if info.Name() == "" {
 		panic("flow name is empty")
 	}
-	if len(info.Id) == 0 {
+	if len(info.ID()) == 0 {
 		panic("flow id is empty")
 	}
 	atomic.AddInt64(&current, 1)
-	fmt.Printf("..process[%s] AfterFlowProcessor execute \n", info.Name)
+	fmt.Printf("..process[%s] AfterFlowProcessor execute \n", info.Name())
 	return true, nil
 }
 
-func BeforeFlowProcessor(info *flow.WorkFlow) (bool, error) {
-	if info.Name == "" {
+func BeforeFlowProcessor(info flow.WorkFlow) (bool, error) {
+	if info.Name() == "" {
 		panic("flow name is empty")
 	}
-	if len(info.Id) == 0 {
+	if len(info.ID()) == 0 {
 		panic("flow id is empty")
 	}
 	atomic.AddInt64(&current, 1)
-	fmt.Printf("..process[%s] BeforeFlowProcessor execute \n", info.Name)
+	fmt.Printf("..process[%s] BeforeFlowProcessor execute \n", info.Name())
 	return true, nil
 }
 
@@ -52,15 +52,8 @@ func TestInfoCorrect(t *testing.T) {
 	process.NameStep(GenerateStep(2), "2", "1")
 	process.NameStep(GenerateStep(3), "3", "1")
 	process.NameStep(GenerateStep(4), "4", "2", "3")
-	features := flow.DoneFlow("TestInfoCorrect", nil)
-	for _, feature := range features.Futures() {
-		if !feature.Success() {
-			t.Errorf("process[%s] fail, exception=%v", feature.GetName(), feature.Exceptions())
-		}
-	}
-	if atomic.LoadInt64(&current) != 12 {
-		t.Errorf("execute 12 step, but current = %d", current)
-	}
+	workflow.AfterFlow(false, CheckResult(t, 12, flow.Success))
+	flow.DoneFlow("TestInfoCorrect", nil)
 }
 
 func TestDefaultProcessConfig(t *testing.T) {
@@ -82,15 +75,8 @@ func TestDefaultProcessConfig(t *testing.T) {
 	process.NameStep(GenerateStep(2), "2", "1")
 	process.NameStep(GenerateStep(3), "3", "2")
 	process.NameStep(GenerateStep(4), "4", "3")
-	features := flow.DoneFlow("TestDefaultProcessConfig", nil)
-	for _, feature := range features.Futures() {
-		if !feature.Success() {
-			t.Errorf("process[%s] fail, exception=%v", feature.GetName(), feature.ExplainStatus())
-		}
-	}
-	if atomic.LoadInt64(&current) != 16 {
-		t.Errorf("execute 16 step, but current = %d", current)
-	}
+	workflow.AfterFlow(false, CheckResult(t, 16, flow.Success))
+	flow.DoneFlow("TestDefaultProcessConfig", nil)
 }
 
 func TestMergeDefaultProcessConfig(t *testing.T) {
@@ -116,15 +102,8 @@ func TestMergeDefaultProcessConfig(t *testing.T) {
 	process.AfterStep(true, PostProcessor)
 	process.BeforeProcess(true, ProcProcessor)
 	process.AfterProcess(true, ProcProcessor)
-	features := flow.DoneFlow("TestMergeDefaultProcessConfig", nil)
-	for _, feature := range features.Futures() {
-		if !feature.Success() {
-			t.Errorf("process[%s] fail", feature.GetName())
-		}
-	}
-	if atomic.LoadInt64(&current) != 18 {
-		t.Errorf("execute 18 step, but current = %d", current)
-	}
+	workflow.AfterFlow(false, CheckResult(t, 18, flow.Success))
+	flow.DoneFlow("TestMergeDefaultProcessConfig", nil)
 }
 
 func TestCallbackCond(t *testing.T) {
@@ -150,15 +129,8 @@ func TestCallbackCond(t *testing.T) {
 	process := workflow.Process("TestCallbackCond")
 	process.NameStep(GenerateStep(1), "1")
 	process.NameStep(GenerateStep(2), "2", "1")
-	features := flow.DoneFlow("TestCallbackCond", nil)
-	for _, feature := range features.Futures() {
-		if !feature.Success() {
-			t.Errorf("process[%s] fail", feature.GetName())
-		}
-	}
-	if atomic.LoadInt64(&current) != 8 {
-		t.Errorf("execute 8 step, but current = %d", current)
-	}
+	workflow.AfterFlow(false, CheckResult(t, 8, flow.Success))
+	flow.DoneFlow("TestCallbackCond", nil)
 }
 
 func TestCallbackCond0(t *testing.T) {
@@ -183,15 +155,8 @@ func TestCallbackCond0(t *testing.T) {
 	process := workflow.Process("TestCallbackCond0")
 	process.NameStep(GenerateStep(1), "1")
 	process.NameStep(GenerateStep(2), "2", "1")
-	features := flow.DoneFlow("TestCallbackCond0", nil)
-	for _, feature := range features.Futures() {
-		if !feature.Success() {
-			t.Errorf("process[%s] fail", feature.GetName())
-		}
-	}
-	if atomic.LoadInt64(&current) != 8 {
-		t.Errorf("execute 8 step, but current = %d", current)
-	}
+	workflow.AfterFlow(false, CheckResult(t, 8, flow.Success))
+	flow.DoneFlow("TestCallbackCond0", nil)
 }
 
 func TestUnableDefaultProcessConfig(t *testing.T) {
@@ -215,13 +180,6 @@ func TestUnableDefaultProcessConfig(t *testing.T) {
 	process.NameStep(GenerateStep(3), "3", "2")
 	process.NameStep(GenerateStep(4), "4", "3")
 	process.NotUseDefault()
-	features := flow.DoneFlow("TestUnableDefaultProcessConfig", nil)
-	for _, feature := range features.Futures() {
-		if !feature.Success() {
-			t.Errorf("process[%s] fail", feature.GetName())
-		}
-	}
-	if atomic.LoadInt64(&current) != 4 {
-		t.Errorf("execute 4 step, but current = %d", current)
-	}
+	workflow.AfterFlow(false, CheckResult(t, 4, flow.Success))
+	flow.DoneFlow("TestUnableDefaultProcessConfig", nil)
 }

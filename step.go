@@ -13,7 +13,6 @@ const (
 
 const (
 	waitingOffset int64 = segmentSize * iota
-	conditionOffset
 )
 
 type segment int64
@@ -21,42 +20,30 @@ type segment int64
 type evaluators []*evaluator
 
 type StepMeta struct {
-	accessInfo
+	nodeRouter
 	StepConfig
 	belong     *ProcessMeta
-	stepName   string
+	name       string
 	layer      int
 	position   *state              // used to record the position of the step
-	depends    SliceSet[*StepMeta] // prev
-	waiters    SliceSet[*StepMeta] // next
+	depends    sliceSet[*StepMeta] // prev
+	waiters    sliceSet[*StepMeta] // next
 	priority   map[string]int64
-	run        func(ctx StepCtx) (any, error)
+	run        func(ctx Step) (any, error)
 	evaluators evaluators
 }
 
 type runStep struct {
-	*StepMeta
 	*state
-	*visibleContext
+	*StepMeta
+	*dependentContext
+	belong    *runProcess
 	id        string
-	flowId    string
-	processId string
-	segments  segment //  0-12 bits for waiting, 12-24 bits for comparator.
+	segments  segment // 0-12 bits for waiting
 	finish    chan bool
-	Start     time.Time
-	End       time.Time
-	infoCache *Step
-	Err       error
-}
-
-type Step struct {
-	*basicInfo
-	StepCtx
-	ProcessId string
-	FlowId    string
-	Start     time.Time
-	End       time.Time
-	Err       error
+	start     time.Time
+	end       time.Time
+	exception error
 }
 
 type StepConfig struct {
@@ -64,40 +51,27 @@ type StepConfig struct {
 	StepRetry   int
 }
 
-func (seg *segment) loadWaiting() int64 {
-	return (atomic.LoadInt64((*int64)(seg)) >> waitingOffset) & segMask
-}
-
-func (seg *segment) loadCondition() int64 {
-	return (atomic.LoadInt64((*int64)(seg)) >> conditionOffset) & segMask
-}
-
 func (seg *segment) addWaiting(i int64) int64 {
 	current := atomic.AddInt64((*int64)(seg), i<<waitingOffset)
 	return (current >> waitingOffset) & segMask
 }
 
-func (seg *segment) addCondition(i int64) int64 {
-	current := atomic.AddInt64((*int64)(seg), i<<conditionOffset)
-	return (current >> conditionOffset) & segMask
+func (meta *StepMeta) Name() string {
+	return meta.name
 }
 
-func (si *Step) Error() error {
-	return si.Err
-}
-
-func (meta *StepMeta) Next(run func(ctx StepCtx) (any, error), alias ...string) *StepMeta {
+func (meta *StepMeta) Next(run func(ctx Step) (any, error), alias ...string) *StepMeta {
 	if len(alias) == 1 {
-		return meta.belong.NameStep(run, alias[0], meta.stepName)
+		return meta.belong.NameStep(run, alias[0], meta.name)
 
 	}
-	return meta.belong.Step(run, meta.stepName)
+	return meta.belong.Step(run, meta.name)
 }
 
-func (meta *StepMeta) Same(run func(ctx StepCtx) (any, error), alias ...string) *StepMeta {
+func (meta *StepMeta) Same(run func(ctx Step) (any, error), alias ...string) *StepMeta {
 	depends := make([]any, 0, len(meta.depends))
 	for i := 0; i < len(meta.depends); i++ {
-		depends = append(depends, meta.depends[i].stepName)
+		depends = append(depends, meta.depends[i].name)
 	}
 	if len(alias) == 1 {
 		return meta.belong.NameStep(run, alias[0], depends...)
@@ -125,13 +99,13 @@ func (meta *StepMeta) wireDepends() {
 	}
 
 	for _, depend := range meta.depends {
-		wired := createSetBySliceFunc(depend.waiters, func(waiter *StepMeta) string { return waiter.stepName })
-		if wired.Contains(meta.stepName) {
+		wired := createSetBySliceFunc(depend.waiters, func(waiter *StepMeta) string { return waiter.name })
+		if wired.Contains(meta.name) {
 			continue
 		}
 		depend.waiters = append(depend.waiters, meta)
 		if depend.position.Has(endE) {
-			depend.position.set(hasNextE)
+			depend.position.append(hasNextE)
 			depend.position.clear(endE)
 		}
 		if depend.layer+1 > meta.layer {
@@ -140,17 +114,17 @@ func (meta *StepMeta) wireDepends() {
 	}
 
 	if len(meta.depends) == 0 {
-		meta.position.set(headE)
+		meta.position.append(headE)
 	}
 
-	meta.position.set(endE)
+	meta.position.append(endE)
 }
 
 // checkPriority checks if the priority key corresponds to an existing step.
 // If not it will panic.
 func (meta *StepMeta) checkPriority() {
 	for _, index := range meta.priority {
-		stepName := meta.names[index]
+		stepName := meta.toName[index]
 		if meta.backSearch(stepName) {
 			continue
 		}
@@ -160,7 +134,7 @@ func (meta *StepMeta) checkPriority() {
 
 func (meta *StepMeta) forwardSearch(searched string) bool {
 	for _, waiter := range meta.waiters {
-		if waiter.stepName == searched {
+		if waiter.name == searched {
 			return true
 		}
 		if waiter.forwardSearch(searched) {
@@ -173,7 +147,7 @@ func (meta *StepMeta) forwardSearch(searched string) bool {
 
 func (meta *StepMeta) backSearch(searched string) bool {
 	for _, depend := range meta.depends {
-		if depend.stepName == searched {
+		if depend.name == searched {
 			return true
 		}
 		if depend.backSearch(searched) {
@@ -194,26 +168,53 @@ func (meta *StepMeta) Retry(retry int) *StepMeta {
 	return meta
 }
 
-func (step *runStep) SetCondition(value any, targets ...string) {
-	step.setExactCond(step.stepName, value, targets...)
+func (step *runStep) Err() error {
+	return step.exception
 }
 
-func (step *runStep) syncInfo() {
-	if step.infoCache == nil {
-		return
+func (step *runStep) ID() string {
+	return step.id
+}
+
+func (step *runStep) GetResult() any {
+	res, exist := step.Result(step.name)
+	if !exist {
+		return nil
 	}
-	step.infoCache.state = step.state
-	step.infoCache.Err = step.Err
-	step.infoCache.Start = step.Start
-	step.infoCache.End = step.End
+	return res
 }
 
-func (sc *StepConfig) combine(config *StepConfig) {
-	copyPropertiesSkipNotEmpty(sc, config)
+func (step *runStep) FlowID() string {
+	return step.belong.FlowID()
 }
 
-func (sc *StepConfig) clone() StepConfig {
-	config := StepConfig{}
-	copyPropertiesSkipNotEmpty(sc, config)
-	return config
+func (step *runStep) Dependents() (stepNames []string) {
+	s := make([]string, len(step.depends))
+	for i, depend := range step.depends {
+		s[i] = depend.name
+	}
+	return s
+}
+
+func (step *runStep) ProcessID() string {
+	return step.belong.id
+}
+
+func (step *runStep) StartTime() time.Time {
+	return step.start
+}
+
+func (step *runStep) EndTime() time.Time {
+	return step.end
+}
+
+func (step *runStep) CostTime() time.Duration {
+	if step.end.IsZero() {
+		return 0
+	}
+	return step.end.Sub(step.start)
+}
+
+func (step *runStep) needRecover() bool {
+	return !step.Normal() && !step.Has(Cancel)
 }

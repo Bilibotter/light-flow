@@ -4,7 +4,6 @@ import (
 	"fmt"
 	flow "github.com/Bilibotter/light-flow"
 	"reflect"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -43,25 +42,9 @@ func (ci *ComparableImpl) Less(other any) bool {
 	return ci.age < c.age
 }
 
-func CheckResult(t *testing.T, check int64, statuses ...*flow.StatusEnum) func(*flow.WorkFlow) (keepOn bool, err error) {
-	return func(workFlow *flow.WorkFlow) (keepOn bool, err error) {
-		t.Logf("start check result")
-		if current != check {
-			t.Errorf("execute %d step, but current = %d\n", check, current)
-		}
-		for _, status := range statuses {
-			if !workFlow.Has(status) {
-				t.Errorf("workFlow has not %s status\n", status.Message())
-			}
-		}
-		t.Logf("status expalin=%s", strings.Join(workFlow.ExplainStatus(), ","))
-		return true, nil
-	}
-}
-
-func GenerateGetResult(step string, check any) func(ctx flow.StepCtx) (any, error) {
-	return func(ctx flow.StepCtx) (any, error) {
-		wrap, ok := ctx.GetResult(step)
+func GenerateGetResult(step string, check any) func(ctx flow.Step) (any, error) {
+	return func(ctx flow.Step) (any, error) {
+		wrap, ok := ctx.Result(step)
 		if !ok {
 			panic(fmt.Sprintf("result[%s] not found", step))
 		}
@@ -73,8 +56,8 @@ func GenerateGetResult(step string, check any) func(ctx flow.StepCtx) (any, erro
 	}
 }
 
-func GenerateConditionStep(value ...any) func(ctx flow.StepCtx) (any, error) {
-	return func(ctx flow.StepCtx) (any, error) {
+func GenerateConditionStep(value ...any) func(ctx flow.Step) (any, error) {
+	return func(ctx flow.Step) (any, error) {
 		for _, v := range value {
 			ctx.SetCondition(v)
 		}
@@ -83,8 +66,8 @@ func GenerateConditionStep(value ...any) func(ctx flow.StepCtx) (any, error) {
 	}
 }
 
-func GenerateConditionStepByMap(m map[string]any) func(ctx flow.StepCtx) (any, error) {
-	return func(ctx flow.StepCtx) (any, error) {
+func GenerateConditionStepByMap(m map[string]any) func(ctx flow.Step) (any, error) {
+	return func(ctx flow.Step) (any, error) {
 		for k, v := range m {
 			ctx.SetCondition(v, k)
 		}
@@ -93,8 +76,8 @@ func GenerateConditionStepByMap(m map[string]any) func(ctx flow.StepCtx) (any, e
 	}
 }
 
-func GenerateExactConditionStep(value ...any) func(ctx flow.StepCtx) (any, error) {
-	return func(ctx flow.StepCtx) (any, error) {
+func GenerateExactConditionStep(value ...any) func(ctx flow.Step) (any, error) {
+	return func(ctx flow.Step) (any, error) {
 		for _, v := range value {
 			ctx.SetCondition(v, "group")
 		}

@@ -8,13 +8,18 @@ import (
 	"strings"
 )
 
+type empty struct{}
+
 type set[T comparable] struct {
-	data map[T]bool
+	Data map[T]empty
 }
 
-func newRoutineUnsafeSet[T comparable]() *set[T] {
+func newRoutineUnsafeSet[T comparable](elem ...T) *set[T] {
 	s := &set[T]{}
-	s.data = make(map[T]bool)
+	s.Data = make(map[T]empty, len(elem))
+	for _, e := range elem {
+		s.Add(e)
+	}
 	return s
 }
 
@@ -27,27 +32,28 @@ func createSetBySliceFunc[T any, K comparable](src []T, transfer func(T) K) *set
 }
 
 func (s *set[T]) Slice() []T {
-	result := make([]T, 0, len(s.data))
-	for key := range s.data {
+	result := make([]T, 0, len(s.Data))
+	for key := range s.Data {
 		result = append(result, key)
 	}
 	return result
 }
 
 func (s *set[T]) Add(item T) {
-	s.data[item] = true
+	s.Data[item] = empty{}
 }
 
-func (s *set[T]) Contains(item T) bool {
-	return s.data[item]
+func (s *set[T]) Contains(item T) (exists bool) {
+	_, exists = s.Data[item]
+	return
 }
 
 func (s *set[T]) Remove(item T) {
-	delete(s.data, item)
+	delete(s.Data, item)
 }
 
 func (s *set[T]) Size() int {
-	return len(s.data)
+	return len(s.Data)
 }
 
 func getStructName(obj any) string {
@@ -57,7 +63,7 @@ func getStructName(obj any) string {
 	return reflect.TypeOf(obj).Name()
 }
 
-// getFuncName function retrieves the stepName of a provided function.
+// getFuncName function retrieves the name of a provided function.
 // If the provided function is anonymous function, it panics.
 func getFuncName(f interface{}) string {
 	funcValue := reflect.ValueOf(f)
