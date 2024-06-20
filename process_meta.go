@@ -82,7 +82,6 @@ func (pm *ProcessMeta) register() {
 	}
 }
 
-// todo:delete it
 func (pm *ProcessMeta) initialize() {
 	pm.init.Do(func() {
 		pm.constructVisible()

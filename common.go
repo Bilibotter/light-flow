@@ -50,29 +50,44 @@ var (
 
 type state int64
 
-type Step interface {
-	stepCtx
-	stepRuntime
+type FlowController interface {
+	flowRuntime
+	Process(name string) (process ProcController, exist bool)
+	Done() FinishedWorkFlow
+	Resume() FlowController
+	Pause() FlowController
+	Stop() FlowController
 }
 
-type stepCtx interface {
-	context
-	EndValues(key string) map[string]any
-	Result(key string) (value any, exist bool)
+type WorkFlow interface {
+	flowRuntime
 }
 
-type stepRuntime interface {
+type FinishedWorkFlow interface {
+	flowRuntime
+	Exceptions() []FinishedProcess
+}
+
+type flowRuntime interface {
 	runtimeI
-	FlowId() string
-	ProcessId() string
-	SetCondition(value any, targets ...string) // the targets contain names of the evaluators to be matched
-	Dependents() (stepNames []string)
-	Err() error
 }
 
 type Process interface {
 	procCtx
 	procRuntime
+}
+
+type FinishedProcess interface {
+	procRuntime
+	Exceptions() []FinishedStep
+}
+
+type ProcController interface {
+	procRuntime
+	Stop() ProcController
+	Pause() ProcController
+	Resume() ProcController
+	Step(name string) (step StepController, exist bool)
 }
 
 type procCtx interface {
@@ -82,11 +97,36 @@ type procCtx interface {
 
 type procRuntime interface {
 	runtimeI
-	FlowId() string
+	FlowID() string
 }
 
-type WorkFlow interface {
+type Step interface {
+	stepCtx
+	stepRuntime
+}
+
+type FinishedStep interface {
+	stepRuntime
+	GetResult() any
+}
+
+type StepController interface {
+	stepRuntime
+}
+
+type stepCtx interface {
+	context
+	SetCondition(value any, targets ...string) // the targets contain names of the evaluators to be matched
+	EndValues(key string) map[string]any
+	Result(key string) (value any, exist bool)
+}
+
+type stepRuntime interface {
 	runtimeI
+	FlowID() string
+	ProcessID() string
+	Dependents() (stepNames []string)
+	Err() error
 }
 
 type runtimeI interface {
@@ -109,20 +149,13 @@ type nameI interface {
 }
 
 type identifierI interface {
-	Id() string
+	ID() string
 }
 
 type periodI interface {
 	StartTime() time.Time
 	EndTime() time.Time
 	CostTime() time.Duration
-}
-
-type basicInfoI interface {
-	statusI
-	GetId() string
-	GetName() string
-	setStatus(enum *StatusEnum) (updated bool)
 }
 
 type context interface {
@@ -145,6 +178,7 @@ type routing interface {
 type nodeInfo interface {
 	ToIndex(name string) (int64, bool)
 	ToName(index int64) string
+	nodeName() string
 }
 
 type panicWrap struct {
@@ -155,12 +189,6 @@ type panicWrap struct {
 type StatusEnum struct {
 	flag state
 	msg  string
-}
-
-type basicInfo struct {
-	*state
-	Id   string
-	Name string
 }
 
 type handler[T runtimeI] struct {
@@ -205,12 +233,6 @@ type node struct {
 	Path  int64 // combine current node connected node's index, corresponding bit will be set to 1
 	Value any
 	Next  *node
-}
-
-type Future struct {
-	*state
-	*basicInfo
-	finish *sync.WaitGroup
 }
 
 type outcome struct {
@@ -342,18 +364,6 @@ func (s *state) cas(old, new state) bool {
 
 func (s *StatusEnum) Message() string {
 	return s.msg
-}
-
-func (bi *basicInfo) GetName() string {
-	return bi.Name
-}
-
-func (bi *basicInfo) GetId() string {
-	return bi.Id
-}
-
-func (bi *basicInfo) setStatus(enum *StatusEnum) (updated bool) {
-	return bi.state.append(enum)
 }
 
 func (cc *handler[T]) addCallback(flag string, must bool, run func(info T) (bool, error)) *callback[T] {
@@ -619,8 +629,8 @@ func (ctx *dependentContext) setResult(key string, value any) {
 	ptr.Result = value
 }
 
-func (ctx *dependentContext) setExactCond(name string, value any, targets ...string) {
-	ptr := ctx.setOutcomeIfAbsent(name)
+func (ctx *dependentContext) SetCondition(value any, targets ...string) {
+	ptr := ctx.setOutcomeIfAbsent(ctx.nodeName())
 	defer ctx.lock.Unlock()
 	switch value.(type) {
 	case int8, int16, int32, int64, int:
@@ -717,7 +727,6 @@ func (router *nodeRouter) ToName(index int64) string {
 	return router.toName[index]
 }
 
-// Done method waits for the corresponding process to complete.
-func (f *Future) Done() {
-	f.finish.Wait()
+func (router *nodeRouter) nodeName() string {
+	return router.ToName(router.index)
 }

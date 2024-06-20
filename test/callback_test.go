@@ -11,7 +11,7 @@ func AfterFlowProcessor(info flow.WorkFlow) (bool, error) {
 	if info.Name() == "" {
 		panic("flow name is empty")
 	}
-	if len(info.Id()) == 0 {
+	if len(info.ID()) == 0 {
 		panic("flow id is empty")
 	}
 	atomic.AddInt64(&current, 1)
@@ -23,7 +23,7 @@ func BeforeFlowProcessor(info flow.WorkFlow) (bool, error) {
 	if info.Name() == "" {
 		panic("flow name is empty")
 	}
-	if len(info.Id()) == 0 {
+	if len(info.ID()) == 0 {
 		panic("flow id is empty")
 	}
 	atomic.AddInt64(&current, 1)

@@ -22,7 +22,7 @@ type runProcess struct {
 	finish    sync.WaitGroup
 }
 
-func (process *runProcess) Id() string {
+func (process *runProcess) ID() string {
 	return process.id
 }
 
@@ -69,43 +69,53 @@ func (process *runProcess) clearExecutedFromRoot(root string) {
 	}
 }
 
-func (process *runProcess) FlowId() string {
+func (process *runProcess) Step(name string) (StepController, bool) {
+	if step, ok := process.flowSteps[name]; ok {
+		return step, true
+	}
+	return nil, false
+}
+
+func (process *runProcess) Exceptions() []FinishedStep {
+	finished := make([]FinishedStep, 0)
+	for _, step := range process.flowSteps {
+		if !step.Normal() {
+			finished = append(finished, step)
+		}
+	}
+	return finished
+}
+
+func (process *runProcess) FlowID() string {
 	return process.belong.id
 }
 
-func (process *runProcess) Resume() {
+func (process *runProcess) Resume() ProcController {
 	if process.clear(Pause) {
 		process.pause.Done()
 	}
+	return process
 }
 
-func (process *runProcess) Pause() {
+func (process *runProcess) Pause() ProcController {
 	if process.append(Pause) {
 		process.pause.Add(1)
 	}
+	return process
 }
 
-func (process *runProcess) Stop() {
+func (process *runProcess) Stop() ProcController {
 	process.append(Stop)
 	process.append(Failed)
+	return process
 }
 
-func (process *runProcess) schedule() (future *Future) {
+func (process *runProcess) schedule() (finish *sync.WaitGroup) {
 	process.initialize()
 	process.start = time.Now().UTC()
-	future = &Future{
-		basicInfo: &basicInfo{
-			Id:    process.id,
-			Name:  process.name,
-			state: process.state,
-		},
-		state:  process.state,
-		finish: &process.finish,
-	}
-
-	// CallbackFail from Flow
-	if process.Has(CallbackFail) {
-		process.append(Cancel)
+	finish = &process.finish
+	// pre-flow callback due to cancel
+	if process.Has(Cancel) {
 		return
 	}
 

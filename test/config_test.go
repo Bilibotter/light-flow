@@ -21,13 +21,13 @@ func StepInfoChecker(key string, prev, next []string) func(info flow.Step) (bool
 }
 
 func PreProcessor(info flow.Step) (bool, error) {
-	if len(info.Id()) == 0 {
+	if len(info.ID()) == 0 {
 		panic("step id is empty")
 	}
-	if len(info.ProcessId()) == 0 {
+	if len(info.ProcessID()) == 0 {
 		panic("step process id is empty")
 	}
-	if len(info.FlowId()) == 0 {
+	if len(info.FlowID()) == 0 {
 		panic("step flow id is empty")
 	}
 	if info.Name() == "" {
@@ -39,13 +39,13 @@ func PreProcessor(info flow.Step) (bool, error) {
 }
 
 func PostProcessor(info flow.Step) (bool, error) {
-	if len(info.Id()) == 0 {
+	if len(info.ID()) == 0 {
 		panic("step id is empty")
 	}
-	if len(info.ProcessId()) == 0 {
+	if len(info.ProcessID()) == 0 {
 		panic("step process id is empty")
 	}
-	if len(info.FlowId()) == 0 {
+	if len(info.FlowID()) == 0 {
 		panic("step flow id is empty")
 	}
 	if info.Name() == "" {
@@ -66,10 +66,10 @@ func ProcProcessor(info flow.Process) (bool, error) {
 	if info.Name() == "" {
 		panic("process name is empty")
 	}
-	if len(info.Id()) == 0 {
+	if len(info.ID()) == 0 {
 		panic("process id is empty")
 	}
-	if len(info.FlowId()) == 0 {
+	if len(info.FlowID()) == 0 {
 		panic("process flow id is empty")
 	}
 	atomic.AddInt64(&current, 1)
@@ -264,18 +264,24 @@ func TestWithLongProcessTimeout(t *testing.T) {
 
 func TestWithShortProcessTimeout(t *testing.T) {
 	defer resetCurrent()
+	letGo = false
 	workflow := flow.RegisterFlow("TestWithShortProcessTimeout")
 	process := workflow.Process("TestWithShortProcessTimeout")
 	process.ProcessTimeout(1 * time.Nanosecond)
-	process.NameStep(GenerateStep(1, "ms"), "1")
-	process.NameStep(GenerateStep(2, "ms"), "2", "1")
-	process.NameStep(GenerateStep(3, "ms"), "3", "2")
-	process.NameStep(GenerateStep(4, "ms"), "4", "3")
-	workflow.AfterFlow(false, CheckResult(t, 0, flow.Timeout))
-	flow.DoneFlow("TestWithShortProcessTimeout", nil)
-	time.Sleep(400 * time.Millisecond)
-	if atomic.LoadInt64(&current) != 1 {
-		t.Errorf("execute 1 step, but current = %d", current)
+	fn := Fn(t)
+	process.NameStep(fn.All(fn.WaitLetGO(), fn.Errors()), "1")
+	process.NameStep(fn.Normal(), "2", "1")
+	process.NameStep(fn.Normal(), "3", "2")
+	process.NameStep(fn.Normal(), "4", "3")
+	workflow.AfterFlow(false, CheckResult(t, 1, flow.Timeout))
+	c := flow.AsyncFlow("TestWithShortProcessTimeout", nil)
+	waitCurrent(1)
+	c.Done()
+	letGo = true
+	waitCurrent(2)
+	time.Sleep(10 * time.Millisecond)
+	if atomic.LoadInt64(&current) != 2 {
+		t.Errorf("execute 2 step, but current = %d", current)
 	}
 }
 
@@ -309,19 +315,25 @@ func TestWithLongDefaultStepTimeout(t *testing.T) {
 
 func TestWithShortDefaultStepTimeout(t *testing.T) {
 	defer resetCurrent()
+	letGo = false
 	workflow := flow.RegisterFlow("TestWithShortDefaultStepTimeout")
 	process := workflow.Process("TestWithShortDefaultStepTimeout")
-	process.StepsTimeout(1 * time.Millisecond)
+	process.StepsTimeout(1 * time.Nanosecond)
 	process.StepsRetry(3)
-	process.NameStep(GenerateStep(1, "ms"), "1")
-	process.NameStep(GenerateStep(2, "ms"), "2", "1")
-	process.NameStep(GenerateStep(3, "ms"), "3", "2")
-	process.NameStep(GenerateStep(4, "ms"), "4", "3")
-	workflow.AfterFlow(false, CheckResult(t, 0, flow.Timeout))
-	flow.DoneFlow("TestWithShortDefaultStepTimeout", nil)
-	time.Sleep(400 * time.Millisecond)
-	if atomic.LoadInt64(&current) != 1 {
-		t.Errorf("execute 1 step, but current = %d", current)
+	fn := Fn(t)
+	process.NameStep(fn.All(fn.WaitLetGO(), fn.Errors()), "1")
+	process.NameStep(fn.Normal(), "2", "1")
+	process.NameStep(fn.Normal(), "3", "2")
+	process.NameStep(fn.Normal(), "4", "3")
+	workflow.AfterFlow(false, CheckResult(t, 1, flow.Timeout))
+	c := flow.AsyncFlow("TestWithShortDefaultStepTimeout", nil)
+	waitCurrent(1)
+	c.Done()
+	letGo = true
+	waitCurrent(8)
+	time.Sleep(10 * time.Millisecond)
+	if atomic.LoadInt64(&current) != 8 {
+		t.Errorf("execute 8 step, but current = %d", current)
 	}
 }
 
@@ -349,17 +361,23 @@ func TestWithLongStepTimeout(t *testing.T) {
 
 func TestWithShortStepTimeout(t *testing.T) {
 	defer resetCurrent()
+	letGo = false
 	workflow := flow.RegisterFlow("TestWithShortStepTimeout")
 	process := workflow.Process("TestWithShortStepTimeout")
-	process.NameStep(GenerateStep(1, "ms"), "1").Retry(3).Timeout(1 * time.Millisecond)
-	process.NameStep(GenerateStep(2, "ms"), "2", "1")
-	process.NameStep(GenerateStep(3, "ms"), "3", "2")
-	process.NameStep(GenerateStep(4, "ms"), "4", "3")
-	workflow.AfterFlow(false, CheckResult(t, 0, flow.Timeout))
-	flow.DoneFlow("TestWithShortStepTimeout", nil)
-	time.Sleep(300 * time.Millisecond)
-	if atomic.LoadInt64(&current) != 1 {
-		t.Errorf("execute 1 step, but current = %d", current)
+	fn := Fn(t)
+	process.NameStep(fn.All(fn.WaitLetGO(), fn.Errors()), "1").Retry(3).Timeout(1 * time.Nanosecond)
+	process.NameStep(fn.Normal(), "2", "1")
+	process.NameStep(fn.Normal(), "3", "2")
+	process.NameStep(fn.Normal(), "4", "3")
+	workflow.AfterFlow(false, CheckResult(t, 1, flow.Timeout))
+	c := flow.AsyncFlow("TestWithShortStepTimeout", nil)
+	waitCurrent(1)
+	c.Done()
+	letGo = true
+	waitCurrent(8)
+	time.Sleep(10 * time.Millisecond)
+	if atomic.LoadInt64(&current) != 8 {
+		t.Errorf("execute 8 step, but current = %d", current)
 	}
 }
 

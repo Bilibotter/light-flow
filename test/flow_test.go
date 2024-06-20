@@ -67,10 +67,10 @@ func AfterProcProcessor(info flow.Process) (bool, error) {
 	if info.Name() == "" {
 		panic("process name is empty")
 	}
-	if len(info.Id()) == 0 {
+	if len(info.ID()) == 0 {
 		panic("process id is empty")
 	}
-	if len(info.FlowId()) == 0 {
+	if len(info.FlowID()) == 0 {
 		panic("process flow id is empty")
 	}
 	atomic.AddInt64(&current, 1)
@@ -91,19 +91,18 @@ func GeneratePanicStep(i int, args ...any) func(ctx flow.Step) (any, error) {
 
 func TestMultipleExceptionStatus(t *testing.T) {
 	defer resetCurrent()
+	letGo = false
 	workflow := flow.RegisterFlow("TestMultipleExceptionStatus")
 	process := workflow.Process("TestMultipleExceptionStatus")
-	process.NameStep(GenerateErrorStep(1), "1")
-	process.NameStep(GeneratePanicStep(2), "2")
-	step := process.NameStep(GenerateErrorStep(3, "ms"), "3")
+	process.NameStep(Fn(t).Errors(), "1")
+	process.NameStep(Fn(t).Panic(), "2")
+	step := process.NameStep(Fn(t).WaitLetGO(1), "3")
 	step.Timeout(time.Nanosecond)
-	workflow.AfterFlow(false, CheckResult(t, 2, flow.Timeout, flow.Error, flow.Panic))
+	workflow.AfterFlow(false, CheckResult(t, 3, flow.Timeout, flow.Error, flow.Panic))
 	flow.DoneFlow("TestMultipleExceptionStatus", nil)
 	// DoneFlow return due to timeout, but process not complete
-	time.Sleep(110 * time.Millisecond)
-	if current != 3 {
-		t.Errorf("execute 3 step, but current = %d\n", current)
-	}
+	letGo = true
+	waitCurrent(4)
 }
 
 func TestSinglePanicStep(t *testing.T) {
@@ -219,115 +218,66 @@ func TestMultipleNormalSteps(t *testing.T) {
 }
 
 // todo add it
-//func TestWorkFlowPause(t *testing.T) {
-//	defer resetCurrent()
-//	workflow := flow.RegisterFlow("TestWorkFlowPause")
-//	process := workflow.Process("TestWorkFlowPause")
-//	process.NameStep(GenerateStep(1, "ms"), "1")
-//	process.NameStep(GenerateStep(2, "ms"), "2", "1")
-//	process.NameStep(GenerateStep(3, "ms"), "3", "2")
-//	process.NameStep(GenerateStep(11, "ms"), "11")
-//	process.NameStep(GenerateStep(12, "ms"), "12", "11")
-//	process.NameStep(GenerateStep(13, "ms"), "13", "12")
-//	wf := flow.AsyncFlow("TestWorkFlowPause", nil)
-//	time.Sleep(10 * time.Millisecond)
-//	wf.Pause()
-//	time.Sleep(200 * time.Millisecond)
-//	if atomic.LoadInt64(&current) != 2 {
-//		t.Errorf("execute 2 step, but current = %d", current)
-//	}
-//	for _, feature := range wf.Futures() {
-//		explain := strings.Join(feature.ExplainStatus(), ", ")
-//		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
-//		if !feature.Has(flow.Pause) {
-//			t.Errorf("process[%s] pause fail", feature.Name)
-//		}
-//	}
-//	wf.Resume()
-//	wf.Done()
-//	for _, feature := range wf.Futures() {
-//		explain := strings.Join(feature.ExplainStatus(), ", ")
-//		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
-//		if !feature.Success() {
-//			t.Errorf("process[%s] fail", feature.Name)
-//		}
-//	}
-//	if atomic.LoadInt64(&current) != 6 {
-//		t.Errorf("execute 6 step, but current = %d", current)
-//	}
-//}
+func TestWorkFlowPause(t *testing.T) {
+	defer resetCurrent()
+	letGo = false
+	workflow := flow.RegisterFlow("TestWorkFlowPause")
+	process := workflow.Process("TestWorkFlowPause")
+	process.NameStep(Fn(t).WaitLetGO(), "1-1")
+	process.NameStep(Fn(t).WaitLetGO(), "1-2", "1-1")
+	process.NameStep(Fn(t).WaitLetGO(), "1-3", "1-2")
+	process.NameStep(Fn(t).WaitLetGO(), "2-1")
+	process.NameStep(Fn(t).WaitLetGO(), "2-2", "2-1")
+	process.NameStep(Fn(t).WaitLetGO(), "2-3", "2-2")
+	workflow.AfterFlow(false, CheckResult(t, 6, flow.Success))
+	wf := flow.AsyncFlow("TestWorkFlowPause", nil)
+	waitCurrent(2)
+	rf := wf.Pause()
+	rp, exist := rf.Process("TestWorkFlowPause")
+	if !exist {
+		t.Errorf("process[TestWorkFlowPause] not exist")
+	}
+	if !rp.Has(flow.Pause) {
+		t.Errorf("process[TestWorkFlowPause] pause fail")
+	}
+	wf.Resume()
+	letGo = true
+	if rp.Has(flow.Pause) {
+		t.Errorf("process[TestWorkFlowPause] resume fail")
+	}
+	wf.Done()
+	waitCurrent(6)
+}
 
-//func TestArgs(t *testing.T) {
-//	workflow := flow.RegisterFlow("TestArgs")
-//	process := workflow.Process("TestArgs")
-//	process.AfterStep(true, ErrorResultPrinter)
-//	process.NameStep(func(ctx flow.Step) (any, error) {
-//		a, ok := ctx.Get("InputA")
-//		if !ok {
-//			panic("InputA not found")
-//		}
-//		aa, ok := a.(InputA)
-//		if !ok {
-//			panic("InputA type error")
-//		}
-//		if aa.Name != "a" {
-//			panic("InputA value error")
-//		}
-//
-//		b, ok := ctx.Get("*InputB")
-//		if !ok {
-//			panic("InputB not found")
-//		}
-//		bb, ok := b.(*InputB)
-//		if !ok {
-//			panic("InputB type error")
-//		}
-//		if bb.Name != "b" {
-//			panic("InputB value error")
-//		}
-//		return nil, nil
-//	}, "1")
-//	workflow.AfterFlow(false, CheckResult(t, 0, flow.Success))
-//	flow.DoneArgs("TestArgs", InputA{Name: "a"}, &InputB{Name: "b"})
-//}
-//
-//func TestProcessPause(t *testing.T) {
-//	defer resetCurrent()
-//	factory := flow.RegisterFlow("TestProcessPause")
-//	process := factory.Process("TestProcessPause")
-//	process.NameStep(GenerateStep(1, "ms"), "1")
-//	process.NameStep(GenerateStep(2, "ms"), "2", "1")
-//	process.NameStep(GenerateStep(3, "ms"), "3", "2")
-//	process.NameStep(GenerateStep(11, "ms"), "11")
-//	process.NameStep(GenerateStep(12, "ms"), "12", "11")
-//	process.NameStep(GenerateStep(13, "ms"), "13", "12")
-//	workflow := flow.AsyncFlow("TestProcessPause", nil)
-//	time.Sleep(10 * time.Millisecond)
-//	workflow.ProcessController("TestProcessPause").Pause()
-//	time.Sleep(200 * time.Millisecond)
-//	if atomic.LoadInt64(&current) != 2 {
-//		t.Errorf("execute 2 step, but current = %d", current)
-//	}
-//	for _, feature := range workflow.Futures() {
-//		explain := strings.Join(feature.ExplainStatus(), ", ")
-//		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
-//		if !feature.Has(flow.Pause) {
-//			t.Errorf("process[%s] pause fail", feature.Name)
-//		}
-//	}
-//	workflow.ProcessController("TestProcessPause").Resume()
-//	workflow.Done()
-//	for _, feature := range workflow.Futures() {
-//		explain := strings.Join(feature.ExplainStatus(), ", ")
-//		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
-//		if !feature.Success() {
-//			t.Errorf("process[%s] fail", feature.Name)
-//		}
-//	}
-//	if atomic.LoadInt64(&current) != 6 {
-//		t.Errorf("execute 6 step, but current = %d", current)
-//	}
-//}
+func TestProcessPause(t *testing.T) {
+	defer resetCurrent()
+	letGo = false
+	workflow := flow.RegisterFlow("TestProcessPause")
+	process := workflow.Process("TestProcessPause")
+	fn := Fn(t)
+	process.NameStep(fn.WaitLetGO(), "1-1")
+	process.NameStep(fn.Normal(), "1-2", "1-1")
+	process.NameStep(fn.Normal(), "1-3", "1-2")
+	process.NameStep(fn.WaitLetGO(), "2-1")
+	process.NameStep(fn.Normal(), "2-2", "2-1")
+	process.NameStep(fn.Normal(), "2-3", "2-2")
+	workflow.AfterFlow(false, CheckResult(t, 6, flow.Success))
+	c := flow.AsyncFlow("TestProcessPause", nil)
+	waitCurrent(2)
+	cc, exist := c.Process("TestProcessPause")
+	if !exist {
+		t.Errorf("process[TestProcessPause] not exist")
+	}
+	cc.Pause()
+	letGo = true
+	time.Sleep(10 * time.Millisecond)
+	if atomic.LoadInt64(&current) != 2 {
+		t.Errorf("Prcess[%s] pause fail", cc.Name())
+	}
+	cc.Resume()
+	c.Done()
+	waitCurrent(6)
+}
 
 func TestCopyDepend(t *testing.T) {
 	defer resetCurrent()

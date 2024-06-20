@@ -18,90 +18,11 @@ var (
 )
 
 var (
-	executeSuc = false
-	username   string
-	password   string
-	host       string
-	dbname     string
+	username string
+	password string
+	host     string
+	dbname   string
 )
-
-func (s *RecoverFuncBuilder) Step() func(ctx flow.Step) (result any, err error) {
-	return func(ctx flow.Step) (result any, err error) {
-		return s.Fn(ctx)
-	}
-}
-
-func (s *RecoverFuncBuilder) ErrStep() func(ctx flow.Step) (result any, err error) {
-	s.err = fmt.Errorf("error")
-	return func(ctx flow.Step) (result any, err error) {
-		return s.Fn(ctx)
-	}
-}
-
-func (s *RecoverFuncBuilder) Proc() func(ctx flow.Process) (result any, err error) {
-	return func(ctx flow.Process) (result any, err error) {
-		return s.Fn(ctx)
-	}
-}
-
-func (s *RecoverFuncBuilder) Fn(ctx Ctx) (result any, err error) {
-	s.t.Logf("task[%s] start\n", ctx.Name())
-	for _, f := range s.doing {
-		result, err = f(ctx)
-		if err != nil {
-			panic(err)
-		}
-	}
-	if len(s.doing) > 0 {
-		atomic.AddInt64(&current, 1)
-	}
-	if executeSuc {
-		for _, f := range s.onSuc {
-			result, err = f(ctx)
-			if err != nil {
-				return nil, err
-			}
-		}
-		if result == nil {
-			result = ctx.Name()
-		}
-		if len(s.onSuc) > 0 {
-			atomic.AddInt64(&current, 1)
-		}
-		s.t.Logf("task[%s] end\n", ctx.Name())
-		return
-	}
-	for _, f := range s.onFail {
-		result, err = f(ctx)
-		if err != nil {
-			panic(err)
-		}
-	}
-	if len(s.onFail) > 0 {
-		atomic.AddInt64(&current, 1)
-	}
-	if s.err != nil {
-		s.t.Logf("task[%s] failed\n", ctx.Name())
-		return nil, s.err
-	}
-	s.t.Logf("task[%s] end\n", ctx.Name())
-	return ctx.Name(), nil
-}
-
-func (s *RecoverFuncBuilder) Do(f ...func(Ctx) (any, error)) *RecoverFuncBuilder {
-	s.doing = append(s.doing, f...)
-	return s
-}
-
-func (s *RecoverFuncBuilder) Suc(f ...func(Ctx) (any, error)) *RecoverFuncBuilder {
-	s.onSuc = append(s.onSuc, f...)
-	return s
-}
-
-func (s *RecoverFuncBuilder) Fail(f ...func(Ctx) (any, error)) *RecoverFuncBuilder {
-	s.onFail = append(s.onFail, f...)
-	return s
-}
 
 type simpleContext struct {
 	table map[string]any
@@ -119,10 +40,6 @@ func (s *simpleContext) Set(key string, value any) {
 
 func (s *simpleContext) Name() string {
 	return s.name
-}
-
-func Fn(t *testing.T) *RecoverFuncBuilder {
-	return &RecoverFuncBuilder{t: t}
 }
 
 type Checkpoints struct {
@@ -670,7 +587,7 @@ func TestRecoverSuccessFlow(t *testing.T) {
 		Next(GenerateStep(2), "2").
 		Next(GenerateStep(3), "3")
 	wf.AfterFlow(false, func(workFlow flow.WorkFlow) (keepOn bool, err error) {
-		id = workFlow.Id()
+		id = workFlow.ID()
 		return true, nil
 	})
 	wf.AfterFlow(false, CheckResult(t, 3, flow.Success))

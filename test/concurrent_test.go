@@ -130,27 +130,24 @@ func TestMultipleConcurrentDependStep(t *testing.T) {
 	flow.DoneFlow("TestMultipleConcurrentDependStep", nil)
 }
 
-//func TestConcurrentSameFlow(t *testing.T) {
-//	defer resetCurrent()
-//	factory := flow.RegisterFlow("TestConcurrentSameFlow")
-//	process := factory.Process("TestConcurrentSameFlow")
-//	for i := 0; i < 62; i++ {
-//		process.NameStep(GenerateNoDelayStep(i), strconv.Itoa(i))
-//	}
-//	flows := make([]flow.FlowController, 0, 1000)
-//	for i := 0; i < 1000; i++ {
-//		flows = append(flows, flow.AsyncFlow("TestConcurrentSameFlow", nil))
-//	}
-//	for _, flowing := range flows {
-//		features := flowing.Done()
-//		for _, feature := range features {
-//			if !feature.Success() {
-//				t.Errorf("process[%s] run fail", feature.Name)
-//			}
-//		}
-//	}
-//
-//	if atomic.LoadInt64(&current) != 62000 {
-//		t.Errorf("execute 62000 step, but current = %d", current)
-//	}
-//}
+func TestConcurrentSameFlow(t *testing.T) {
+	defer resetCurrent()
+	workflow := flow.RegisterFlow("TestConcurrentSameFlow")
+	process := workflow.Process("TestConcurrentSameFlow")
+	for i := 0; i < 62; i++ {
+		process.NameStep(GenerateNoDelayStep(i), strconv.Itoa(i))
+	}
+	flows := make([]flow.FlowController, 0, 1000)
+	for i := 0; i < 1000; i++ {
+		flows = append(flows, flow.AsyncFlow("TestConcurrentSameFlow", nil))
+	}
+	for _, flowing := range flows {
+		if !flowing.Done().Success() {
+			t.Errorf("flow fail")
+		}
+	}
+
+	if atomic.LoadInt64(&current) != 62000 {
+		t.Errorf("execute 62000 step, but current = %d", current)
+	}
+}

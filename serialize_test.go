@@ -7,6 +7,14 @@ import (
 	"time"
 )
 
+type InputA struct {
+	Name string
+}
+
+type InputB struct {
+	Name string
+}
+
 type Person struct {
 	Name string
 	Age  int
@@ -18,6 +26,32 @@ type Named interface {
 
 func (p *Person) name() string {
 	return p.Name
+}
+
+func TestTypeDiff(t *testing.T) {
+	RegisterType[InputA]()
+	RegisterType[InputB]()
+	m := map[string]any{}
+	m["input"] = InputA{"Alice"}
+	bs, err := serialize[map[string]any](m)
+	if err != nil {
+		t.Errorf("serialize error: %v", err)
+	}
+	m2, err := deserialize[map[string]any](bs)
+	if err != nil {
+		t.Errorf("deserialize error: %v", err)
+	}
+	wrap, ok := m2["input"]
+	if !ok {
+		t.Errorf("deserialize falied")
+	}
+	inputA, ok := wrap.(InputA)
+	if !ok {
+		t.Errorf("deserialize falied, type is%T, not InputA", wrap)
+	}
+	if inputA.Name != "Alice" {
+		t.Errorf("deserialize falied, name is %s", inputA.Name)
+	}
 }
 
 func TestAllType(t *testing.T) {

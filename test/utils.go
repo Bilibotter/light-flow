@@ -3,13 +3,17 @@ package test
 import (
 	"fmt"
 	flow "github.com/Bilibotter/light-flow"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 var (
-	current int64
+	current    int64
+	letGo      = false
+	executeSuc = false
 )
 
 type Named interface {
@@ -22,7 +26,7 @@ type Ctx interface {
 	Name() string
 }
 
-type RecoverFuncBuilder struct {
+type FuncBuilder struct {
 	t      *testing.T
 	err    error
 	doing  []func(ctx Ctx) (any, error)
@@ -39,8 +43,195 @@ func (p *Person) name() string {
 	return p.Name
 }
 
+func (s *FuncBuilder) Step() func(ctx flow.Step) (result any, err error) {
+	return func(ctx flow.Step) (result any, err error) {
+		return s.Fn(ctx)
+	}
+}
+
+func (s *FuncBuilder) ErrStep() func(ctx flow.Step) (result any, err error) {
+	s.err = fmt.Errorf("error")
+	return func(ctx flow.Step) (result any, err error) {
+		return s.Fn(ctx)
+	}
+}
+
+func (s *FuncBuilder) Proc() func(ctx flow.Process) (result any, err error) {
+	return func(ctx flow.Process) (result any, err error) {
+		return s.Fn(ctx)
+	}
+}
+
+func (s *FuncBuilder) Fn(ctx Ctx) (result any, err error) {
+	s.t.Logf("task[%s] start\n", ctx.Name())
+	for _, f := range s.doing {
+		result, err = f(ctx)
+		if err != nil {
+			panic(err)
+		}
+	}
+	if len(s.doing) > 0 {
+		atomic.AddInt64(&current, 1)
+	}
+	if executeSuc {
+		for _, f := range s.onSuc {
+			result, err = f(ctx)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if result == nil {
+			result = ctx.Name()
+		}
+		if len(s.onSuc) > 0 {
+			atomic.AddInt64(&current, 1)
+		}
+		s.t.Logf("task[%s] end\n", ctx.Name())
+		return
+	}
+	for _, f := range s.onFail {
+		result, err = f(ctx)
+		if err != nil {
+			panic(err)
+		}
+	}
+	if len(s.onFail) > 0 {
+		atomic.AddInt64(&current, 1)
+	}
+	if s.err != nil {
+		s.t.Logf("task[%s] failed\n", ctx.Name())
+		return nil, s.err
+	}
+	s.t.Logf("task[%s] end\n", ctx.Name())
+	return ctx.Name(), nil
+}
+
+func (s *FuncBuilder) Do(f ...func(Ctx) (any, error)) *FuncBuilder {
+	s.doing = append(s.doing, f...)
+	return s
+}
+
+func (s *FuncBuilder) Suc(f ...func(Ctx) (any, error)) *FuncBuilder {
+	s.onSuc = append(s.onSuc, f...)
+	return s
+}
+
+func (s *FuncBuilder) Fail(f ...func(Ctx) (any, error)) *FuncBuilder {
+	s.onFail = append(s.onFail, f...)
+	return s
+}
+
+func (s *FuncBuilder) Normal() func(ctx flow.Step) (result any, err error) {
+	return func(ctx flow.Step) (result any, err error) {
+		atomic.AddInt64(&current, 1)
+		s.t.Logf("Step[%s] start\n", ctx.Name())
+		s.t.Logf("Step[%s] end\n", ctx.Name())
+		return ctx.Name(), nil
+	}
+}
+
+func (s *FuncBuilder) All(fs ...func(ctx flow.Step) (result any, err error)) func(ctx flow.Step) (result any, err error) {
+	return func(ctx flow.Step) (result any, err error) {
+		for _, f := range fs {
+			result, err = f(ctx)
+		}
+		return
+	}
+}
+
+func (s *FuncBuilder) WaitLetGO(i ...int64) func(ctx flow.Step) (result any, err error) {
+	return func(ctx flow.Step) (result any, err error) {
+		atomic.AddInt64(&current, 1)
+		s.t.Logf("Step[%s] start\n", ctx.Name())
+		start := time.Now()
+		duration := 100 * time.Millisecond
+		for {
+			if letGo {
+				s.t.Logf("Step[%s] finish wait\n", ctx.Name())
+				if len(i) > 0 {
+					atomic.AddInt64(&current, i[0])
+				}
+				return ctx.Name(), nil
+			}
+			if time.Since(start) > duration {
+				s.t.Errorf("Step[%s] timeout\n", ctx.Name())
+				return ctx.Name(), nil
+			}
+			runtime.Gosched()
+		}
+	}
+}
+
+func (s *FuncBuilder) Panic(i ...int64) func(ctx flow.Step) (result any, err error) {
+	return func(ctx flow.Step) (result any, err error) {
+		if len(i) > 0 {
+			atomic.AddInt64(&current, i[0])
+		} else {
+			atomic.AddInt64(&current, 1)
+		}
+		s.t.Logf("Step[%s] panic\n", ctx.Name())
+		panic(fmt.Sprintf("Step[%s] panic", ctx.Name()))
+	}
+}
+
+func (s *FuncBuilder) Errors(i ...int64) func(ctx flow.Step) (result any, err error) {
+	return func(ctx flow.Step) (result any, err error) {
+		if len(i) > 0 {
+			atomic.AddInt64(&current, i[0])
+		} else {
+			atomic.AddInt64(&current, 1)
+		}
+		s.t.Logf("Step[%s] error\n", ctx.Name())
+		return ctx.Name(), fmt.Errorf("step[%s] error", ctx.Name())
+	}
+}
+
+func (s *FuncBuilder) SetCtx() func(ctx flow.Step) (result any, err error) {
+	s.Do(SetCtx())
+	return s.Step()
+}
+
+func (s *FuncBuilder) SetCtx0(prefix string) *FuncBuilder {
+	s.Do(SetCtx0(prefix))
+	return s
+}
+
+func (s *FuncBuilder) CheckCtx(preview string, notCheckResult ...int) func(ctx flow.Step) (result any, err error) {
+	s.Do(CheckCtx(preview, notCheckResult...))
+	return s.Step()
+}
+
+func (s *FuncBuilder) CheckCtx0(preview string, prefix string, notCheckResult ...int) *FuncBuilder {
+	s.Do(CheckCtx0(preview, prefix, notCheckResult...))
+	return s
+}
+
 func resetCurrent() {
 	atomic.StoreInt64(&current, 0)
+}
+
+func waitCurrent(i int) {
+	if atomic.LoadInt64(&current) == int64(i) {
+		return
+	}
+	start := time.Now()
+	duration := 200 * time.Millisecond
+	for {
+		if atomic.LoadInt64(&current) == int64(i) {
+			return
+		}
+		runtime.Gosched()
+		if atomic.LoadInt64(&current) == int64(i) {
+			return
+		}
+		if time.Since(start) > duration {
+			panic(fmt.Sprintf("current is not %d, current is %d\n", i, atomic.LoadInt64(&current)))
+		}
+	}
+}
+
+func Fn(t *testing.T) *FuncBuilder {
+	return &FuncBuilder{t: t}
 }
 
 func SetCtx() func(ctx Ctx) (any, error) {
@@ -240,9 +431,6 @@ func CheckResult(t *testing.T, check int64, statuses ...*flow.StatusEnum) func(f
 			if status == flow.Success && !workFlow.Success() {
 				t.Errorf("WorkFlow executed failed\n")
 			}
-			//if status == flow.Timeout {
-			//	time.Sleep(50 * time.Millisecond)
-			//}
 			if !workFlow.Has(status) {
 				t.Errorf("workFlow has not %s status\n", status.Message())
 			}

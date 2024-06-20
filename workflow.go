@@ -20,26 +20,6 @@ var (
 	defaultConfig *FlowConfig
 )
 
-type controller interface {
-	Resume()
-	Pause()
-	Stop()
-}
-
-type resultI interface {
-	basicInfoI
-	Futures() []*Future
-	Fails() []*Future
-}
-
-type FlowController interface {
-	controller
-	resultI
-	Done() []*Future
-	ListProcess() []string
-	ProcessController(name string) controller
-}
-
 type FlowConfig struct {
 	handler[WorkFlow] `flow:"skip"`
 	ProcessConfig     `flow:"skip"`
@@ -62,7 +42,6 @@ type runFlow struct {
 	processes map[string]*runProcess
 	start     time.Time
 	end       time.Time
-	futures   []*Future
 	lock      sync.Mutex
 	finish    sync.WaitGroup
 }
@@ -93,39 +72,23 @@ func RegisterFlow(name string) *FlowMeta {
 	return &flow
 }
 
-//func AsyncArgs(name string, args ...any) FlowController {
-//	input := make(map[string]any, len(args))
-//	for _, arg := range args {
-//		input[getStructName(arg)] = arg
-//	}
-//	return AsyncFlow(name, input)
-//}
-
-//func AsyncFlow(name string, input map[string]any) FlowController {
-//	factory, ok := allFlows.Load(name)
-//	if !ok {
-//		panic(fmt.Sprintf("Flow[%s] not found", name))
-//	}
-//	flow := factory.(*FlowMeta).buildRunFlow(input)
-//	flow.Flow()
-//	return flow
-//}
-//
-//func DoneArgs(name string, args ...any) resultI {
-//	input := make(map[string]any, len(args))
-//	for _, arg := range args {
-//		input[getStructName(arg)] = arg
-//	}
-//	return DoneFlow(name, input)
-//}
-
-func DoneFlow(name string, input map[string]any) {
+func AsyncFlow(name string, input map[string]any) FlowController {
 	factory, ok := allFlows.Load(name)
 	if !ok {
 		panic(fmt.Sprintf("Flow[%s] not found", name))
 	}
 	flow := factory.(*FlowMeta).buildRunFlow(input)
-	flow.Done()
+	go flow.Done()
+	return flow
+}
+
+func DoneFlow(name string, input map[string]any) FinishedWorkFlow {
+	factory, ok := allFlows.Load(name)
+	if !ok {
+		panic(fmt.Sprintf("Flow[%s] not found", name))
+	}
+	flow := factory.(*FlowMeta).buildRunFlow(input)
+	return flow.Done()
 }
 
 func (fc *FlowConfig) BeforeFlow(must bool, callback func(WorkFlow) (keepOn bool, err error)) *callback[WorkFlow] {
@@ -230,7 +193,25 @@ func (fm *FlowMeta) Process(name string) *ProcessMeta {
 	return &pm
 }
 
-func (rf *runFlow) Id() string {
+func (rf *runFlow) Process(name string) (ProcController, bool) {
+	res, ok := rf.processes[name]
+	if ok {
+		return res, true
+	}
+	return nil, false
+}
+
+func (rf *runFlow) Exceptions() []FinishedProcess {
+	res := make([]FinishedProcess, 0)
+	for _, process := range rf.processes {
+		if !process.state.Normal() {
+			res = append(res, process)
+		}
+	}
+	return res
+}
+
+func (rf *runFlow) ID() string {
 	return rf.id
 }
 
@@ -280,9 +261,6 @@ func (rf *runFlow) buildRunProcess(meta *ProcessMeta) *runProcess {
 }
 
 func (rf *runFlow) finalize() {
-	for _, future := range rf.futures {
-		future.Done()
-	}
 	for _, process := range rf.processes {
 		rf.add(process.state.load())
 	}
@@ -297,45 +275,36 @@ func (rf *runFlow) finalize() {
 }
 
 // Done function will block util all process done.
-func (rf *runFlow) Done() []*Future {
-	rf.start = time.Now().UTC()
-	futures := rf.Flow()
-	for _, future := range futures {
-		// process finish running and callback
-		future.Done()
+func (rf *runFlow) Done() FinishedWorkFlow {
+	if !rf.EndTime().IsZero() {
+		return rf
 	}
-	// workflow finish running and callback
-	rf.finish.Wait()
-	rf.end = time.Now().UTC()
-	return futures
-}
-
-// Flow function asynchronous execute process of workflow and return immediately.
-func (rf *runFlow) Flow() []*Future {
-	if rf.futures != nil {
-		return rf.futures
-	}
-	// avoid duplicate call
+	// Asynchronous scheduling may call Done twice,
+	// so a lock is used to ensure that it only executes once.
 	rf.lock.Lock()
 	defer rf.lock.Unlock()
 	// DCL
-	if rf.futures != nil {
-		return rf.futures
+	if !rf.EndTime().IsZero() {
+		return rf
 	}
+	rf.start = time.Now().UTC()
 	rf.initialize()
 	rf.advertise(Before)
-	futures := make([]*Future, 0, len(rf.processes))
+	wg := make([]*sync.WaitGroup, 0, len(rf.processes))
 	for _, process := range rf.processes {
 		if rf.Has(CallbackFail) {
-			process.append(CallbackFail)
+			process.append(Cancel)
 		}
-		futures = append(futures, process.schedule())
+		wg = append(wg, process.schedule())
 	}
-	rf.futures = futures
 	rf.finish.Add(1)
+	for _, w := range wg {
+		w.Wait()
+	}
 	// execute callback and recover after all processes are done
-	go rf.finalize()
-	return futures
+	rf.finalize()
+	rf.end = time.Now().UTC()
+	return rf
 }
 
 func (rf *runFlow) advertise(flag string) {
@@ -347,21 +316,21 @@ func (rf *runFlow) advertise(flag string) {
 
 // Fails returns a slice of fail result Future pointers.
 // If all process success, return an empty slice.
-func (rf *runFlow) Fails() []*Future {
-	futures := make([]*Future, 0)
-	for _, future := range rf.futures {
-		if len(future.Exceptions()) != 0 {
-			futures = append(futures, future)
-		}
-	}
-	return futures
-}
+//func (rf *runFlow) Fails() []*Future {
+//	futures := make([]*Future, 0)
+//	for _, future := range rf.futures {
+//		if len(future.Exceptions()) != 0 {
+//			futures = append(futures, future)
+//		}
+//	}
+//	return futures
+//}
 
 // Futures returns the slice of future objects.
 // future can get the result and state of the process.
-func (rf *runFlow) Futures() []*Future {
-	return rf.futures
-}
+//func (rf *runFlow) Futures() []*Future {
+//	return rf.futures
+//}
 
 func (rf *runFlow) ListProcess() []string {
 	processes := make([]string, 0, len(rf.processes))
@@ -371,33 +340,26 @@ func (rf *runFlow) ListProcess() []string {
 	return processes
 }
 
-// ProcessController returns the controller of the specified process name.
-// controller can stop and resume the process.
-func (rf *runFlow) ProcessController(processName string) controller {
-	for _, process := range rf.processes {
-		if process.name == processName {
-			return process
-		}
-	}
-	return nil
-}
-
-func (rf *runFlow) Pause() {
+func (rf *runFlow) Pause() FlowController {
+	rf.append(Pause)
 	for _, process := range rf.processes {
 		process.Pause()
 	}
+	return rf
 }
 
 // Resume resumes the execution of the workflow.
-func (rf *runFlow) Resume() {
+func (rf *runFlow) Resume() FlowController {
 	for _, process := range rf.processes {
 		process.Resume()
 	}
+	return rf
 }
 
 // Stop stops the execution of the workflow.
-func (rf *runFlow) Stop() {
+func (rf *runFlow) Stop() FlowController {
 	for _, process := range rf.processes {
 		process.Stop()
 	}
+	return rf
 }

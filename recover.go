@@ -326,10 +326,13 @@ func unwrapNodeMap(m map[string][]node) {
 
 func unwrapInterfaceMap(m map[string]any) {
 	for k := range m {
-		kind := reflect.TypeOf(m[k]).Kind()
-		if kind == reflect.Pointer {
-			m[k] = pointerValue{Elem: m[k]}
+		wrap, ok := m[k].(pointerValue)
+		if !ok {
+			continue
 		}
+		pointer := reflect.New(reflect.TypeOf(wrap.Elem))
+		pointer.Elem().Set(reflect.ValueOf(wrap.Elem))
+		m[k] = pointer.Interface()
 	}
 }
 
@@ -519,11 +522,11 @@ func (point *procCheckpoint) GetName() string {
 }
 
 func (point *procCheckpoint) GetParentId() string {
-	return point.FlowId()
+	return point.FlowID()
 }
 
 func (point *procCheckpoint) GetRootId() string {
-	return point.FlowId()
+	return point.FlowID()
 }
 
 func (point *procCheckpoint) GetScope() uint8 {
@@ -568,11 +571,11 @@ func (point *stepCheckpoint) GetName() string {
 }
 
 func (point *stepCheckpoint) GetParentId() string {
-	return point.ProcessId()
+	return point.ProcessID()
 }
 
 func (point *stepCheckpoint) GetRootId() string {
-	return point.FlowId()
+	return point.FlowID()
 }
 
 func (point *stepCheckpoint) GetScope() uint8 {

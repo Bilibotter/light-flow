@@ -42,9 +42,6 @@ func CheckCtxResult(t *testing.T, check int64, statuses ...*flow.StatusEnum) fun
 			if status == flow.Success && !workFlow.Success() {
 				t.Errorf("WorkFlow executed failed\n")
 			}
-			//if status == flow.Timeout {
-			//	time.Sleep(50 * time.Millisecond)
-			//}
 			if !workFlow.Has(status) {
 				t.Errorf("workFlow has not %s status\n", status.Message())
 			}
@@ -296,49 +293,44 @@ func TestDependStepCtx(t *testing.T) {
 	}
 }
 
-// todo add it
-//func TestFlowMultipleAsyncExecute(t *testing.T) {
-//	defer resetCtx()
-//	workflow := flow.RegisterFlow("TestFlowMultipleExecute")
-//	process := workflow.Process("TestFlowMultipleExecute1")
-//	process.AfterStep(true, ErrorResultPrinter)
-//	process.NameStep(GenerateStepIncAddr(1), "1")
-//	process.NameStep(GenerateStepIncAddr(2), "2", "1")
-//	process.NameStep(GenerateStepIncAddr(3), "3", "2")
-//	process = workflow.Process("TestFlowMultipleExecute2")
-//	process.NameStep(GenerateStepIncAddr(11), "11")
-//	process.NameStep(GenerateStepIncAddr(12), "12", "11")
-//	process.NameStep(GenerateStepIncAddr(13), "13", "12")
-//	flow1 := flow.AsyncFlow("TestFlowMultipleExecute", map[string]any{addrKey: &ctx1})
-//	flow2 := flow.AsyncFlow("TestFlowMultipleExecute", map[string]any{addrKey: &ctx2})
-//	flow3 := flow.AsyncFlow("TestFlowMultipleExecute", map[string]any{addrKey: &ctx3})
-//	flow4 := flow.AsyncFlow("TestFlowMultipleExecute", map[string]any{addrKey: &ctx4})
-//	flow5 := flow.AsyncFlow("TestFlowMultipleExecute", map[string]any{addrKey: &ctx5})
-//	for _, flowing := range []flow.FlowController{flow1, flow2, flow3, flow4, flow5} {
-//		for _, feature := range flowing.Done() {
-//			explain := strings.Join(feature.ExplainStatus(), ", ")
-//			fmt.Printf("process[%s] explain=%s\n", feature.Name(), explain)
-//			if !feature.Success() {
-//				t.Errorf("process[%s] fail", feature.Name())
-//			}
-//		}
-//	}
-//	if atomic.LoadInt64(&ctx1) != 6 {
-//		t.Errorf("execute 6 step, but ctx1 = %d", ctx1)
-//	}
-//	if atomic.LoadInt64(&ctx2) != 6 {
-//		t.Errorf("execute 2 step, but ctx2 = %d", ctx3)
-//	}
-//	if atomic.LoadInt64(&ctx3) != 6 {
-//		t.Errorf("execute 2 step, but ctx3 = %d", ctx3)
-//	}
-//	if atomic.LoadInt64(&ctx4) != 6 {
-//		t.Errorf("execute 2 step, but ctx4 = %d", ctx4)
-//	}
-//	if atomic.LoadInt64(&ctx5) != 6 {
-//		t.Errorf("execute 2 step, but ctx5 = %d", ctx5)
-//	}
-//}
+func TestFlowMultipleAsyncExecute(t *testing.T) {
+	defer resetCtx()
+	workflow := flow.RegisterFlow("TestFlowMultipleExecute")
+	process := workflow.Process("TestFlowMultipleExecute1")
+	process.AfterStep(true, ErrorResultPrinter)
+	process.NameStep(GenerateStepIncAddr(1), "1")
+	process.NameStep(GenerateStepIncAddr(2), "2", "1")
+	process.NameStep(GenerateStepIncAddr(3), "3", "2")
+	process = workflow.Process("TestFlowMultipleExecute2")
+	process.NameStep(GenerateStepIncAddr(11), "11")
+	process.NameStep(GenerateStepIncAddr(12), "12", "11")
+	process.NameStep(GenerateStepIncAddr(13), "13", "12")
+	flow1 := flow.AsyncFlow("TestFlowMultipleExecute", map[string]any{addrKey: &ctx1})
+	flow2 := flow.AsyncFlow("TestFlowMultipleExecute", map[string]any{addrKey: &ctx2})
+	flow3 := flow.AsyncFlow("TestFlowMultipleExecute", map[string]any{addrKey: &ctx3})
+	flow4 := flow.AsyncFlow("TestFlowMultipleExecute", map[string]any{addrKey: &ctx4})
+	flow5 := flow.AsyncFlow("TestFlowMultipleExecute", map[string]any{addrKey: &ctx5})
+	for _, flowing := range []flow.FlowController{flow1, flow2, flow3, flow4, flow5} {
+		if !flowing.Done().Success() {
+			t.Errorf("flowing execute failed")
+		}
+	}
+	if atomic.LoadInt64(&ctx1) != 6 {
+		t.Errorf("execute 6 step, but ctx1 = %d", ctx1)
+	}
+	if atomic.LoadInt64(&ctx2) != 6 {
+		t.Errorf("execute 6 step, but ctx2 = %d", ctx3)
+	}
+	if atomic.LoadInt64(&ctx3) != 6 {
+		t.Errorf("execute 6 step, but ctx3 = %d", ctx3)
+	}
+	if atomic.LoadInt64(&ctx4) != 6 {
+		t.Errorf("execute 6 step, but ctx4 = %d", ctx4)
+	}
+	if atomic.LoadInt64(&ctx5) != 6 {
+		t.Errorf("execute 6 step, but ctx5 = %d", ctx5)
+	}
+}
 
 func TestContextNameCorrect(t *testing.T) {
 	workflow := flow.RegisterFlow("TestContextNameCorrect")

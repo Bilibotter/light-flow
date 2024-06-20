@@ -172,12 +172,20 @@ func (step *runStep) Err() error {
 	return step.exception
 }
 
-func (step *runStep) Id() string {
+func (step *runStep) ID() string {
 	return step.id
 }
 
-func (step *runStep) FlowId() string {
-	return step.belong.FlowId()
+func (step *runStep) GetResult() any {
+	res, exist := step.Result(step.name)
+	if !exist {
+		return nil
+	}
+	return res
+}
+
+func (step *runStep) FlowID() string {
+	return step.belong.FlowID()
 }
 
 func (step *runStep) Dependents() (stepNames []string) {
@@ -188,7 +196,7 @@ func (step *runStep) Dependents() (stepNames []string) {
 	return s
 }
 
-func (step *runStep) ProcessId() string {
+func (step *runStep) ProcessID() string {
 	return step.belong.id
 }
 
@@ -205,10 +213,6 @@ func (step *runStep) CostTime() time.Duration {
 		return 0
 	}
 	return step.end.Sub(step.start)
-}
-
-func (step *runStep) SetCondition(value any, targets ...string) {
-	step.setExactCond(step.name, value, targets...)
 }
 
 func (step *runStep) needRecover() bool {
