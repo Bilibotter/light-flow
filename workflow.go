@@ -39,6 +39,7 @@ type runFlow struct {
 	*FlowMeta
 	*simpleContext
 	id        string
+	compress  state
 	processes map[string]*runProcess
 	start     time.Time
 	end       time.Time
@@ -193,6 +194,10 @@ func (fm *FlowMeta) Process(name string) *ProcessMeta {
 	return &pm
 }
 
+func (rf *runFlow) HasAny(enum ...*StatusEnum) bool {
+	return rf.compress.Has(enum...)
+}
+
 func (rf *runFlow) Process(name string) (ProcController, bool) {
 	res, ok := rf.processes[name]
 	if ok {
@@ -262,15 +267,19 @@ func (rf *runFlow) buildRunProcess(meta *ProcessMeta) *runProcess {
 
 func (rf *runFlow) finalize() {
 	for _, process := range rf.processes {
-		rf.add(process.state.load())
+		rf.compress.add(process.compress.load())
 	}
-	if rf.Normal() {
+	rf.compress.add(rf.load())
+	if rf.compress.Normal() {
 		rf.append(Success)
+	} else {
+		rf.append(Failed)
 	}
 	if rf.shallRecover() {
 		rf.saveCheckpoints()
 	}
 	rf.advertise(After)
+	rf.compress.add(rf.load())
 	rf.finish.Done()
 }
 
@@ -289,6 +298,7 @@ func (rf *runFlow) Done() FinishedWorkFlow {
 	}
 	rf.start = time.Now().UTC()
 	rf.initialize()
+	// execute before flow callback
 	rf.advertise(Before)
 	wg := make([]*sync.WaitGroup, 0, len(rf.processes))
 	for _, process := range rf.processes {

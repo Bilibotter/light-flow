@@ -749,42 +749,60 @@ func TestParallelStepRecover(t *testing.T) {
 	Recover("TestParallelStepRecover")
 }
 
-//func TestFlowRecover(t *testing.T) {
-//	defer resetCurrent()
-//	executeSuc = false
-//	wf := flow.RegisterFlow("TestFlowRecover")
-//	wf.EnableRecover()
-//	proc := wf.Process("TestFlowRecover")
-//	proc.NameStep(func(ctx flow.Step) (any, error) {
-//		StepCheck("TestFlowRecover", ctx)
-//		if !executeSuc {
-//			StepSet(ctx)
-//			return nil, errors.New("error")
-//		}
-//		atomic.AddInt64(&current, 1)
-//		return ctx.Name(), nil
-//	}, "step1")
-//	proc.NameStep(GenerateAfter(t, "step1", StepSet, StepCheck), "step2", "step1")
-//	proc.NameStep(GenerateAfter(t, "step2", StepSet, StepCheck), "step3", "step2")
-//	wf.AfterFlow(false, CheckResult(t, 0, flow.Error)).If(execFail)
-//	wf.AfterFlow(false, CheckResult(t, 3, flow.Success)).If(execSuc)
-//	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
-//	m := simpleContext{
-//		name:  "TestFlowRecover",
-//		table: make(map[string]any),
-//	}
-//	StepSet(&m)
-//	flow.DoneFlow("TestFlowRecover", m.table)
-//	executeSuc = true
-//	flowId, err := getId("TestFlowRecover")
-//	if err != nil {
-//		panic(err)
-//	}
-//	resetCurrent()
-//	if err = flow.RecoverFlow(flowId); err != nil {
-//		panic(err)
-//	}
-//}
+func TestFlowInputRecover(t *testing.T) {
+	defer resetCurrent()
+	executeSuc = false
+	wf := flow.RegisterFlow("TestFlowInputRecover")
+	wf.EnableRecover()
+	proc := wf.Process("TestFlowInputRecover")
+	proc.NameStep(Fn(t).Do(CheckCtx("TestFlowInputRecover", 0)).Suc(SetCtx()).ErrStep(), "step1")
+	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
+	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
+	wf.AfterFlow(false, CheckResult(t, 1, flow.Error)).If(execFail)
+	wf.AfterFlow(false, CheckResult(t, 4, flow.Success)).If(execSuc)
+	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
+	m := simpleContext{
+		name:  "TestFlowInputRecover",
+		table: make(map[string]any),
+	}
+	_, err := SetCtx()(&m)
+	if err != nil {
+		t.Errorf("set context error %v", err)
+	}
+	flow.DoneFlow("TestFlowInputRecover", m.table)
+	Recover("TestFlowInputRecover")
+}
+
+func TestFlowCallbackSkipWhileRecover(t *testing.T) {
+	defer resetCurrent()
+	executeSuc = false
+	wf := flow.RegisterFlow("TestFlowCallbackSkipWhileRecover")
+	wf.EnableRecover()
+	proc := wf.Process("TestFlowCallbackSkipWhileRecover")
+	proc.NameStep(Fn(t).Do(CheckCtx("TestFlowCallbackSkipWhileRecover", 0)).Suc(SetCtx()).ErrStep(), "step1")
+	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
+	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
+	wf.BeforeFlow(false, func(workFlow flow.WorkFlow) (keepOn bool, err error) {
+		t.Logf("start Flow[%s] pre-callback", workFlow.Name())
+		atomic.AddInt64(&current, 1)
+		t.Logf("finish Flow[%s] pre-callback", workFlow.Name())
+		return true, nil
+	})
+	wf.AfterFlow(false, CheckResult(t, 2, flow.Error)).If(execFail)
+	wf.AfterFlow(false, CheckResult(t, 4, flow.Success)).If(execSuc)
+	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
+	m := simpleContext{
+		name:  "TestFlowCallbackSkipWhileRecover",
+		table: make(map[string]any),
+	}
+	_, err := SetCtx()(&m)
+	if err != nil {
+		t.Errorf("set context error %v", err)
+	}
+	flow.DoneFlow("TestFlowCallbackSkipWhileRecover", m.table)
+	Recover("TestFlowCallbackSkipWhileRecover")
+}
+
 //
 //func TestProcessRecover(t *testing.T) {
 //	defer resetCurrent()

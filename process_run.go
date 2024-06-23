@@ -2,7 +2,6 @@ package light_flow
 
 import (
 	"fmt"
-	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -14,12 +13,17 @@ type runProcess struct {
 	*dependentContext
 	belong    *runFlow
 	id        string
+	compress  state
 	flowSteps map[string]*runStep
 	start     time.Time
 	end       time.Time
 	pause     sync.WaitGroup
 	running   sync.WaitGroup
 	finish    sync.WaitGroup
+}
+
+func (process *runProcess) HasAny(enum ...*StatusEnum) bool {
+	return process.compress.Has(enum...)
 }
 
 func (process *runProcess) ID() string {
@@ -106,7 +110,6 @@ func (process *runProcess) Pause() ProcController {
 
 func (process *runProcess) Stop() ProcController {
 	process.append(Stop)
-	process.append(Failed)
 	return process
 }
 
@@ -176,7 +179,6 @@ func (process *runProcess) startStep(step *runStep) {
 	select {
 	case <-timer.C:
 		step.append(Timeout)
-		step.append(Failed)
 	case <-step.finish:
 		return
 	}
@@ -210,18 +212,20 @@ func (process *runProcess) finalize() {
 	select {
 	case <-timer.C:
 		process.append(Timeout)
-		process.append(Failed)
 	case <-finish:
 	}
 
 	for _, step := range process.flowSteps {
-		process.add(step.state.load())
+		process.compress.add(step.load())
 	}
-
-	if process.Normal() {
+	process.compress.add(process.load())
+	if process.compress.Normal() {
 		process.append(Success)
+	} else {
+		process.append(Failed)
 	}
 	process.procCallback(After)
+	process.compress.add(process.load())
 	process.end = time.Now().UTC()
 	process.finish.Done()
 }
@@ -230,6 +234,8 @@ func (process *runProcess) startNextSteps(step *runStep) {
 	// all step not execute should cancel while process is timeout
 	cancel := !step.Normal() || !process.Normal()
 	skip := step.Has(skipped)
+	// execute the next step in the current goroutine to reduce the frequency of goroutine creation.
+	var bind *runStep
 	for _, waiter := range step.waiters {
 		next := process.flowSteps[waiter.name]
 		waiting := next.segments.addWaiting(-1)
@@ -244,10 +250,15 @@ func (process *runProcess) startNextSteps(step *runStep) {
 		} else if skip {
 			next.append(skipped)
 		}
-		go process.startStep(next)
+		if bind != nil {
+			go process.startStep(bind)
+		}
+		bind = next
 	}
-
 	process.running.Done()
+	if bind != nil {
+		process.startStep(bind)
+	}
 }
 
 func (process *runProcess) runStep(step *runStep) {
@@ -270,9 +281,8 @@ func (process *runProcess) runStep(step *runStep) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			panicErr := fmt.Errorf("panic: %v\n\n%s\n", r, string(debug.Stack()))
+			panicErr := fmt.Errorf("\n[Recovery] %s panic recovered:\n%s\n%s\n", time.Now().Format("2006/01/02 - 15:04:05"), r, stack())
 			step.append(Panic)
-			step.append(Failed)
 			step.exception = panicErr
 			step.end = time.Now().UTC()
 		}
@@ -285,7 +295,6 @@ func (process *runProcess) runStep(step *runStep) {
 		step.exception = err
 		if err != nil {
 			step.append(Error)
-			step.append(Failed)
 			continue
 		}
 		if result != nil {

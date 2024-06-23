@@ -54,6 +54,50 @@ func TestTypeDiff(t *testing.T) {
 	}
 }
 
+func TestEmpty(t *testing.T) {
+	m := map[string]any{}
+	m["empty"] = shallBeforeCallback{}
+	bs, err := serialize[map[string]any](m)
+	if err != nil {
+		t.Errorf("serialize error: %v", err)
+	}
+	m2, err := deserialize[map[string]any](bs)
+	if err != nil {
+		t.Errorf("deserialize error: %v", err)
+	}
+	wrap, ok := m2["empty"]
+	if !ok {
+		t.Errorf("deserialize falied")
+	}
+	_, ok = wrap.(shallBeforeCallback)
+	if !ok {
+		t.Errorf("deserialize falied, type is%T, not InputA", wrap)
+	}
+	m0 := map[string][]node{}
+	m0["empty"] = []node{{Value: shallBeforeCallback{}}}
+	bs, err = serialize[map[string][]node](m0)
+	if err != nil {
+		t.Errorf("serialize error: %v", err)
+	}
+	m1, err := deserialize[map[string][]node](bs)
+	if err != nil {
+		t.Errorf("deserialize error: %v", err)
+	}
+	wrap, ok = m1["empty"]
+	if !ok {
+		t.Errorf("deserialize falied")
+	}
+	ss, ok := wrap.([]node)
+	if !ok {
+		t.Errorf("deserialize falied, type is%T, not InputA", wrap)
+	}
+	value := ss[0].Value
+	_, ok = value.(shallBeforeCallback)
+	if !ok {
+		t.Errorf("deserialize falied, type is%T, not InputA", value)
+	}
+}
+
 func TestAllType(t *testing.T) {
 	RegisterType[Person]()
 	named := &Person{Name: "Alice", Age: 30}

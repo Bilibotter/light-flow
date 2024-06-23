@@ -16,6 +16,10 @@ var (
 	executeSuc = false
 )
 
+var (
+	shallCallbackKey = "~"
+)
+
 type Named interface {
 	name() string
 }
@@ -187,23 +191,26 @@ func (s *FuncBuilder) Errors(i ...int64) func(ctx flow.Step) (result any, err er
 }
 
 func (s *FuncBuilder) SetCtx() func(ctx flow.Step) (result any, err error) {
-	s.Do(SetCtx())
-	return s.Step()
+	f := Fn(s.t).Do(SetCtx()).Step()
+	return f
 }
 
 func (s *FuncBuilder) SetCtx0(prefix string) *FuncBuilder {
-	s.Do(SetCtx0(prefix))
-	return s
+	f := Fn(s.t)
+	f.Do(SetCtx0(prefix)).Step()
+	return f
 }
 
 func (s *FuncBuilder) CheckCtx(preview string, notCheckResult ...int) func(ctx flow.Step) (result any, err error) {
-	s.Do(CheckCtx(preview, notCheckResult...))
-	return s.Step()
+	f := Fn(s.t)
+	fn := f.Do(CheckCtx(preview, notCheckResult...)).Step()
+	return fn
 }
 
 func (s *FuncBuilder) CheckCtx0(preview string, prefix string, notCheckResult ...int) *FuncBuilder {
-	s.Do(CheckCtx0(preview, prefix, notCheckResult...))
-	return s
+	f := Fn(s.t)
+	f.Do(CheckCtx0(preview, prefix, notCheckResult...))
+	return f
 }
 
 func resetCurrent() {
@@ -258,15 +265,27 @@ func SetCtx0(prefix string) func(ctx Ctx) (any, error) {
 		ctx.Set(prefix+"pwd", ctx.Name())
 		ctx.Set(prefix+"Person", Person{ctx.Name(), 11})
 		ctx.Set(prefix+"*Person", &Person{ctx.Name(), 11})
+		ctx.Set(shallCallbackKey, 11)
 		var named Named
 		named = &Person{ctx.Name(), 11}
 		ctx.Set(prefix+"Named", named)
-		return nil, nil
+		return ctx.Name(), nil
 	}
 }
 
 func CheckCtx(preview string, notCheckResult ...int) func(ctx Ctx) (any, error) {
 	return CheckCtx0(preview, "", notCheckResult...)
+}
+
+func CheckCtx1(notCheckResult ...int) func(ctx Ctx) (any, error) {
+	return func(ctx Ctx) (any, error) {
+		if step, ok := ctx.(flow.Step); ok {
+			for _, depend := range step.Dependents() {
+				return CheckCtx0(depend, "", notCheckResult...)(ctx)
+			}
+		}
+		return ctx.Name(), nil
+	}
 }
 
 func CheckCtx0(preview, prefix string, notCheckResult ...int) func(ctx Ctx) (any, error) {
@@ -413,6 +432,13 @@ func CheckCtx0(preview, prefix string, notCheckResult ...int) func(ctx Ctx) (any
 		} else {
 			return ctx.Name(), fmt.Errorf("Step[%s] check pwd failed, pwd=[%#v]", ctx.Name(), value)
 		}
+		if value, exist := ctx.Get(shallCallbackKey); exist {
+			if value.(int) != 11 {
+				return ctx.Name(), fmt.Errorf("Step[%s] check shallCallbackKey failed, shallCallbackKey=[%#v]", ctx.Name(), value)
+			}
+		} else {
+			return ctx.Name(), fmt.Errorf("Step[%s] check shallCallbackKey failed, shallCallbackKey=[%#v]", ctx.Name(), value)
+		}
 		return ctx.Name(), nil
 	}
 }
@@ -431,7 +457,7 @@ func CheckResult(t *testing.T, check int64, statuses ...*flow.StatusEnum) func(f
 			if status == flow.Success && !workFlow.Success() {
 				t.Errorf("WorkFlow executed failed\n")
 			}
-			if !workFlow.Has(status) {
+			if !workFlow.HasAny(status) {
 				t.Errorf("workFlow has not %s status\n", status.Message())
 			}
 		}

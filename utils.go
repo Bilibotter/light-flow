@@ -1,17 +1,92 @@
 package light_flow
 
 import (
+	"bytes"
 	"fmt"
+	"os"
 	"reflect"
 	"regexp"
 	"runtime"
 	"strings"
 )
 
+var (
+	dunno     = "???"
+	centerDot = "·"
+	dot       = "."
+	slash     = "/"
+)
+
 type empty struct{}
 
 type set[T comparable] struct {
 	Data map[T]empty
+}
+
+// This file includes a modified version of the 'stack' function from the 'gin' framework,
+// originally licensed under the MIT License at https://github.com/gin-gonic/gin.
+func stack() []byte {
+	limitSize := 8182
+	buf := new(bytes.Buffer) // the returned data
+	// As we loop, we open files and read them. These variables record the currently
+	// loaded file.
+	var lines [][]byte
+	var lastFile string
+	for i := 3; ; i++ { // Skip the expected number of frames
+		pc, file, line, ok := runtime.Caller(i)
+		if !ok {
+			break
+		}
+		// Skip assemble file
+		if strings.HasSuffix(file, ".s") {
+			continue
+		}
+		// Print this much at least.  If we can't find the source, it won't show.
+		fmt.Fprintf(buf, "%s:%d (0x%x)\n", file, line, pc)
+		if file != lastFile {
+			data, err := os.ReadFile(file)
+			if err != nil {
+				continue
+			}
+			lines = bytes.Split(data, []byte{'\n'})
+			lastFile = file
+		}
+		funcName := function(pc)
+		if funcName == dunno {
+			continue // Skip printing if function name is "???" or starts with "runtime."
+		}
+		fmt.Fprintf(buf, "\t%s -> %s\n", funcName, source(lines, line))
+		if buf.Len() > limitSize {
+			break
+		}
+	}
+	return buf.Bytes()
+}
+
+func function(pc uintptr) string {
+	fn := runtime.FuncForPC(pc)
+	if fn == nil {
+		return dunno
+	}
+	name := fn.Name()
+	// Benchmark tests have shown that using 'strings' package outperforms 'bytes' for this particular use case.
+	if lastSlash := strings.LastIndex(name, slash); lastSlash >= 0 {
+		name = name[lastSlash+1:]
+	}
+	if period := strings.Index(name, dot); period >= 0 {
+		name = name[period+1:]
+	}
+	name = strings.ReplaceAll(name, centerDot, dot)
+	return name
+}
+
+// source returns a space-trimmed slice of the n'th line.
+func source(lines [][]byte, n int) []byte {
+	n-- // in stack trace, lines are 1-indexed but our array is 0-indexed
+	if n < 0 || n >= len(lines) {
+		return []byte(dunno)
+	}
+	return bytes.TrimSpace(lines[n])
 }
 
 func newRoutineUnsafeSet[T comparable](elem ...T) *set[T] {

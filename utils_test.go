@@ -1,6 +1,7 @@
 package light_flow
 
 import (
+	"bytes"
 	"strconv"
 	"strings"
 	"testing"
@@ -33,6 +34,44 @@ type FConfig struct {
 }
 
 type PConfig struct {
+}
+
+func fn1() {
+	panic("fn1 invoke fail")
+}
+
+func fn2() {
+	fn1()
+}
+
+func fn3() {
+	fn2()
+}
+
+func fn4() {
+	fn3()
+}
+
+func TestNamedFuncStackTrace(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			bs := stack()
+			if !bytes.Contains(bs, []byte("fn1")) {
+				t.Errorf("fn1 trace fail")
+			}
+			if !bytes.Contains(bs, []byte("fn2")) {
+				t.Errorf("fn2 trace fail")
+			}
+			if !bytes.Contains(bs, []byte("fn3")) {
+				t.Errorf("fn3 trace fail")
+			}
+			if !bytes.Contains(bs, []byte("fn4")) {
+				t.Errorf("fn4 trace fail")
+			}
+			t.Logf("[Recovery] %s panic recovered:\n%s\n%s\n", time.Now().Format("2006/01/02 - 15:04:05"), r, bs)
+		}
+	}()
+	fn4()
 }
 
 func TestGetFuncName(t *testing.T) {
@@ -126,6 +165,7 @@ func TestPopStatus(t *testing.T) {
 		t.Errorf("cancel appended but not exist")
 	}
 	status.clear(Cancel)
+	status.append(Failed)
 	if status.Has(Cancel) {
 		t.Errorf("cancel status pop error")
 	}
@@ -134,6 +174,7 @@ func TestPopStatus(t *testing.T) {
 		t.Errorf("panic appended but not exist")
 	}
 	status.clear(Panic)
+	status.append(Failed)
 	if status.Has(Panic) {
 		t.Errorf("panic status pop error")
 	}
@@ -145,11 +186,12 @@ func TestPopStatus(t *testing.T) {
 	if status.Has(Failed) {
 		t.Errorf("failed status pop error")
 	}
-
+	status.append(Failed)
 	if !status.Has(Timeout) {
 		t.Errorf("timeout appended bu not exist")
 	}
 	status.clear(Timeout)
+	status.append(Failed)
 	if status.Has(Timeout) {
 		t.Errorf("timeout status pop error")
 	}
@@ -158,6 +200,7 @@ func TestPopStatus(t *testing.T) {
 		t.Errorf("error appended bu not exist")
 	}
 	status.clear(Stop)
+	status.append(Failed)
 	if status.Has(Stop) {
 		t.Errorf("error status pop error")
 	}
@@ -166,6 +209,7 @@ func TestPopStatus(t *testing.T) {
 		t.Errorf("error appended bu not exist")
 	}
 	status.clear(Error)
+	status.append(Failed)
 	if status.Has(Error) {
 		t.Errorf("error status pop error")
 	}

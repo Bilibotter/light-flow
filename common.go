@@ -26,24 +26,24 @@ var (
 
 // these variable are used to indicate the state of the unit
 var (
-	normal       = []*StatusEnum{Pending, Running, Pause, Success}
-	Pending      = &StatusEnum{0, "Pending"}
-	Running      = &StatusEnum{0b1, "Running"}
-	Pause        = &StatusEnum{0b1 << 1, "Pause"}
-	skipped      = &StatusEnum{0b1 << 2, "skip"}
-	executed     = &StatusEnum{0b1 << 3, "executed"}
-	recovering   = &StatusEnum{0b1 << 4, "recovering"}
-	skipCallback = &StatusEnum{0b1 << 5, "skipCallback"}
-	Success      = &StatusEnum{0b1 << 15, "Success"}
-	NormalMask   = &StatusEnum{0b1<<16 - 1, "NormalMask"}
-	abnormal     = []*StatusEnum{Cancel, Timeout, Panic, Error, Stop, CallbackFail, Failed}
-	Cancel       = &StatusEnum{0b1 << 16, "Cancel"}
-	Timeout      = &StatusEnum{0b1 << 17, "Timeout"}
-	Panic        = &StatusEnum{0b1 << 18, "Panic"}
-	Error        = &StatusEnum{0b1 << 19, "Error"}
-	Stop         = &StatusEnum{0b1 << 20, "Stop"}
-	CallbackFail = &StatusEnum{0b1 << 21, "CallbackFail"}
-	Failed       = &StatusEnum{0b1 << 31, "Failed"}
+	normal          = []*StatusEnum{Pending, Running, Pause, Success}
+	Pending         = &StatusEnum{0, "Pending"}
+	Running         = &StatusEnum{0b1, "Running"}
+	Pause           = &StatusEnum{0b1 << 1, "Pause"}
+	skipped         = &StatusEnum{0b1 << 2, "skip"}
+	executed        = &StatusEnum{0b1 << 3, "executed"}
+	recovering      = &StatusEnum{0b1 << 4, "recovering"}
+	skipPreCallback = &StatusEnum{0b1 << 5, "skipPreCallback"}
+	Success         = &StatusEnum{0b1 << 15, "Success"}
+	NormalMask      = &StatusEnum{0b1<<16 - 1, "NormalMask"}
+	abnormal        = []*StatusEnum{Cancel, Timeout, Panic, Error, Stop, CallbackFail, Failed}
+	Cancel          = &StatusEnum{0b1<<31 | 0b1<<16, "Cancel"}
+	Timeout         = &StatusEnum{0b1<<31 | 0b1<<17, "Timeout"}
+	Panic           = &StatusEnum{0b1<<31 | 0b1<<18, "Panic"}
+	Error           = &StatusEnum{0b1<<31 | 0b1<<19, "Error"}
+	Stop            = &StatusEnum{0b1<<31 | 0b1<<20, "Stop"}
+	CallbackFail    = &StatusEnum{0b1<<31 | 0b1<<21, "CallbackFail"}
+	Failed          = &StatusEnum{0b1 << 31, "Failed"}
 	// An abnormal step state will cause the cancellation of dependent unexecuted steps.
 	AbnormalMask = &StatusEnum{NormalMask.flag << 16, "AbnormalMask"}
 )
@@ -70,6 +70,8 @@ type FinishedWorkFlow interface {
 
 type flowRuntime interface {
 	runtimeI
+	// HasAny checks if any of the steps within a given workflow are in any of the specified states.
+	HasAny(...*StatusEnum) bool
 }
 
 type Process interface {
@@ -98,6 +100,8 @@ type procCtx interface {
 type procRuntime interface {
 	runtimeI
 	FlowID() string
+	// HasAny checks if any of the steps within a given process are in any of the specified states.
+	HasAny(...*StatusEnum) bool
 }
 
 type Step interface {
@@ -387,12 +391,17 @@ func (cc *handler[T]) addCallback(flag string, must bool, run func(info T) (bool
 
 // don't want to raise error not deal hint, so return string
 func (cc *handler[T]) handle(flag string, info T) string {
+	if flag == Before && info.Has(skipPreCallback) {
+		return ""
+	}
 	for _, filter := range cc.filter {
 		keepOn, err, panicStack := filter.call(flag, info)
 		if filter.must {
 			if len(panicStack) != 0 || err != nil {
 				info.append(CallbackFail)
-				info.append(Failed)
+				if flag == Before {
+					info.append(Cancel)
+				}
 				return panicStack
 			}
 		}

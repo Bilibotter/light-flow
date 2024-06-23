@@ -36,6 +36,12 @@ var (
 	persister     Persist
 )
 
+var (
+	shallCallbackKey = "~"
+)
+
+type shallBeforeCallback struct{}
+
 type Persist interface {
 	GetLatestRecord(rootId string) (RecoverRecord, error)
 	ListCheckpoints(recoveryId string) ([]CheckPoint, error)
@@ -129,10 +135,13 @@ type aes256Encryptor struct {
 }
 
 func init() {
-	RegisterType[pointerValue]()
 	RegisterType[time.Time]()
+
 	RegisterType[outcome]()
 	RegisterType[outcomeValue]()
+
+	RegisterType[pointerValue]()
+	RegisterType[shallBeforeCallback]()
 }
 
 func DisableEncrypt() {
@@ -185,7 +194,7 @@ func RecoverFlow(flowId string) (err error) {
 	if err = loadCheckpoints(flow, checkpoints); err != nil {
 		return
 	}
-	if err = markExecuted(flow, checkpoints); err != nil {
+	if err = loadStatus(flow, checkpoints); err != nil {
 		return
 	}
 	persister.UpdateRecordStatus(&recoverRecord{RecoverId: record.GetRecoverId(), Status: RecoverRunning})
@@ -203,7 +212,7 @@ func SetMaxSerializeSize(size int) {
 	maxSize = size
 }
 
-func markExecuted(workflow *runFlow, checkpoints []CheckPoint) error {
+func loadStatus(workflow *runFlow, checkpoints []CheckPoint) error {
 	for _, proc := range workflow.processes {
 		for _, step := range proc.flowSteps {
 			step.append(executed)
@@ -400,6 +409,18 @@ func decryptIfNeed(key string, value any, secret []byte) (any, error) {
 	return value, nil
 }
 
+func needPreCallback(m map[string]any) bool {
+	key := shallCallbackKey
+	for mark, exist := m[key]; exist; mark, exist = m[key] {
+		if _, ok := mark.(shallBeforeCallback); ok {
+			delete(m, key)
+			return true
+		}
+		key += shallCallbackKey
+	}
+	return false
+}
+
 func (r *recoverRecord) GetRootId() string {
 	return r.RootId
 }
@@ -505,6 +526,13 @@ func (point *flowCheckpoint) buildSnapshot() (err error) {
 			return
 		}
 	}
+	if point.Has(CallbackFail, Cancel) {
+		key := shallCallbackKey
+		for _, exist := snapshot[key]; exist; key += shallCallbackKey {
+			_, exist = snapshot[key]
+		}
+		snapshot[shallCallbackKey] = shallBeforeCallback{}
+	}
 	point.snapshot, err = serialize(snapshot)
 	return
 }
@@ -553,7 +581,9 @@ func (point *procCheckpoint) buildSnapshot() (err error) {
 			snapshot[k] = append(snapshot[k], *head)
 		}
 	}
-
+	if point.Has(CallbackFail, Cancel) {
+		snapshot[shallCallbackKey] = append(snapshot[shallCallbackKey], node{Value: shallBeforeCallback{}})
+	}
 	point.snapshot, err = serialize(snapshot)
 	return
 }
@@ -591,6 +621,12 @@ func (point *stepCheckpoint) setRecoverId(id string) {
 }
 
 func (point *stepCheckpoint) buildSnapshot() (err error) {
+	if point.Has(CallbackFail, Cancel) {
+		m := make(map[string]any)
+		m[shallCallbackKey] = shallBeforeCallback{}
+		point.snapshot, err = serialize[map[string]any](m)
+		return
+	}
 	return nil
 }
 
@@ -609,6 +645,9 @@ func (rf *runFlow) loadCheckpoint(checkpoint CheckPoint) error {
 		if err != nil {
 			return err
 		}
+	}
+	if !needPreCallback(snapshot) {
+		rf.append(skipPreCallback)
 	}
 	rf.table = snapshot
 	rf.id = checkpoint.GetPrimaryKey()
@@ -673,6 +712,14 @@ func (process *runProcess) loadCheckpoint(checkpoint CheckPoint) error {
 	for k := range snapshot {
 		var head, current *node
 		nodeList := snapshot[k]
+		if k == shallCallbackKey {
+			tail := nodeList[len(nodeList)-1]
+			if _, ok := tail.Value.(shallBeforeCallback); ok {
+				nodeList = nodeList[:len(nodeList)-1]
+			} else {
+				process.append(skipPreCallback)
+			}
+		}
 		for i := len(nodeList) - 1; i >= 0; i-- {
 			newNode := &node{
 				Path: nodeList[i].Path,
@@ -694,5 +741,14 @@ func (process *runProcess) loadCheckpoint(checkpoint CheckPoint) error {
 
 func (step *runStep) loadCheckpoint(checkpoint CheckPoint) error {
 	step.id = checkpoint.GetPrimaryKey()
+	if bs := checkpoint.GetSnapshot(); len(bs) != 0 {
+		snapshot, err := deserialize[map[string]any](bs)
+		if err != nil {
+			return err
+		}
+		if !needPreCallback(snapshot) {
+			step.append(skipPreCallback)
+		}
+	}
 	return nil
 }
