@@ -115,13 +115,12 @@ func (process *runProcess) Stop() ProcController {
 
 func (process *runProcess) schedule() (finish *sync.WaitGroup) {
 	process.initialize()
-	process.start = time.Now().UTC()
 	finish = &process.finish
 	// pre-flow callback due to cancel
-	if process.Has(Cancel) {
+	if process.Has(Cancel) || process.Has(executed) {
 		return
 	}
-
+	process.start = time.Now().UTC()
 	process.append(Running)
 	process.procCallback(Before)
 	for _, step := range process.flowSteps {

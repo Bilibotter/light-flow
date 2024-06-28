@@ -213,7 +213,12 @@ func SetMaxSerializeSize(size int) {
 }
 
 func loadStatus(workflow *runFlow, checkpoints []CheckPoint) error {
+	// workflow
+	if !workflow.Has(skipPreCallback) {
+		return nil
+	}
 	for _, proc := range workflow.processes {
+		proc.append(executed)
 		for _, step := range proc.flowSteps {
 			step.append(executed)
 		}
@@ -221,6 +226,7 @@ func loadStatus(workflow *runFlow, checkpoints []CheckPoint) error {
 	id2Name := make(map[string]string)
 	for _, checkpoint := range checkpoints {
 		if checkpoint.GetScope() == ProcessScope {
+			workflow.processes[checkpoint.GetName()].clear(executed)
 			id2Name[checkpoint.GetPrimaryKey()] = checkpoint.GetName()
 		}
 	}
@@ -249,7 +255,7 @@ func loadCheckpoints(workflow *runFlow, checkpoints []CheckPoint) (err error) {
 	}
 	defer func() {
 		if r := recover(); r != nil {
-			err = newPanicError("load checkpoint failed", r)
+			logger.Errorf("[Recovery] panic recovered:\n%s\n%s\n", r, stack())
 		}
 	}()
 	for _, checkpoint := range checkpoints {
@@ -264,7 +270,7 @@ func loadCheckpoints(workflow *runFlow, checkpoints []CheckPoint) (err error) {
 			step := belong.flowSteps[checkpoint.GetName()]
 			err = step.loadCheckpoint(checkpoint)
 		default:
-			err = fmt.Errorf("CheckPointp[%s] has unknown scope %d", checkpoint.GetName(), checkpoint.GetScope())
+			err = fmt.Errorf("CheckPoint[%s] has unknown scope %d", checkpoint.GetName(), checkpoint.GetScope())
 		}
 		if err != nil {
 			return err

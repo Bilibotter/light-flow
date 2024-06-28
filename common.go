@@ -3,7 +3,6 @@ package light_flow
 import (
 	"fmt"
 	"math/bits"
-	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -34,6 +33,7 @@ var (
 	executed        = &StatusEnum{0b1 << 3, "executed"}
 	recovering      = &StatusEnum{0b1 << 4, "recovering"}
 	skipPreCallback = &StatusEnum{0b1 << 5, "skipPreCallback"}
+	skipExecute     = &StatusEnum{0b1 << 6, "skipExecute"}
 	Success         = &StatusEnum{0b1 << 15, "Success"}
 	NormalMask      = &StatusEnum{0b1<<16 - 1, "NormalMask"}
 	abnormal        = []*StatusEnum{Cancel, Timeout, Panic, Error, Stop, CallbackFail, Failed}
@@ -186,8 +186,9 @@ type nodeInfo interface {
 }
 
 type panicWrap struct {
-	msg string
-	r   any
+	err   error
+	trace []byte
+	r     any
 }
 
 type StatusEnum struct {
@@ -270,8 +271,12 @@ func toStepName(value any) string {
 	}
 }
 
-func newPanicError(msg string, r any) PanicError {
-	return &panicWrap{msg: msg, r: r}
+func newPanicError(err error, r any, trace []byte) PanicError {
+	return &panicWrap{
+		err:   err,
+		trace: trace,
+		r:     r,
+	}
 }
 
 // Success return true if finish running and success
@@ -487,21 +492,20 @@ func (c *callback[T]) Exclude(status ...*StatusEnum) *callback[T] {
 	return c
 }
 
-func (c *callback[T]) call(flag string, info T) (keepOn bool, err error, panicStack string) {
+func (c *callback[T]) call(flag string, info T) (bool, PanicError) {
 	if c.flag != flag {
-		return true, nil, ""
+		return true, nil
 	}
 
 	defer func() {
 		r := recover()
 		if r != nil {
-			// this will lead to turn process state to panic
-			panicStack = fmt.Sprintf("panic: %v\n\n%s", r, string(debug.Stack()))
+			err = newPanicError(nil, r, stack())
+			return
 		}
-
 	}()
 
-	keepOn, err = c.run(info)
+	keepOn1, err1 := c.run(info)
 	return
 }
 
@@ -704,11 +708,15 @@ func (sc *simpleContext) Set(key string, value any) {
 }
 
 func (pw *panicWrap) Error() string {
-	return pw.msg
+	return pw.err.Error()
 }
 
 func (pw *panicWrap) GetRecover() any {
 	return pw.r
+}
+
+func (pw *panicWrap) GetPanicStack() []byte {
+	return pw.trace
 }
 
 func (router *nodeRouter) Prefer(key string) (index int64, exist bool) {

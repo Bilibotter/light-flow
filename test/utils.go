@@ -60,9 +60,18 @@ func (s *FuncBuilder) ErrStep() func(ctx flow.Step) (result any, err error) {
 	}
 }
 
-func (s *FuncBuilder) Proc() func(ctx flow.Process) (result any, err error) {
-	return func(ctx flow.Process) (result any, err error) {
-		return s.Fn(ctx)
+func (s *FuncBuilder) Proc() func(ctx flow.Process) (keepOn bool, err error) {
+	return func(ctx flow.Process) (keepOn bool, err error) {
+		_, err = s.Fn(ctx)
+		return true, err
+	}
+}
+
+func (s *FuncBuilder) ErrProc() func(ctx flow.Process) (keepOn bool, err error) {
+	s.err = fmt.Errorf("error")
+	return func(ctx flow.Process) (keepOn bool, err error) {
+		_, err = s.Fn(ctx)
+		return true, err
 	}
 }
 
