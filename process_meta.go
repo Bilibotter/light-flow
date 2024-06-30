@@ -14,6 +14,7 @@ const (
 
 type ProcessMeta struct {
 	ProcessConfig
+	procCallback
 	nodeRouter
 	belong   *FlowMeta
 	init     sync.Once
@@ -27,8 +28,8 @@ type ProcessConfig struct {
 	StepConfig
 	ProcTimeout       time.Duration
 	ProcNotUseDefault bool
-	stepChain         handler[Step]    `flow:"skip"`
-	procChain         handler[Process] `flow:"skip"`
+	//stepChain         handler[Step]    `flow:"skip"`
+	//procChain         handler[Process] `flow:"skip"`
 }
 
 func newProcessConfig() ProcessConfig {
@@ -53,22 +54,6 @@ func (pc *ProcessConfig) StepsRetry(retry int) *ProcessConfig {
 func (pc *ProcessConfig) StepsTimeout(timeout time.Duration) *ProcessConfig {
 	pc.StepConfig.StepTimeout = timeout
 	return pc
-}
-
-func (pc *ProcessConfig) BeforeStep(must bool, callback func(Step) (keepOn bool, err error)) *callback[Step] {
-	return pc.stepChain.addCallback(Before, must, callback)
-}
-
-func (pc *ProcessConfig) AfterStep(must bool, callback func(Step) (keepOn bool, err error)) *callback[Step] {
-	return pc.stepChain.addCallback(After, must, callback)
-}
-
-func (pc *ProcessConfig) BeforeProcess(must bool, callback func(i Process) (keepOn bool, err error)) *callback[Process] {
-	return pc.procChain.addCallback(Before, must, callback)
-}
-
-func (pc *ProcessConfig) AfterProcess(must bool, callback func(Process) (keepOn bool, err error)) *callback[Process] {
-	return pc.procChain.addCallback(After, must, callback)
 }
 
 func (pm *ProcessMeta) Name() string {

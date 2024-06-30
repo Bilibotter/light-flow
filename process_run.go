@@ -122,7 +122,7 @@ func (process *runProcess) schedule() (finish *sync.WaitGroup) {
 	}
 	process.start = time.Now().UTC()
 	process.append(Running)
-	process.procCallback(Before)
+	process.advertise(Before)
 	for _, step := range process.flowSteps {
 		if step.layer == 1 {
 			go process.startStep(step)
@@ -223,7 +223,7 @@ func (process *runProcess) finalize() {
 	} else {
 		process.append(Failed)
 	}
-	process.procCallback(After)
+	process.advertise(After)
 	process.compress.add(process.load())
 	process.end = time.Now().UTC()
 	process.finish.Done()
@@ -305,30 +305,23 @@ func (process *runProcess) runStep(step *runStep) {
 }
 
 func (process *runProcess) stepCallback(step *runStep, flag string) {
-	//info := process.summaryStepInfo(step)
-	panicStack := ""
-	defer func() {
-		if len(panicStack) > 0 && step.exception == nil {
-			step.exception = fmt.Errorf(panicStack)
-		}
-	}()
 	if !process.belong.ProcNotUseDefault && !process.ProcNotUseDefault && defaultConfig != nil {
-		panicStack = defaultConfig.stepChain.handle(flag, step)
+		if breakOff, _ := defaultCallback.stepFilter(flag, nil, step); breakOff {
+			return
+		}
 	}
-	if len(panicStack) != 0 {
+	if breakOff, _ := process.belong.stepFilter(flag, nil, step); breakOff {
 		return
 	}
-	panicStack = process.belong.stepChain.handle(flag, step)
-	if len(panicStack) != 0 {
+	if breakOff, _ := process.stepFilter(flag, nil, step); breakOff {
 		return
 	}
-	panicStack = process.stepChain.handle(flag, step)
 }
 
-func (process *runProcess) procCallback(flag string) {
+func (process *runProcess) advertise(flag string) {
 	if !process.belong.ProcNotUseDefault && !process.ProcNotUseDefault && defaultConfig != nil {
-		defaultConfig.procChain.handle(flag, process)
+		defaultCallback.procFilter(flag, nil, process)
 	}
-	process.belong.procChain.handle(flag, process)
-	process.procChain.handle(flag, process)
+	process.belong.procFilter(flag, nil, process)
+	process.procFilter(flag, nil, process)
 }

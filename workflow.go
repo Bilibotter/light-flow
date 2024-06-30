@@ -21,13 +21,14 @@ var (
 )
 
 type FlowConfig struct {
-	handler[WorkFlow] `flow:"skip"`
-	ProcessConfig     `flow:"skip"`
-	enableRecover     int8
+	//handler[WorkFlow] `flow:"skip"`
+	ProcessConfig `flow:"skip"`
+	enableRecover int8
 }
 
 type FlowMeta struct {
 	FlowConfig
+	flowCallback
 	init              sync.Once
 	name              string
 	flowNotUseDefault bool
@@ -66,8 +67,9 @@ func CreateDefaultConfig() *FlowConfig {
 
 func RegisterFlow(name string) *FlowMeta {
 	flow := FlowMeta{
-		name: name,
-		init: sync.Once{},
+		name:         name,
+		flowCallback: buildFlowCallback(flowScope),
+		init:         sync.Once{},
 	}
 	flow.register()
 	return &flow
@@ -90,14 +92,6 @@ func DoneFlow(name string, input map[string]any) FinishedWorkFlow {
 	}
 	flow := factory.(*FlowMeta).buildRunFlow(input)
 	return flow.Done()
-}
-
-func (fc *FlowConfig) BeforeFlow(must bool, callback func(WorkFlow) (keepOn bool, err error)) *callback[WorkFlow] {
-	return fc.addCallback(Before, must, callback)
-}
-
-func (fc *FlowConfig) AfterFlow(must bool, callback func(WorkFlow) (keepOn bool, err error)) *callback[WorkFlow] {
-	return fc.addCallback(After, must, callback)
 }
 
 func (fm *FlowMeta) initialize() {
@@ -183,10 +177,11 @@ func (fm *FlowMeta) Process(name string) *ProcessMeta {
 			toName:   map[int64]string{0: name},
 			toIndex:  map[string]int64{name: 0},
 		},
-		belong: fm,
-		name:   name,
-		init:   sync.Once{},
-		steps:  make(map[string]*StepMeta),
+		procCallback: buildProcCallback(procScope),
+		belong:       fm,
+		name:         name,
+		init:         sync.Once{},
+		steps:        make(map[string]*StepMeta),
 	}
 
 	pm.register()
@@ -319,9 +314,9 @@ func (rf *runFlow) Done() FinishedWorkFlow {
 
 func (rf *runFlow) advertise(flag string) {
 	if !rf.flowNotUseDefault && defaultConfig != nil {
-		defaultConfig.handle(flag, rf)
+		defaultCallback.flowFilter(flag, nil, rf)
 	}
-	rf.handle(flag, rf)
+	rf.flowFilter(flag, nil, rf)
 }
 
 // Fails returns a slice of fail result Future pointers.

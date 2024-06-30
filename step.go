@@ -20,8 +20,9 @@ type segment int64
 type evaluators []*evaluator
 
 type StepMeta struct {
-	nodeRouter
 	StepConfig
+	stepCallback
+	nodeRouter
 	belong     *ProcessMeta
 	name       string
 	layer      int
