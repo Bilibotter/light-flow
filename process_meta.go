@@ -8,27 +8,28 @@ import (
 )
 
 const (
-	Before = "Before"
-	After  = "After"
+	beforeF uint64 = 1 << iota
+	afterF  uint64 = 1 << iota
+	beforeS        = "Before"
+	afterS         = "After"
 )
 
 type ProcessMeta struct {
 	ProcessConfig
+	procCallback
 	nodeRouter
 	belong   *FlowMeta
 	init     sync.Once
 	name     string
 	steps    map[string]*StepMeta
 	tailStep string
-	nodeNum  int
+	nodeNum  uint
 }
 
 type ProcessConfig struct {
 	StepConfig
 	ProcTimeout       time.Duration
 	ProcNotUseDefault bool
-	stepChain         handler[Step]    `flow:"skip"`
-	procChain         handler[Process] `flow:"skip"`
 }
 
 func newProcessConfig() ProcessConfig {
@@ -53,22 +54,6 @@ func (pc *ProcessConfig) StepsRetry(retry int) *ProcessConfig {
 func (pc *ProcessConfig) StepsTimeout(timeout time.Duration) *ProcessConfig {
 	pc.StepConfig.StepTimeout = timeout
 	return pc
-}
-
-func (pc *ProcessConfig) BeforeStep(must bool, callback func(Step) (keepOn bool, err error)) *callback[Step] {
-	return pc.stepChain.addCallback(Before, must, callback)
-}
-
-func (pc *ProcessConfig) AfterStep(must bool, callback func(Step) (keepOn bool, err error)) *callback[Step] {
-	return pc.stepChain.addCallback(After, must, callback)
-}
-
-func (pc *ProcessConfig) BeforeProcess(must bool, callback func(i Process) (keepOn bool, err error)) *callback[Process] {
-	return pc.procChain.addCallback(Before, must, callback)
-}
-
-func (pc *ProcessConfig) AfterProcess(must bool, callback func(Process) (keepOn bool, err error)) *callback[Process] {
-	return pc.procChain.addCallback(After, must, callback)
 }
 
 func (pm *ProcessMeta) Name() string {
@@ -119,7 +104,7 @@ func (pm *ProcessMeta) Merge(name string) {
 
 	// ensure step index bigger than all depends index
 	for index, step := range pm.sortedSteps() {
-		step.index = int64(index)
+		step.index = uint64(index)
 		step.nodePath = 1 << index
 		pm.toName[step.index] = step.name
 		pm.toIndex[step.name] = step.index
@@ -235,7 +220,7 @@ func (pm *ProcessMeta) addRouterInfo(step *StepMeta) {
 	}
 	step.nodeRouter = nodeRouter{
 		nodePath: 1 << pm.nodeNum,
-		index:    int64(pm.nodeNum),
+		index:    uint64(pm.nodeNum),
 		toName:   pm.toName,
 		toIndex:  pm.toIndex,
 	}

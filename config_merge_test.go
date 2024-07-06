@@ -30,7 +30,7 @@ func CheckResult(t *testing.T, check int64, statuses ...*StatusEnum) func(WorkFl
 			//if status == Timeout {
 			//	time.Sleep(50 * time.Millisecond)
 			//}
-			if !workFlow.Has(status) {
+			if !workFlow.HasAny(status) {
 				t.Errorf("workFlow has not %s status\n", status.Message())
 			}
 		}

@@ -42,7 +42,7 @@ func CheckCtxResult(t *testing.T, check int64, statuses ...*flow.StatusEnum) fun
 			if status == flow.Success && !workFlow.Success() {
 				t.Errorf("WorkFlow executed failed\n")
 			}
-			if !workFlow.Has(status) {
+			if !workFlow.HasAny(status) {
 				t.Errorf("workFlow has not %s status\n", status.Message())
 			}
 		}

@@ -301,3 +301,12 @@ func TestNewFlowReturn(t *testing.T) {
 	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
 	flow.DoneFlow("TestNewFlowReturn", nil)
 }
+
+func TestPanicStepLook(t *testing.T) {
+	defer resetCurrent()
+	workflow := flow.RegisterFlow("TestPanicStepLook")
+	process := workflow.Process("TestPanicStepLook")
+	process.NameStep(Fn(t).Panic(), "1")
+	workflow.AfterStep(false, ErrorResultPrinter)
+	flow.DoneFlow("TestPanicStepLook", nil)
+}

@@ -1,85 +1,53 @@
 package test
 
-//import (
-//	"fmt"
-//	flow "github.com/Bilibotter/light-flow"
-//	"strings"
-//	"sync/atomic"
-//	"testing"
-//)
-//
-//func TestDependMergedWithEmptyHead(t *testing.T) {
-//	defer resetCurrent()
-//	factory1 := flow.RegisterFlow("TestDependMergedWithEmptyHead1")
-//	process1 := factory1.Process("TestDependMergedWithEmptyHead1")
-//	process1.NameStep(GenerateStep(1), "1")
-//	process1.NameStep(GenerateStep(2), "2", "1")
-//	process1.NameStep(GenerateStep(3), "3", "2")
-//	process1.NameStep(GenerateStep(4), "4", "3")
-//	factory2 := flow.RegisterFlow("TestDependMergedWithEmptyHead2")
-//	process2 := factory2.Process("TestDependMergedWithEmptyHead2")
-//	process2.Merge("TestDependMergedWithEmptyHead1")
-//	process2.NameStep(GenerateStep(5), "5", "4")
-//	features := flow.DoneFlow("TestDependMergedWithEmptyHead2", nil)
-//	for _, feature := range features.Futures() {
-//		explain := strings.Join(feature.ExplainStatus(), ", ")
-//		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
-//		if !feature.Success() {
-//			t.Errorf("process[%s] fail", feature.Name)
-//		}
-//	}
-//	if atomic.LoadInt64(&current) != 5 {
-//		t.Errorf("execute 5 step, but current = %d", current)
-//	}
-//	features = flow.DoneFlow("TestDependMergedWithEmptyHead1", nil)
-//	for _, feature := range features.Futures() {
-//		explain := strings.Join(feature.ExplainStatus(), ", ")
-//		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
-//		if !feature.Success() {
-//			t.Errorf("process[%s] fail", feature.Name)
-//		}
-//	}
-//	if atomic.LoadInt64(&current) != 9 {
-//		t.Errorf("execute 9 step, but current = %d", current)
-//	}
-//}
-//
-//func TestDependMergedWithNotEmptyHead(t *testing.T) {
-//	defer resetCurrent()
-//	factory1 := flow.RegisterFlow("TestDependMergedWithNotEmptyHead1")
-//	process1 := factory1.Process("TestDependMergedWithNotEmptyHead1")
-//	process1.NameStep(GenerateStep(1), "1")
-//	process1.NameStep(GenerateStep(2), "2", "1")
-//	process1.NameStep(GenerateStep(3), "3", "2")
-//	process1.NameStep(GenerateStep(4), "4", "3")
-//	factory2 := flow.RegisterFlow("TestDependMergedWithNotEmptyHead2")
-//	process2 := factory2.Process("TestDependMergedWithNotEmptyHead2")
-//	process2.NameStep(GenerateStep(0), "0")
-//	process2.Merge("TestDependMergedWithNotEmptyHead1")
-//	process2.NameStep(GenerateStep(5), "5", "4")
-//	features := flow.DoneFlow("TestDependMergedWithNotEmptyHead2", nil)
-//	for _, feature := range features.Futures() {
-//		explain := strings.Join(feature.ExplainStatus(), ", ")
-//		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
-//		if !feature.Success() {
-//			t.Errorf("process[%s] fail", feature.Name)
-//		}
-//	}
-//	if atomic.LoadInt64(&current) != 6 {
-//		t.Errorf("execute 6 step, but current = %d", current)
-//	}
-//	features = flow.DoneFlow("TestDependMergedWithNotEmptyHead1", nil)
-//	for _, feature := range features.Futures() {
-//		explain := strings.Join(feature.ExplainStatus(), ", ")
-//		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
-//		if !feature.Success() {
-//			t.Errorf("process[%s] fail", feature.Name)
-//		}
-//	}
-//	if atomic.LoadInt64(&current) != 10 {
-//		t.Errorf("execute 10 step, but current = %d", current)
-//	}
-//}
+import (
+	flow "github.com/Bilibotter/light-flow"
+	"testing"
+)
+
+func TestDependMergedWithEmptyHead(t *testing.T) {
+	defer resetCurrent()
+	workflow1 := flow.RegisterFlow("TestDependMergedWithEmptyHead1")
+	process1 := workflow1.Process("TestDependMergedWithEmptyHead1")
+	fn := Fn(t)
+	process1.NameStep(fn.SetCtx0("1").Step(), "1")
+	process1.NameStep(fn.SetCtx0("2").Step(), "2", "1")
+	process1.NameStep(fn.SetCtx0("3").Step(), "3", "2")
+	process1.NameStep(fn.SetCtx0("4").Step(), "4", "3")
+	workflow1.AfterFlow(false, CheckResult(t, 4, flow.Success))
+	workflow2 := flow.RegisterFlow("TestDependMergedWithEmptyHead2")
+	process2 := workflow2.Process("TestDependMergedWithEmptyHead2")
+	process2.Merge("TestDependMergedWithEmptyHead1")
+	f := fn.Do(CheckCtx0("1", "1"), CheckCtx0("2", "2"), CheckCtx0("3", "3"), CheckCtx0("4", "4"))
+	process2.NameStep(f.Step(), "5", "4")
+	workflow2.AfterStep(false, ErrorResultPrinter)
+	workflow2.AfterFlow(false, CheckResult(t, 5, flow.Success))
+	flow.DoneFlow("TestDependMergedWithEmptyHead2", nil)
+	resetCurrent()
+	flow.DoneFlow("TestDependMergedWithEmptyHead1", nil)
+}
+
+func TestDependMergedWithNotEmptyHead(t *testing.T) {
+	defer resetCurrent()
+	workflow1 := flow.RegisterFlow("TestDependMergedWithNotEmptyHead1")
+	process1 := workflow1.Process("TestDependMergedWithNotEmptyHead1")
+	process1.NameStep(Fn(t).Do(SetCtx()).Step(), "1")
+	process1.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "2", "1")
+	process1.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "3", "2")
+	process1.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "4", "3")
+	workflow1.AfterFlow(false, CheckResult(t, 4, flow.Success))
+	workflow2 := flow.RegisterFlow("TestDependMergedWithNotEmptyHead2")
+	process2 := workflow2.Process("TestDependMergedWithNotEmptyHead2")
+	process2.NameStep(Fn(t).Do(SetCtx0("+")).Step(), "0")
+	process2.Merge("TestDependMergedWithNotEmptyHead1")
+	process2.NameStep(Fn(t).Do(CheckCtx0("0", "+"), CheckCtx("4")).Step(), "5", "0", "4")
+	workflow2.AfterStep(false, ErrorResultPrinter)
+	workflow2.AfterFlow(false, CheckResult(t, 6, flow.Success))
+	flow.DoneFlow("TestDependMergedWithNotEmptyHead2", nil)
+	resetCurrent()
+	flow.DoneFlow("TestDependMergedWithNotEmptyHead1", nil)
+}
+
 //
 //func TestMergeEmpty(t *testing.T) {
 //	defer resetCurrent()

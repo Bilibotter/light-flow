@@ -2,7 +2,6 @@ package light_flow
 
 import (
 	"fmt"
-	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -14,12 +13,17 @@ type runProcess struct {
 	*dependentContext
 	belong    *runFlow
 	id        string
+	compress  state
 	flowSteps map[string]*runStep
 	start     time.Time
 	end       time.Time
 	pause     sync.WaitGroup
 	running   sync.WaitGroup
 	finish    sync.WaitGroup
+}
+
+func (process *runProcess) HasAny(enum ...*StatusEnum) bool {
+	return process.compress.Has(enum...)
 }
 
 func (process *runProcess) ID() string {
@@ -39,6 +43,10 @@ func (process *runProcess) CostTime() time.Duration {
 		return 0
 	}
 	return process.end.Sub(process.start)
+}
+
+func (process *runProcess) isRecoverable() bool {
+	return process.belong.isRecoverable()
 }
 
 func (process *runProcess) buildRunStep(meta *StepMeta) *runStep {
@@ -106,21 +114,19 @@ func (process *runProcess) Pause() ProcController {
 
 func (process *runProcess) Stop() ProcController {
 	process.append(Stop)
-	process.append(Failed)
 	return process
 }
 
 func (process *runProcess) schedule() (finish *sync.WaitGroup) {
 	process.initialize()
-	process.start = time.Now().UTC()
 	finish = &process.finish
 	// pre-flow callback due to cancel
-	if process.Has(Cancel) {
+	if process.Has(Cancel) || process.Has(executed) {
 		return
 	}
-
+	process.start = time.Now().UTC()
 	process.append(Running)
-	process.procCallback(Before)
+	process.advertise(beforeF)
 	for _, step := range process.flowSteps {
 		if step.layer == 1 {
 			go process.startStep(step)
@@ -176,7 +182,6 @@ func (process *runProcess) startStep(step *runStep) {
 	select {
 	case <-timer.C:
 		step.append(Timeout)
-		step.append(Failed)
 	case <-step.finish:
 		return
 	}
@@ -210,18 +215,20 @@ func (process *runProcess) finalize() {
 	select {
 	case <-timer.C:
 		process.append(Timeout)
-		process.append(Failed)
 	case <-finish:
 	}
 
 	for _, step := range process.flowSteps {
-		process.add(step.state.load())
+		process.compress.add(step.load())
 	}
-
-	if process.Normal() {
+	process.compress.add(process.load())
+	if process.compress.Normal() {
 		process.append(Success)
+	} else {
+		process.append(Failed)
 	}
-	process.procCallback(After)
+	process.advertise(afterF)
+	process.compress.add(process.load())
 	process.end = time.Now().UTC()
 	process.finish.Done()
 }
@@ -230,6 +237,8 @@ func (process *runProcess) startNextSteps(step *runStep) {
 	// all step not execute should cancel while process is timeout
 	cancel := !step.Normal() || !process.Normal()
 	skip := step.Has(skipped)
+	// execute the next step in the current goroutine to reduce the frequency of goroutine creation.
+	var bind *runStep
 	for _, waiter := range step.waiters {
 		next := process.flowSteps[waiter.name]
 		waiting := next.segments.addWaiting(-1)
@@ -244,17 +253,22 @@ func (process *runProcess) startNextSteps(step *runStep) {
 		} else if skip {
 			next.append(skipped)
 		}
-		go process.startStep(next)
+		if bind != nil {
+			go process.startStep(bind)
+		}
+		bind = next
 	}
-
 	process.running.Done()
+	if bind != nil {
+		process.startStep(bind)
+	}
 }
 
 func (process *runProcess) runStep(step *runStep) {
 	defer func() { step.finish <- true }()
 
 	step.start = time.Now().UTC()
-	process.stepCallback(step, Before)
+	process.stepCallback(step, beforeF)
 	// if beforeStep panic occur, the step will mark as panic
 	if !step.Normal() {
 		return
@@ -270,14 +284,26 @@ func (process *runProcess) runStep(step *runStep) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			panicErr := fmt.Errorf("panic: %v\n\n%s\n", r, string(debug.Stack()))
+			panicErr := fmt.Errorf("\n[Recovery] %s panic recovered:\n%s\n%s\n", time.Now().Format("2006/01/02 - 15:04:05"), r, stack())
+			logger.Errorf("Step[%s] execute panic; Panic=%v\n%s\n", step.name, r, stack())
 			step.append(Panic)
-			step.append(Failed)
 			step.exception = panicErr
 			step.end = time.Now().UTC()
+			if step.isRecoverable() {
+				step.setInternal(fmt.Sprintf(stepBreakPoint, step.Name()), &stepPanicBreakPoint)
+			}
 		}
-		process.stepCallback(step, After)
+		process.stepCallback(step, afterF)
 	}()
+
+	if step.Has(Recovering) {
+		point, exist := step.getInternal(fmt.Sprintf(stepBreakPoint, step.Name()))
+		if exist {
+			if point.(*breakPoint).SkipRun {
+				return
+			}
+		}
+	}
 
 	for i := 0; i <= retry; i++ {
 		result, err := step.run(step)
@@ -285,7 +311,6 @@ func (process *runProcess) runStep(step *runStep) {
 		step.exception = err
 		if err != nil {
 			step.append(Error)
-			step.append(Failed)
 			continue
 		}
 		if result != nil {
@@ -296,31 +321,30 @@ func (process *runProcess) runStep(step *runStep) {
 	}
 }
 
-func (process *runProcess) stepCallback(step *runStep, flag string) {
-	//info := process.summaryStepInfo(step)
-	panicStack := ""
-	defer func() {
-		if len(panicStack) > 0 && step.exception == nil {
-			step.exception = fmt.Errorf(panicStack)
+func (process *runProcess) stepCallback(step *runStep, flag uint64) {
+	if !process.belong.disableDefault && !process.disableDefault {
+		if !defaultCallback.stepFilter(flag, step) {
+			return
 		}
-	}()
-	if !process.belong.ProcNotUseDefault && !process.ProcNotUseDefault && defaultConfig != nil {
-		panicStack = defaultConfig.stepChain.handle(flag, step)
 	}
-	if len(panicStack) != 0 {
+	if !process.belong.stepFilter(flag, step) {
 		return
 	}
-	panicStack = process.belong.stepChain.handle(flag, step)
-	if len(panicStack) != 0 {
+	if !process.stepFilter(flag, step) {
 		return
 	}
-	panicStack = process.stepChain.handle(flag, step)
 }
 
-func (process *runProcess) procCallback(flag string) {
-	if !process.belong.ProcNotUseDefault && !process.ProcNotUseDefault && defaultConfig != nil {
-		defaultConfig.procChain.handle(flag, process)
+func (process *runProcess) advertise(flag uint64) {
+	if !process.belong.disableDefault && !process.disableDefault {
+		if !defaultCallback.procFilter(flag, process) {
+			return
+		}
 	}
-	process.belong.procChain.handle(flag, process)
-	process.procChain.handle(flag, process)
+	if !process.belong.procFilter(flag, process) {
+		return
+	}
+	if !process.procFilter(flag, process) {
+		return
+	}
 }

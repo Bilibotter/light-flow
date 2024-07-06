@@ -21,13 +21,13 @@ var (
 )
 
 type FlowConfig struct {
-	handler[WorkFlow] `flow:"skip"`
-	ProcessConfig     `flow:"skip"`
-	enableRecover     int8
+	ProcessConfig `flow:"skip"`
+	enableRecover int8
 }
 
 type FlowMeta struct {
 	FlowConfig
+	flowCallback
 	init              sync.Once
 	name              string
 	flowNotUseDefault bool
@@ -39,6 +39,7 @@ type runFlow struct {
 	*FlowMeta
 	*simpleContext
 	id        string
+	compress  state
 	processes map[string]*runProcess
 	start     time.Time
 	end       time.Time
@@ -65,8 +66,9 @@ func CreateDefaultConfig() *FlowConfig {
 
 func RegisterFlow(name string) *FlowMeta {
 	flow := FlowMeta{
-		name: name,
-		init: sync.Once{},
+		name:         name,
+		flowCallback: buildFlowCallback(flowScope),
+		init:         sync.Once{},
 	}
 	flow.register()
 	return &flow
@@ -89,14 +91,6 @@ func DoneFlow(name string, input map[string]any) FinishedWorkFlow {
 	}
 	flow := factory.(*FlowMeta).buildRunFlow(input)
 	return flow.Done()
-}
-
-func (fc *FlowConfig) BeforeFlow(must bool, callback func(WorkFlow) (keepOn bool, err error)) *callback[WorkFlow] {
-	return fc.addCallback(Before, must, callback)
-}
-
-func (fc *FlowConfig) AfterFlow(must bool, callback func(WorkFlow) (keepOn bool, err error)) *callback[WorkFlow] {
-	return fc.addCallback(After, must, callback)
 }
 
 func (fm *FlowMeta) initialize() {
@@ -149,8 +143,9 @@ func (fm *FlowMeta) DisableRecover() *FlowMeta {
 
 func (fm *FlowMeta) buildRunFlow(input map[string]any) *runFlow {
 	ctx := simpleContext{
-		table:   input,
-		ctxName: fm.name,
+		table:    input,
+		internal: make(map[string]any),
+		ctxName:  fm.name,
 	}
 	rf := runFlow{
 		state:         emptyStatus(),
@@ -179,18 +174,23 @@ func (fm *FlowMeta) Process(name string) *ProcessMeta {
 		nodeRouter: nodeRouter{
 			nodePath: fullAccess,
 			index:    0,
-			toName:   map[int64]string{0: name},
-			toIndex:  map[string]int64{name: 0},
+			toName:   map[uint64]string{0: name},
+			toIndex:  map[string]uint64{name: 0},
 		},
-		belong: fm,
-		name:   name,
-		init:   sync.Once{},
-		steps:  make(map[string]*StepMeta),
+		procCallback: buildProcCallback(procScope),
+		belong:       fm,
+		name:         name,
+		init:         sync.Once{},
+		steps:        make(map[string]*StepMeta),
 	}
 
 	pm.register()
 	fm.processes = append(fm.processes, &pm)
 	return &pm
+}
+
+func (rf *runFlow) HasAny(enum ...*StatusEnum) bool {
+	return rf.compress.Has(enum...)
 }
 
 func (rf *runFlow) Process(name string) (ProcController, bool) {
@@ -232,7 +232,6 @@ func (rf *runFlow) CostTime() time.Duration {
 
 func (rf *runFlow) buildRunProcess(meta *ProcessMeta) *runProcess {
 	table := linkedTable{
-		lock:  sync.RWMutex{},
 		nodes: map[string]*node{},
 	}
 	process := runProcess{
@@ -260,20 +259,6 @@ func (rf *runFlow) buildRunProcess(meta *ProcessMeta) *runProcess {
 	return &process
 }
 
-func (rf *runFlow) finalize() {
-	for _, process := range rf.processes {
-		rf.add(process.state.load())
-	}
-	if rf.Normal() {
-		rf.append(Success)
-	}
-	if rf.shallRecover() {
-		rf.saveCheckpoints()
-	}
-	rf.advertise(After)
-	rf.finish.Done()
-}
-
 // Done function will block util all process done.
 func (rf *runFlow) Done() FinishedWorkFlow {
 	if !rf.EndTime().IsZero() {
@@ -289,7 +274,8 @@ func (rf *runFlow) Done() FinishedWorkFlow {
 	}
 	rf.start = time.Now().UTC()
 	rf.initialize()
-	rf.advertise(Before)
+	// execute before flow callback
+	rf.advertise(beforeF)
 	wg := make([]*sync.WaitGroup, 0, len(rf.processes))
 	for _, process := range rf.processes {
 		if rf.Has(CallbackFail) {
@@ -307,30 +293,32 @@ func (rf *runFlow) Done() FinishedWorkFlow {
 	return rf
 }
 
-func (rf *runFlow) advertise(flag string) {
-	if !rf.flowNotUseDefault && defaultConfig != nil {
-		defaultConfig.handle(flag, rf)
+func (rf *runFlow) advertise(flag uint64) {
+	if !rf.disableDefault {
+		if !defaultCallback.flowFilter(flag, rf) {
+			return
+		}
 	}
-	rf.handle(flag, rf)
+	rf.flowFilter(flag, rf)
 }
 
-// Fails returns a slice of fail result Future pointers.
-// If all process success, return an empty slice.
-//func (rf *runFlow) Fails() []*Future {
-//	futures := make([]*Future, 0)
-//	for _, future := range rf.futures {
-//		if len(future.Exceptions()) != 0 {
-//			futures = append(futures, future)
-//		}
-//	}
-//	return futures
-//}
-
-// Futures returns the slice of future objects.
-// future can get the result and state of the process.
-//func (rf *runFlow) Futures() []*Future {
-//	return rf.futures
-//}
+func (rf *runFlow) finalize() {
+	for _, process := range rf.processes {
+		rf.compress.add(process.compress.load())
+	}
+	rf.compress.add(rf.load())
+	if rf.compress.Normal() {
+		rf.append(Success)
+	} else {
+		rf.append(Failed)
+	}
+	rf.advertise(afterF)
+	rf.compress.add(rf.load())
+	if rf.isRecoverable() {
+		rf.saveCheckpoints()
+	}
+	rf.finish.Done()
+}
 
 func (rf *runFlow) ListProcess() []string {
 	processes := make([]string, 0, len(rf.processes))
