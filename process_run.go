@@ -45,6 +45,10 @@ func (process *runProcess) CostTime() time.Duration {
 	return process.end.Sub(process.start)
 }
 
+func (process *runProcess) isRecoverable() bool {
+	return process.belong.isRecoverable()
+}
+
 func (process *runProcess) buildRunStep(meta *StepMeta) *runStep {
 	step := runStep{
 		dependentContext: &dependentContext{
@@ -122,7 +126,7 @@ func (process *runProcess) schedule() (finish *sync.WaitGroup) {
 	}
 	process.start = time.Now().UTC()
 	process.append(Running)
-	process.advertise(Before)
+	process.advertise(beforeF)
 	for _, step := range process.flowSteps {
 		if step.layer == 1 {
 			go process.startStep(step)
@@ -223,7 +227,7 @@ func (process *runProcess) finalize() {
 	} else {
 		process.append(Failed)
 	}
-	process.advertise(After)
+	process.advertise(afterF)
 	process.compress.add(process.load())
 	process.end = time.Now().UTC()
 	process.finish.Done()
@@ -264,7 +268,7 @@ func (process *runProcess) runStep(step *runStep) {
 	defer func() { step.finish <- true }()
 
 	step.start = time.Now().UTC()
-	process.stepCallback(step, Before)
+	process.stepCallback(step, beforeF)
 	// if beforeStep panic occur, the step will mark as panic
 	if !step.Normal() {
 		return
@@ -281,12 +285,25 @@ func (process *runProcess) runStep(step *runStep) {
 	defer func() {
 		if r := recover(); r != nil {
 			panicErr := fmt.Errorf("\n[Recovery] %s panic recovered:\n%s\n%s\n", time.Now().Format("2006/01/02 - 15:04:05"), r, stack())
+			logger.Errorf("Step[%s] execute panic; Panic=%v\n%s\n", step.name, r, stack())
 			step.append(Panic)
 			step.exception = panicErr
 			step.end = time.Now().UTC()
+			if step.isRecoverable() {
+				step.setInternal(fmt.Sprintf(stepBreakPoint, step.Name()), &stepPanicBreakPoint)
+			}
 		}
-		process.stepCallback(step, After)
+		process.stepCallback(step, afterF)
 	}()
+
+	if step.Has(Recovering) {
+		point, exist := step.getInternal(fmt.Sprintf(stepBreakPoint, step.Name()))
+		if exist {
+			if point.(*breakPoint).SkipRun {
+				return
+			}
+		}
+	}
 
 	for i := 0; i <= retry; i++ {
 		result, err := step.run(step)
@@ -304,24 +321,30 @@ func (process *runProcess) runStep(step *runStep) {
 	}
 }
 
-func (process *runProcess) stepCallback(step *runStep, flag string) {
-	if !process.belong.ProcNotUseDefault && !process.ProcNotUseDefault && defaultConfig != nil {
-		if breakOff, _ := defaultCallback.stepFilter(flag, nil, step); breakOff {
+func (process *runProcess) stepCallback(step *runStep, flag uint64) {
+	if !process.belong.disableDefault && !process.disableDefault {
+		if !defaultCallback.stepFilter(flag, step) {
 			return
 		}
 	}
-	if breakOff, _ := process.belong.stepFilter(flag, nil, step); breakOff {
+	if !process.belong.stepFilter(flag, step) {
 		return
 	}
-	if breakOff, _ := process.stepFilter(flag, nil, step); breakOff {
+	if !process.stepFilter(flag, step) {
 		return
 	}
 }
 
-func (process *runProcess) advertise(flag string) {
-	if !process.belong.ProcNotUseDefault && !process.ProcNotUseDefault && defaultConfig != nil {
-		defaultCallback.procFilter(flag, nil, process)
+func (process *runProcess) advertise(flag uint64) {
+	if !process.belong.disableDefault && !process.disableDefault {
+		if !defaultCallback.procFilter(flag, process) {
+			return
+		}
 	}
-	process.belong.procFilter(flag, nil, process)
-	process.procFilter(flag, nil, process)
+	if !process.belong.procFilter(flag, process) {
+		return
+	}
+	if !process.procFilter(flag, process) {
+		return
+	}
 }

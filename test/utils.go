@@ -38,18 +38,169 @@ type FuncBuilder struct {
 	onFail []func(ctx Ctx) (any, error)
 }
 
+type FuncBuilder0 struct {
+	t      *testing.T
+	err    error
+	doing  []func(ctx flow.WorkFlow) (keepOn bool, err error)
+	onSuc  []func(ctx flow.WorkFlow) (keepOn bool, err error)
+	onFail []func(ctx flow.WorkFlow) (keepOn bool, err error)
+}
+
 type Person struct {
 	Name string
 	Age  int
+}
+
+type simpleContext struct {
+	table map[string]any
+	name  string
+}
+
+func (s *simpleContext) Get(key string) (value any, exist bool) {
+	value, exist = s.table[key]
+	return
+}
+
+func (s *simpleContext) Set(key string, value any) {
+	s.table[key] = value
+}
+
+func (s *simpleContext) Name() string {
+	return s.name
 }
 
 func (p *Person) name() string {
 	return p.Name
 }
 
+func (s *FuncBuilder0) ErrFlow() func(ctx flow.WorkFlow) (keepOn bool, err error) {
+	s.err = fmt.Errorf("error")
+	return func(ctx flow.WorkFlow) (keepOn bool, err error) {
+		return s.Fn(ctx)
+	}
+}
+
+func (s *FuncBuilder0) PanicFlow() func(ctx flow.WorkFlow) (keepOn bool, err error) {
+	s.err = fmt.Errorf("error")
+	return func(ctx flow.WorkFlow) (keepOn bool, err error) {
+		keepOn, err = s.Fn(ctx)
+		if err != nil {
+			panic("panic")
+		}
+		return
+	}
+}
+
+func (s *FuncBuilder0) Fn(ctx flow.WorkFlow) (keepOn bool, err error) {
+	for _, f := range s.doing {
+		_, err = f(ctx)
+		if err != nil {
+			panic(err)
+		}
+	}
+	if len(s.doing) > 0 {
+		atomic.AddInt64(&current, 1)
+	}
+	if executeSuc {
+		for _, f := range s.onSuc {
+			_, err = f(ctx)
+			if err != nil {
+				return false, err
+			}
+		}
+		if len(s.onSuc) > 0 {
+			atomic.AddInt64(&current, 1)
+		}
+		return
+	}
+	for _, f := range s.onFail {
+		f(ctx)
+	}
+	if len(s.onFail) > 0 {
+		atomic.AddInt64(&current, 1)
+	}
+	if s.err != nil {
+		return false, s.err
+	}
+	return true, nil
+}
+
+func (s *FuncBuilder0) Suc() *FuncBuilder0 {
+	f := func(ctx flow.WorkFlow) (keepOn bool, err error) {
+		atomic.AddInt64(&current, 1)
+		s.t.Logf("Flow-Callback[%s] start\n", ctx.Name())
+		s.t.Logf("Flow-Callback[%s] suc\n", ctx.Name())
+		return true, fmt.Errorf("error")
+	}
+	s.onSuc = append(s.onSuc, f)
+	return s
+}
+
+func (s *FuncBuilder0) Fail() *FuncBuilder0 {
+	f := func(ctx flow.WorkFlow) (keepOn bool, err error) {
+		atomic.AddInt64(&current, 1)
+		s.t.Logf("Flow-Callback[%s] start\n", ctx.Name())
+		s.t.Logf("Flow-Callback[%s] failed\n", ctx.Name())
+		return true, fmt.Errorf("error")
+	}
+	s.onFail = append(s.onFail, f)
+	return s
+}
+
+func (s *FuncBuilder0) Normal() func(flow.WorkFlow) (keepOn bool, err error) {
+	return func(ctx flow.WorkFlow) (keepOn bool, err error) {
+		atomic.AddInt64(&current, 1)
+		s.t.Logf("Flow-Callback[%s] start\n", ctx.Name())
+		s.t.Logf("Flow-Callback[%s] end\n", ctx.Name())
+		return true, nil
+	}
+}
+
+func (s *FuncBuilder0) Panic(i ...int64) func(ctx flow.WorkFlow) (result any, err error) {
+	return func(ctx flow.WorkFlow) (result any, err error) {
+		if len(i) > 0 {
+			atomic.AddInt64(&current, i[0])
+		} else {
+			atomic.AddInt64(&current, 1)
+		}
+		s.t.Logf("Step[%s] panic\n", ctx.Name())
+		panic(fmt.Sprintf("Step[%s] panic", ctx.Name()))
+	}
+}
+
 func (s *FuncBuilder) Step() func(ctx flow.Step) (result any, err error) {
 	return func(ctx flow.Step) (result any, err error) {
 		return s.Fn(ctx)
+	}
+}
+
+func (s *FuncBuilder) StepCall(scope string) func(ctx flow.Step) (keepOn bool, err error) {
+	return func(ctx flow.Step) (keepOn bool, err error) {
+		atomic.AddInt64(&current, 1)
+		s.t.Logf("Step-Callback[%s] at scope[%s] start\n", ctx.Name(), scope)
+		s.t.Logf("Step-Callback[%s] at scope[%s] end\n", ctx.Name(), scope)
+		return true, nil
+	}
+}
+
+func (s *FuncBuilder) ErrStepCall() func(ctx flow.Step) (keepOn bool, err error) {
+	s.err = fmt.Errorf("error")
+	return func(ctx flow.Step) (keepOn bool, err error) {
+		_, err = s.Fn(ctx, true)
+		keepOn = err == nil
+		return
+	}
+}
+
+func (s *FuncBuilder) PanicStepCall() func(ctx flow.Step) (keepOn bool, err error) {
+	s.err = fmt.Errorf("error")
+	return func(ctx flow.Step) (keepOn bool, err error) {
+		_, err = s.Fn(ctx, true)
+		if err != nil {
+			panic("panic")
+		}
+		keepOn = err == nil
+		return
 	}
 }
 
@@ -75,8 +226,23 @@ func (s *FuncBuilder) ErrProc() func(ctx flow.Process) (keepOn bool, err error) 
 	}
 }
 
-func (s *FuncBuilder) Fn(ctx Ctx) (result any, err error) {
-	s.t.Logf("task[%s] start\n", ctx.Name())
+func (s *FuncBuilder) PanicProc() func(ctx flow.Process) (keepOn bool, err error) {
+	s.err = fmt.Errorf("error")
+	return func(ctx flow.Process) (keepOn bool, err error) {
+		_, err = s.Fn(ctx)
+		if err != nil {
+			panic("panic")
+		}
+		return true, err
+	}
+}
+
+func (s *FuncBuilder) Fn(ctx Ctx, isCallback ...bool) (result any, err error) {
+	if len(isCallback) > 0 {
+		s.t.Logf("Callback[%s] start\n", ctx.Name())
+	} else {
+		s.t.Logf("task[%s] start\n", ctx.Name())
+	}
 	for _, f := range s.doing {
 		result, err = f(ctx)
 		if err != nil {
@@ -99,7 +265,11 @@ func (s *FuncBuilder) Fn(ctx Ctx) (result any, err error) {
 		if len(s.onSuc) > 0 {
 			atomic.AddInt64(&current, 1)
 		}
-		s.t.Logf("task[%s] end\n", ctx.Name())
+		if len(isCallback) > 0 {
+			s.t.Logf("Callback[%s] end\n", ctx.Name())
+		} else {
+			s.t.Logf("task[%s] end\n", ctx.Name())
+		}
 		return
 	}
 	for _, f := range s.onFail {
@@ -112,10 +282,18 @@ func (s *FuncBuilder) Fn(ctx Ctx) (result any, err error) {
 		atomic.AddInt64(&current, 1)
 	}
 	if s.err != nil {
-		s.t.Logf("task[%s] failed\n", ctx.Name())
+		if len(isCallback) > 0 {
+			s.t.Logf("Callback[%s] failed\n", ctx.Name())
+		} else {
+			s.t.Logf("task[%s] failed\n", ctx.Name())
+		}
 		return nil, s.err
 	}
-	s.t.Logf("task[%s] end\n", ctx.Name())
+	if len(isCallback) > 0 {
+		s.t.Logf("Callback[%s] end\n", ctx.Name())
+	} else {
+		s.t.Logf("task[%s] end\n", ctx.Name())
+	}
 	return ctx.Name(), nil
 }
 
@@ -132,6 +310,15 @@ func (s *FuncBuilder) Suc(f ...func(Ctx) (any, error)) *FuncBuilder {
 func (s *FuncBuilder) Fail(f ...func(Ctx) (any, error)) *FuncBuilder {
 	s.onFail = append(s.onFail, f...)
 	return s
+}
+
+func (s *FuncBuilder) NormalProc() func(ctx flow.Process) (keepOn bool, err error) {
+	return func(ctx flow.Process) (keepOn bool, err error) {
+		atomic.AddInt64(&current, 1)
+		s.t.Logf("Process-Callback[%s] start\n", ctx.Name())
+		s.t.Logf("Process-Callback[%s] end\n", ctx.Name())
+		return true, nil
+	}
 }
 
 func (s *FuncBuilder) Normal() func(ctx flow.Step) (result any, err error) {
@@ -250,6 +437,10 @@ func Fn(t *testing.T) *FuncBuilder {
 	return &FuncBuilder{t: t}
 }
 
+func Fn0(t *testing.T) *FuncBuilder0 {
+	return &FuncBuilder0{t: t}
+}
+
 func SetCtx() func(ctx Ctx) (any, error) {
 	return SetCtx0("")
 }
@@ -284,6 +475,12 @@ func SetCtx0(prefix string) func(ctx Ctx) (any, error) {
 
 func CheckCtx(preview string, notCheckResult ...int) func(ctx Ctx) (any, error) {
 	return CheckCtx0(preview, "", notCheckResult...)
+}
+
+func Normal() func(ctx Ctx) (any, error) {
+	return func(ctx Ctx) (any, error) {
+		return ctx.Name(), nil
+	}
 }
 
 func CheckCtx1(notCheckResult ...int) func(ctx Ctx) (any, error) {
@@ -454,25 +651,27 @@ func CheckCtx0(preview, prefix string, notCheckResult ...int) func(ctx Ctx) (any
 
 func CheckResult(t *testing.T, check int64, statuses ...*flow.StatusEnum) func(flow.WorkFlow) (keepOn bool, err error) {
 	return func(workFlow flow.WorkFlow) (keepOn bool, err error) {
+		t.Logf(">>>>>>>>>>>>>>>")
 		ss := make([]string, len(statuses))
 		for i, status := range statuses {
 			ss[i] = status.Message()
 		}
-		t.Logf("start check, expected current=%d, status include %s", check, strings.Join(ss, ","))
+		t.Logf("start check")
+		t.Logf("expect [current] = %d, [status] include {%s}", check, strings.Join(ss, ","))
 		if current != check {
-			t.Errorf("execute %d step, but current = %d\n", check, current)
+			t.Errorf("execute %d step, but current = %d", check, current)
 		}
 		for _, status := range statuses {
 			if status == flow.Success && !workFlow.Success() {
-				t.Errorf("WorkFlow executed failed\n")
+				t.Errorf("WorkFlow executed failed")
 			}
 			if !workFlow.HasAny(status) {
-				t.Errorf("workFlow has not %s status\n", status.Message())
+				t.Errorf("workFlow has not %s status", status.Message())
 			}
 		}
 		t.Logf("status expalin=%s", strings.Join(workFlow.ExplainStatus(), ","))
 		t.Logf("finish check")
-		println()
+		t.Logf("<<<<<<<<<<<<<<<\n")
 		return true, nil
 	}
 }

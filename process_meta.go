@@ -8,8 +8,10 @@ import (
 )
 
 const (
-	Before = "Before"
-	After  = "After"
+	beforeF uint64 = 1 << iota
+	afterF  uint64 = 1 << iota
+	beforeS        = "Before"
+	afterS         = "After"
 )
 
 type ProcessMeta struct {
@@ -21,15 +23,13 @@ type ProcessMeta struct {
 	name     string
 	steps    map[string]*StepMeta
 	tailStep string
-	nodeNum  int
+	nodeNum  uint
 }
 
 type ProcessConfig struct {
 	StepConfig
 	ProcTimeout       time.Duration
 	ProcNotUseDefault bool
-	//stepChain         handler[Step]    `flow:"skip"`
-	//procChain         handler[Process] `flow:"skip"`
 }
 
 func newProcessConfig() ProcessConfig {
@@ -104,7 +104,7 @@ func (pm *ProcessMeta) Merge(name string) {
 
 	// ensure step index bigger than all depends index
 	for index, step := range pm.sortedSteps() {
-		step.index = int64(index)
+		step.index = uint64(index)
 		step.nodePath = 1 << index
 		pm.toName[step.index] = step.name
 		pm.toIndex[step.name] = step.index
@@ -220,7 +220,7 @@ func (pm *ProcessMeta) addRouterInfo(step *StepMeta) {
 	}
 	step.nodeRouter = nodeRouter{
 		nodePath: 1 << pm.nodeNum,
-		index:    int64(pm.nodeNum),
+		index:    uint64(pm.nodeNum),
 		toName:   pm.toName,
 		toIndex:  pm.toIndex,
 	}

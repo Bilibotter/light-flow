@@ -9,10 +9,12 @@ import (
 )
 
 const (
-	publicIndex int64 = 0
-	resultIndex int64 = 62
-	fullAccess  int64 = 1<<62 - 1
-	resultMark  int64 = 1 << resultIndex
+	publicIndex   uint64 = 0
+	resultIndex   uint64 = 62
+	internalIndex uint64 = 63
+	fullAccess    uint64 = 1<<62 - 1
+	resultMark    uint64 = 1 << resultIndex
+	internalMark  uint64 = 1 << 63
 )
 
 // these constants are used to indicate the position of the process
@@ -25,25 +27,23 @@ var (
 
 // these variable are used to indicate the state of the unit
 var (
-	normal          = []*StatusEnum{Pending, Running, Pause, Success}
-	Pending         = &StatusEnum{0, "Pending"}
-	Running         = &StatusEnum{0b1, "Running"}
-	Pause           = &StatusEnum{0b1 << 1, "Pause"}
-	skipped         = &StatusEnum{0b1 << 2, "skip"}
-	executed        = &StatusEnum{0b1 << 3, "executed"}
-	recovering      = &StatusEnum{0b1 << 4, "recovering"}
-	skipPreCallback = &StatusEnum{0b1 << 5, "skipPreCallback"}
-	skipExecute     = &StatusEnum{0b1 << 6, "skipExecute"}
-	Success         = &StatusEnum{0b1 << 15, "Success"}
-	NormalMask      = &StatusEnum{0b1<<16 - 1, "NormalMask"}
-	abnormal        = []*StatusEnum{Cancel, Timeout, Panic, Error, Stop, CallbackFail, Failed}
-	Cancel          = &StatusEnum{0b1<<31 | 0b1<<16, "Cancel"}
-	Timeout         = &StatusEnum{0b1<<31 | 0b1<<17, "Timeout"}
-	Panic           = &StatusEnum{0b1<<31 | 0b1<<18, "Panic"}
-	Error           = &StatusEnum{0b1<<31 | 0b1<<19, "Error"}
-	Stop            = &StatusEnum{0b1<<31 | 0b1<<20, "Stop"}
-	CallbackFail    = &StatusEnum{0b1<<31 | 0b1<<21, "CallbackFail"}
-	Failed          = &StatusEnum{0b1 << 31, "Failed"}
+	normal       = []*StatusEnum{Pending, Running, Pause, Success}
+	Pending      = &StatusEnum{0, "Pending"}
+	Running      = &StatusEnum{0b1, "Running"}
+	Pause        = &StatusEnum{0b1 << 1, "Pause"}
+	skipped      = &StatusEnum{0b1 << 2, "skip"}
+	executed     = &StatusEnum{0b1 << 3, "executed"}
+	Recovering   = &StatusEnum{0b1 << 4, "recovering"}
+	Success      = &StatusEnum{0b1 << 15, "Success"}
+	NormalMask   = &StatusEnum{0b1<<16 - 1, "NormalMask"}
+	abnormal     = []*StatusEnum{Cancel, Timeout, Panic, Error, Stop, CallbackFail, Failed}
+	Cancel       = &StatusEnum{0b1<<31 | 0b1<<16, "Cancel"}
+	Timeout      = &StatusEnum{0b1<<31 | 0b1<<17, "Timeout"}
+	Panic        = &StatusEnum{0b1<<31 | 0b1<<18, "Panic"}
+	Error        = &StatusEnum{0b1<<31 | 0b1<<19, "Error"}
+	Stop         = &StatusEnum{0b1<<31 | 0b1<<20, "Stop"}
+	CallbackFail = &StatusEnum{0b1<<31 | 0b1<<21, "CallbackFail"}
+	Failed       = &StatusEnum{0b1 << 31, "Failed"}
 	// An abnormal step state will cause the cancellation of dependent unexecuted steps.
 	AbnormalMask = &StatusEnum{NormalMask.flag << 16, "AbnormalMask"}
 )
@@ -61,6 +61,7 @@ type FlowController interface {
 
 type WorkFlow interface {
 	flowRuntime
+	proto
 }
 
 type FinishedWorkFlow interface {
@@ -77,6 +78,7 @@ type flowRuntime interface {
 type Process interface {
 	procCtx
 	procRuntime
+	proto
 }
 
 type FinishedProcess interface {
@@ -107,6 +109,7 @@ type procRuntime interface {
 type Step interface {
 	stepCtx
 	stepRuntime
+	proto
 }
 
 type FinishedStep interface {
@@ -170,18 +173,19 @@ type context interface {
 type PanicError interface {
 	Error() string
 	GetRecover() any
+	GetPanicStack() []byte
 }
 
 type routing interface {
 	nodeInfo
-	Prefer(key string) (index int64, exist bool)
-	KeyPath() int64
-	KeyAccess() int64
+	Prefer(key string) (index uint64, exist bool)
+	Visible() uint64
+	Access() uint64
 }
 
 type nodeInfo interface {
-	ToIndex(name string) (int64, bool)
-	ToName(index int64) string
+	ToIndex(name string) (uint64, bool)
+	ToName(index uint64) string
 	nodeName() string
 }
 
@@ -197,8 +201,10 @@ type StatusEnum struct {
 }
 
 type simpleContext struct {
-	table   map[string]any
-	ctxName string
+	sync.RWMutex
+	table    map[string]any
+	internal map[string]any
+	ctxName  string
 }
 
 type dependentContext struct {
@@ -207,21 +213,13 @@ type dependentContext struct {
 	prev context
 }
 
-type nodeRouter struct {
-	toName   map[int64]string // index to name
-	toIndex  map[string]int64 // name to toIndex
-	priority map[string]int64 // specify the  key to index
-	index    int64
-	nodePath int64
-}
-
 type linkedTable struct {
-	lock  sync.RWMutex
+	sync.RWMutex
 	nodes map[string]*node
 }
 
 type node struct {
-	Path  int64 // combine current node connected node's index, corresponding bit will be set to 1
+	Path  uint64 // combine current node connected node's index, corresponding bit will be set to 1
 	Value any
 	Next  *node
 }
@@ -230,6 +228,14 @@ type outcome struct {
 	Result  interface{}
 	Named   []evalValue
 	Unnamed []evalValue
+}
+
+type nodeRouter struct {
+	toName   map[uint64]string // index to name
+	toIndex  map[string]uint64 // name to toIndex
+	priority map[string]uint64 // specify the  key to index
+	index    uint64
+	nodePath uint64
 }
 
 type evalValue struct {
@@ -361,74 +367,45 @@ func (s *StatusEnum) Message() string {
 	return s.msg
 }
 
-// set method sets the value associated with the given key in own context.
-func (t *linkedTable) set(path int64, key string, value any) {
-	t.lock.Lock()
-	defer t.lock.Unlock()
-	n := &node{
-		Value: value,
-		Path:  path,
-		Next:  t.nodes[key],
-	}
-	t.nodes[key] = n
+func (pw *panicWrap) Error() string {
+	return pw.err.Error()
 }
 
-func (t *linkedTable) matchByIndex(index int64, key string) (any, bool) {
-	t.lock.RLock()
-	defer t.lock.RUnlock()
-	head, exist := t.nodes[key]
-	if !exist {
-		return nil, false
-	}
-	if index == resultMark {
-		return head.matchByHighest(0)
-	}
-	return head.matchByHighest(1 << index)
+func (pw *panicWrap) GetRecover() any {
+	return pw.r
 }
 
-// Get method retrieves the value associated with the given key from the context path.
-// The method first checks the priority context, then own context, finally parents context.
-// Returns the value associated with the key (if found) and a boolean indicating its presence.
-func (t *linkedTable) get(path int64, key string) (any, bool) {
-	t.lock.RLock()
-	defer t.lock.RUnlock()
-	if head, exist := t.nodes[key]; exist {
-		if value, find := head.search(path); find {
-			return value, find
-		}
-	}
-	return nil, false
+func (pw *panicWrap) GetPanicStack() []byte {
+	return pw.trace
 }
 
-// matchByHighest will exact search node.
-// In most cases, the position of the highest bit is the index.
-func (n *node) matchByHighest(highest int64) (any, bool) {
-	// Check if the highest set bit in "highest" is equal to the highest set bit in "n.Path".
-	// If the condition is true, the value of node is set by the step corresponding to highest.
-	if bits.Len64(uint64(highest)) == bits.Len64(uint64(n.Path)) {
-		return n.Value, true
-	}
-	if n.Next == nil {
-		return nil, false
-	}
-	return n.Next.matchByHighest(highest)
+func (sc *simpleContext) Get(key string) (value any, exist bool) {
+	value, exist = sc.table[key]
+	return
 }
 
-func (n *node) search(path int64) (any, bool) {
-	if path&n.Path == n.Path {
-		return n.Value, true
-	}
-	if n.Next == nil {
-		return nil, false
-	}
-	return n.Next.search(path)
+func (sc *simpleContext) Set(key string, value any) {
+	sc.table[key] = value
+}
+
+func (sc *simpleContext) setInternal(key string, value any) {
+	sc.Lock()
+	defer sc.Unlock()
+	sc.internal[key] = value
+}
+
+func (sc *simpleContext) getInternal(key string) (value any, exist bool) {
+	sc.RLock()
+	defer sc.RUnlock()
+	value, exist = sc.internal[key]
+	return
 }
 
 func (ctx *dependentContext) Get(key string) (value any, exist bool) {
 	if index, match := ctx.Prefer(key); match {
 		return ctx.matchByIndex(index, key)
 	}
-	if value, exist = ctx.get(ctx.KeyAccess(), key); exist {
+	if value, exist = ctx.get(ctx.Access(), key); exist {
 		return
 	}
 	if ctx.prev != nil {
@@ -437,40 +414,34 @@ func (ctx *dependentContext) Get(key string) (value any, exist bool) {
 	return nil, false
 }
 
-func (ctx *dependentContext) Result(key string) (value any, exist bool) {
-	ptr, find := ctx.getOutCome(key)
-	defer ctx.lock.RUnlock()
-	if !find {
-		return nil, false
-	}
-	return ptr.Result, true
+func (ctx *dependentContext) Set(key string, value any) {
+	ctx.set(ctx.Visible(), key, value)
 }
 
-func (ctx *dependentContext) getCondition(key string) (named, unnamed []evalValue, exist bool) {
-	ptr, find := ctx.getOutCome(key)
-	defer ctx.lock.RUnlock()
-	if !find {
-		return nil, nil, false
-	}
-	return ptr.Named, ptr.Unnamed, true
+func (ctx *dependentContext) getInternal(key string) (value any, exist bool) {
+	return ctx.matchByIndex(internalIndex, key)
+}
+
+func (ctx *dependentContext) setInternal(key string, value any) {
+	ctx.set(internalMark, key, value)
 }
 
 func (ctx *dependentContext) EndValues(key string) map[string]any {
-	ctx.lock.RLock()
-	defer ctx.lock.RUnlock()
+	ctx.RLock()
+	defer ctx.RUnlock()
 	current, find := ctx.nodes[key]
 	if !find {
 		return nil
 	}
 	m := make(map[string]any)
-	exist := int64(0)
+	exist := uint64(0)
 	for current.Next != nil {
-		if ctx.KeyPath()&current.Path != current.Path || exist|current.Path == exist {
+		if ctx.Visible()&current.Path != current.Path || exist|current.Path == exist {
 			current = current.Next
 			continue
 		}
-		length := bits.Len64(uint64(current.Path))
-		name := ctx.ToName(int64(length) - 1)
+		length := bits.Len64(current.Path)
+		name := ctx.ToName(uint64(length) - 1)
 		m[name] = current.Value
 		exist |= current.Path
 		current = current.Next
@@ -478,25 +449,33 @@ func (ctx *dependentContext) EndValues(key string) map[string]any {
 	return m
 }
 
-func (ctx *dependentContext) GetByStepName(stepName, key string) (value any, exist bool) {
-	ctx.lock.RLock()
-	defer ctx.lock.RUnlock()
-	index, ok := ctx.ToIndex(stepName)
-	if !ok {
-		panic(fmt.Sprintf("Step[%s] not found.", stepName))
+func (ctx *dependentContext) Result(key string) (value any, exist bool) {
+	ptr, find := ctx.getOutCome(key)
+	defer ctx.RUnlock()
+	if !find {
+		return nil, false
 	}
-	return ctx.matchByIndex(index, key)
+	return ptr.Result, true
 }
 
 func (ctx *dependentContext) setResult(key string, value any) {
 	ptr := ctx.setOutcomeIfAbsent(key)
-	defer ctx.lock.Unlock()
+	defer ctx.Unlock()
 	ptr.Result = value
+}
+
+func (ctx *dependentContext) getCondition(key string) (named, unnamed []evalValue, exist bool) {
+	ptr, find := ctx.getOutCome(key)
+	defer ctx.RUnlock()
+	if !find {
+		return nil, nil, false
+	}
+	return ptr.Named, ptr.Unnamed, true
 }
 
 func (ctx *dependentContext) SetCondition(value any, targets ...string) {
 	ptr := ctx.setOutcomeIfAbsent(ctx.nodeName())
-	defer ctx.lock.Unlock()
+	defer ctx.Unlock()
 	switch value.(type) {
 	case int8, int16, int32, int64, int:
 		value = toInt64(value)
@@ -515,7 +494,7 @@ func (ctx *dependentContext) SetCondition(value any, targets ...string) {
 func (ctx *dependentContext) getOutCome(name string) (*outcome, bool) {
 	// make sure panic will never occur,
 	// otherwise lock will never be released and will block permanently
-	ctx.lock.RLock()
+	ctx.RLock()
 	find, ok := ctx.nodes[name]
 	if !ok {
 		return nil, false
@@ -528,7 +507,7 @@ func (ctx *dependentContext) getOutCome(name string) (*outcome, bool) {
 }
 
 func (ctx *dependentContext) setOutcomeIfAbsent(key string) *outcome {
-	ctx.lock.Lock()
+	ctx.Lock()
 	if find, exist := ctx.nodes[key]; exist {
 		wrap, ok := find.matchByHighest(resultMark)
 		if ok {
@@ -546,53 +525,101 @@ func (ctx *dependentContext) setOutcomeIfAbsent(key string) *outcome {
 	return ptr
 }
 
-func (ctx *dependentContext) Set(key string, value any) {
-	ctx.set(ctx.KeyPath(), key, value)
+func (ctx *dependentContext) GetByStepName(stepName, key string) (value any, exist bool) {
+	ctx.RLock()
+	defer ctx.RUnlock()
+	index, ok := ctx.ToIndex(stepName)
+	if !ok {
+		panic(fmt.Sprintf("Step[%s] not found.", stepName))
+	}
+	return ctx.matchByIndex(index, key)
 }
 
-func (sc *simpleContext) Get(key string) (value any, exist bool) {
-	value, exist = sc.table[key]
-	return
+// Get method retrieves the value associated with the given key from the context path.
+// The method first checks the priority context, then own context, finally parents context.
+// Returns the value associated with the key (if found) and a boolean indicating its presence.
+func (t *linkedTable) get(path uint64, key string) (any, bool) {
+	t.RLock()
+	defer t.RUnlock()
+	if head, exist := t.nodes[key]; exist {
+		if value, find := head.search(path); find {
+			return value, find
+		}
+	}
+	return nil, false
 }
 
-func (sc *simpleContext) Set(key string, value any) {
-	sc.table[key] = value
+// set method sets the value associated with the given key in own context.
+func (t *linkedTable) set(path uint64, key string, value any) {
+	t.Lock()
+	defer t.Unlock()
+	n := &node{
+		Value: value,
+		Path:  path,
+		Next:  t.nodes[key],
+	}
+	t.nodes[key] = n
 }
 
-func (pw *panicWrap) Error() string {
-	return pw.err.Error()
+func (t *linkedTable) matchByIndex(index uint64, key string) (any, bool) {
+	t.RLock()
+	defer t.RUnlock()
+	head, exist := t.nodes[key]
+	if !exist {
+		return nil, false
+	}
+	if index == resultMark {
+		return head.matchByHighest(0)
+	}
+	return head.matchByHighest(1 << index)
 }
 
-func (pw *panicWrap) GetRecover() any {
-	return pw.r
+// matchByHighest will exact search node.
+// In most cases, the position of the highest bit is the index.
+func (n *node) matchByHighest(highest uint64) (any, bool) {
+	// Check if the highest set bit in "highest" is equal to the highest set bit in "n.Path".
+	// If the condition is true, the value of node is set by the step corresponding to highest.
+	if bits.Len64(highest) == bits.Len64(n.Path) {
+		return n.Value, true
+	}
+	if n.Next == nil {
+		return nil, false
+	}
+	return n.Next.matchByHighest(highest)
 }
 
-func (pw *panicWrap) GetPanicStack() []byte {
-	return pw.trace
+func (n *node) search(path uint64) (any, bool) {
+	if path&n.Path == n.Path {
+		return n.Value, true
+	}
+	if n.Next == nil {
+		return nil, false
+	}
+	return n.Next.search(path)
 }
 
-func (router *nodeRouter) Prefer(key string) (index int64, exist bool) {
+func (router *nodeRouter) Prefer(key string) (index uint64, exist bool) {
 	index, exist = router.priority[key]
 	return
 }
 
-func (router *nodeRouter) KeyPath() int64 {
+func (router *nodeRouter) Visible() uint64 {
 	if router.nodePath == fullAccess {
 		return publicIndex
 	}
 	return router.nodePath
 }
 
-func (router *nodeRouter) KeyAccess() int64 {
+func (router *nodeRouter) Access() uint64 {
 	return router.nodePath
 }
 
-func (router *nodeRouter) ToIndex(name string) (index int64, exist bool) {
+func (router *nodeRouter) ToIndex(name string) (index uint64, exist bool) {
 	index, exist = router.toIndex[name]
 	return
 }
 
-func (router *nodeRouter) ToName(index int64) string {
+func (router *nodeRouter) ToName(index uint64) string {
 	return router.toName[index]
 }
 

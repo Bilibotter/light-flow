@@ -29,7 +29,7 @@ type StepMeta struct {
 	position   *state              // used to record the position of the step
 	depends    sliceSet[*StepMeta] // prev
 	waiters    sliceSet[*StepMeta] // next
-	priority   map[string]int64
+	priority   map[string]uint64
 	run        func(ctx Step) (any, error)
 	evaluators evaluators
 }
@@ -82,7 +82,7 @@ func (meta *StepMeta) Same(run func(ctx Step) (any, error), alias ...string) *St
 
 func (meta *StepMeta) Priority(priority map[string]any) {
 	if meta.priority == nil {
-		meta.priority = make(map[string]int64, len(priority))
+		meta.priority = make(map[string]uint64, len(priority))
 	}
 	for key, stepName := range priority {
 		step, exist := meta.belong.steps[toStepName(stepName)]
@@ -216,6 +216,10 @@ func (step *runStep) CostTime() time.Duration {
 	return step.end.Sub(step.start)
 }
 
+func (step *runStep) isRecoverable() bool {
+	return step.belong.isRecoverable()
+}
+
 func (step *runStep) needRecover() bool {
-	return !step.Normal() && !step.Has(Cancel)
+	return step.Has(CallbackFail) || (!step.Normal() && !step.Has(Cancel))
 }
