@@ -159,10 +159,8 @@ func FlowCurrentChecker(i int64, flag int) func(info WorkFlow) (bool, error) {
 
 func TestExecuteDefaultOrder(t *testing.T) {
 	defer resetCurrent()
-	defer func() {
-		CreateDefaultConfig()
-	}()
-	config := CreateDefaultConfig()
+	defer ResetDefaultCallback()
+	config := DefaultCallback()
 	config.BeforeFlow(true, FlowCurrentChecker(0, 0))
 	config.BeforeProcess(true, ProcessCurrentChecker(1, 0))
 	config.BeforeStep(true, StepCurrentChecker(2, 0))
@@ -178,10 +176,6 @@ func TestExecuteDefaultOrder(t *testing.T) {
 
 func TestExecuteOwnOrder(t *testing.T) {
 	defer resetCurrent()
-	defer func() {
-		CreateDefaultConfig()
-	}()
-	CreateDefaultConfig()
 	workflow := RegisterFlow("TestExecuteOwnOrder")
 	workflow.BeforeFlow(true, FlowCurrentChecker(0, 0))
 	workflow.BeforeProcess(true, ProcessCurrentChecker(1, 0))
@@ -197,10 +191,8 @@ func TestExecuteOwnOrder(t *testing.T) {
 
 func TestExecuteMixOrder(t *testing.T) {
 	defer resetCurrent()
-	defer func() {
-		CreateDefaultConfig()
-	}()
-	config := CreateDefaultConfig()
+	defer ResetDefaultCallback()
+	config := DefaultCallback()
 	config.BeforeFlow(true, FlowCurrentChecker(0, 0))
 	config.BeforeProcess(true, ProcessCurrentChecker(2, 0))
 	config.BeforeStep(true, StepCurrentChecker(4, 0))
@@ -222,10 +214,8 @@ func TestExecuteMixOrder(t *testing.T) {
 
 func TestExecuteDeepMixOrder(t *testing.T) {
 	defer resetCurrent()
-	defer func() {
-		CreateDefaultConfig()
-	}()
-	config := CreateDefaultConfig()
+	defer ResetDefaultCallback()
+	config := DefaultCallback()
 	config.BeforeFlow(true, FlowCurrentChecker(0, 0))
 	config.BeforeProcess(true, ProcessCurrentChecker(2, 0))
 	config.BeforeStep(true, StepCurrentChecker(5, 0))
@@ -251,8 +241,8 @@ func TestExecuteDeepMixOrder(t *testing.T) {
 
 func TestBreakWhileFlowError(t *testing.T) {
 	defer resetCurrent()
-	defer CreateDefaultConfig()
-	config := CreateDefaultConfig()
+	defer ResetDefaultCallback()
+	config := DefaultCallback()
 	config.BeforeFlow(true, FlowIncr("default config before panic"))
 	config.BeforeFlow(true, FlowCurrentChecker(111, 0))
 	config.BeforeFlow(true, FlowIncr("default config after panic"))
@@ -261,6 +251,7 @@ func TestBreakWhileFlowError(t *testing.T) {
 	config.AfterStep(true, StepIncr)
 	config.AfterProcess(true, ProcIncr)
 	config.AfterFlow(true, FlowIncr("default config after flow"))
+
 	workflow := RegisterFlow("TestBreakWhileFlowError")
 	workflow.BeforeFlow(true, FlowIncr("own config before flow"))
 	workflow.BeforeProcess(true, ProcIncr)
@@ -274,47 +265,32 @@ func TestBreakWhileFlowError(t *testing.T) {
 	process.AfterProcess(true, ProcIncr)
 	process.BeforeStep(true, StepIncr)
 	process.AfterStep(true, StepIncr)
-	workflow.AfterFlow(false, CheckResult(t, 4, CallbackFail))
+	workflow.AfterFlow(false, CheckResult(t, 3, CallbackFail))
 	DoneFlow("TestBreakWhileFlowError", nil)
 }
 
 func TestFieldSkip(t *testing.T) {
-	config := CreateDefaultConfig()
+	config := DefaultConfig()
 	config.ProcessTimeout(1 * time.Second)
-	config.StepsTimeout(1 * time.Second)
-	config.StepsRetry(3)
-	move := FlowConfig{}
+	config.StepTimeout(1 * time.Second)
+	config.StepRetry(3)
+	move := flowConfig{}
 	move.ProcessTimeout(2 * time.Second)
-	move.NotUseDefault()
-	move.StepsTimeout(2 * time.Second)
-	move.StepsRetry(4)
+	move.DisableDefaultConfig()
+	move.StepTimeout(2 * time.Second)
+	move.StepRetry(4)
 	tmp := move
 	copyPropertiesSkipNotEmpty(config, &move)
-	if tmp.ProcNotUseDefault != move.ProcNotUseDefault {
+	if tmp.disableDefaultCfg != move.disableDefaultCfg {
 		t.Errorf("not use default not equal")
 	}
-	if tmp.ProcTimeout != move.ProcTimeout {
+	if tmp.procTimeout != move.procTimeout {
 		t.Errorf("process timeout not equal")
 	}
-	if tmp.StepRetry != move.StepRetry {
+	if tmp.stepRetry != move.stepRetry {
 		t.Errorf("step retry not equal")
 	}
-	if tmp.StepTimeout != move.StepTimeout {
+	if tmp.stepTimeout != move.stepTimeout {
 		t.Errorf("step timeout not equal")
 	}
-}
-
-func TestFieldCorrect(t *testing.T) {
-	defer CreateDefaultConfig()
-	config := CreateDefaultConfig()
-	config.ProcessTimeout(1 * time.Second)
-	config.NotUseDefault()
-	config.StepsTimeout(1 * time.Second)
-	config.StepsRetry(3)
-	move := FlowConfig{}
-	copyPropertiesSkipNotEmpty(config, &move)
-	copyPropertiesSkipNotEmpty(&config.ProcessConfig, &move.ProcessConfig)
-	CheckField(move.ProcessConfig, "ProcTimeout", "ProcNotUseDefault", "StepConfig")
-	CheckField(move.ProcessConfig.StepConfig, "StepTimeout", "StepRetry")
-	return
 }

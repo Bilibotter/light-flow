@@ -218,7 +218,7 @@ func Recover(name string) {
 		panic(err)
 	}
 	resetCurrent()
-	if err = flow.RecoverFlow(flowId); err != nil {
+	if _, err = flow.RecoverFlow(flowId); err != nil {
 		panic(err)
 	}
 }
@@ -257,9 +257,10 @@ func TestMain(m *testing.M) {
 
 func TestCombineStepRecover(t *testing.T) {
 	defer resetCurrent()
+	defer flow.DefaultConfig().DisableRecover()
+	flow.DefaultConfig().EnableRecover()
 	executeSuc = false
 	wf := flow.RegisterFlow("TestCombineStepRecover")
-	wf.EnableRecover()
 	proc := wf.Process("TestCombineStepRecover")
 	proc.NameStep(Fn(t).Do(SetCtx()).Step(), "step1").
 		Next(Fn(t).Do(SetCtx()).Step(), "step2").
@@ -293,6 +294,7 @@ func TestSeparateStepRecover(t *testing.T) {
 
 func Test1ProcSuc1ProcRecover(t *testing.T) {
 	defer resetCurrent()
+	flow.DefaultConfig().DisableRecover()
 	executeSuc = false
 	wf := flow.RegisterFlow("Test1ProcSuc1ProcRecover")
 	wf.EnableRecover()
@@ -336,9 +338,9 @@ func TestRecoverSuccessFlow(t *testing.T) {
 	wf := flow.RegisterFlow("TestRecoverSuccessFlow")
 	wf.EnableRecover()
 	proc := wf.Process("TestRecoverSuccessFlow")
-	proc.NameStep(GenerateStep(1), "1").
-		Next(GenerateStep(2), "2").
-		Next(GenerateStep(3), "3")
+	proc.NameStep(Ck(t).SetFn(), "Step1").
+		Next(Ck(t).SetFn(), "Step2").
+		Next(Ck(t).SetFn(), "Step3")
 	wf.AfterFlow(false, func(workFlow flow.WorkFlow) (keepOn bool, err error) {
 		id = workFlow.ID()
 		return true, nil
@@ -347,10 +349,17 @@ func TestRecoverSuccessFlow(t *testing.T) {
 	flow.DoneFlow("TestRecoverSuccessFlow", nil)
 	defer func() {
 		if r := recover(); r != nil {
-			t.Errorf("recover error: %v", r)
+			if r != gorm.ErrRecordNotFound {
+				t.Errorf("recover error: %v", r)
+			}
+		} else {
+			t.Errorf("recover success, but should fail")
 		}
 	}()
-	flow.RecoverFlow(id)
+	_, err := flow.RecoverFlow(id)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func TestSingleStepRecoverWith1DependSuc1DependFail0(t *testing.T) {
@@ -421,8 +430,13 @@ func TestSingleStepRecover(t *testing.T) {
 	wf.AfterFlow(false, CheckResult(t, 1, flow.Error)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 2, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
-	flow.DoneFlow("TestSingleStepRecover", nil)
-	Recover("TestSingleStepRecover")
+	ret := flow.DoneFlow("TestSingleStepRecover", nil)
+	println("\n\t----------Recovering----------\n")
+	executeSuc = true
+	resetCurrent()
+	if _, err := ret.Recover(); err != nil {
+		panic(err)
+	}
 }
 
 func TestPanicStepRecover(t *testing.T) {

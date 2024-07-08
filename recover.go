@@ -32,13 +32,17 @@ var (
 	maxSize                          = 4096
 	enableEncrypt                    = true
 	pwdEncryptor  SymmetricEncryptor = &aes256Encryptor{newRoutineUnsafeSet[string]("pwd", "password")}
-	enableRecover                    = false
 	persister     Persist
+)
+
+var (
+	recoverLog = "panic occur while WorkFlow[%s] recovering;\n Id=%s\n Panic=%s\n%s"
+	saveLog    = "panic occur while WorkFlow[%s] saving checkpoints;\n Id=%s\n Panic=%s\n%s"
 )
 
 type proto interface {
 	runtimeI
-	isRecoverable() bool
+	canRecover() bool
 	getInternal(key string) (value any, exist bool)
 	setInternal(key string, value any)
 }
@@ -166,47 +170,39 @@ func RegisterType[T any]() {
 	gob.Register(t)
 }
 
-func EnableRecover() {
-	if persister == nil {
-		panic("Persistence must be set to use the recovery function")
-	}
-	enableRecover = true
-}
-
-func DisableRecover() {
-	enableRecover = false
-}
-
-// todo optimize performance
-func RecoverFlow(flowId string) (err error) {
+func RecoverFlow(flowId string) (ret FinishedWorkFlow, err error) {
 	record, err := persister.GetLatestRecord(flowId)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	checkpoints, err := persister.ListCheckpoints(record.GetRecoverId())
 	if err != nil {
-		return err
+		return nil, err
 	}
 	factory, ok := allFlows.Load(record.GetName())
 	if !ok {
-		return fmt.Errorf("flow[%s] not found", record.GetName())
+		return nil, fmt.Errorf("flow[%s] not found", record.GetName())
 	}
 	flow := factory.(*FlowMeta).buildRunFlow(nil)
+	flow.id = flowId
 	if err = loadCheckpoints(flow, checkpoints); err != nil {
 		return
 	}
 	if err = loadStatus(flow, checkpoints); err != nil {
 		return
 	}
-	persister.UpdateRecordStatus(&recoverRecord{RecoverId: record.GetRecoverId(), Status: RecoverRunning})
-	flow.append(Recovering)
-	flow.Done()
-	if flow.Success() {
-		persister.UpdateRecordStatus(&recoverRecord{RecoverId: record.GetRecoverId(), Status: RecoverSuccess})
-	} else {
-		persister.UpdateRecordStatus(&recoverRecord{RecoverId: record.GetRecoverId(), Status: RecoverFailed})
+	err = persister.UpdateRecordStatus(&recoverRecord{RecoverId: record.GetRecoverId(), Status: RecoverRunning})
+	if err != nil {
+		return
 	}
-	return nil
+	flow.append(Recovering)
+	ret = flow.Done()
+	if flow.Success() {
+		err = persister.UpdateRecordStatus(&recoverRecord{RecoverId: record.GetRecoverId(), Status: RecoverSuccess})
+	} else {
+		err = persister.UpdateRecordStatus(&recoverRecord{RecoverId: record.GetRecoverId(), Status: RecoverFailed})
+	}
+	return
 }
 
 func SetMaxSerializeSize(size int) {
@@ -269,7 +265,7 @@ func loadCheckpoints(workflow *runFlow, checkpoints []CheckPoint) (err error) {
 	}
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Errorf("[Recovery] panic recovered:\n%s\n%s\n", r, stack())
+			logger.Errorf(recoverLog, workflow.name, workflow.id, r, stack())
 		}
 	}()
 	for _, checkpoint := range checkpoints {
@@ -370,7 +366,7 @@ func unwrapInterfaceMap(listMap []map[string]any) {
 	}
 }
 
-func getSecret(checkpoint CheckPoint) []byte {
+func createSecret(checkpoint CheckPoint) []byte {
 	secret := pwdEncryptor.GetSecret()
 	if secret == nil {
 		if _, ok := pwdEncryptor.(*aes256Encryptor); ok {
@@ -531,7 +527,7 @@ func (point *flowCheckpoint) setRecoverId(id string) {
 }
 
 func (point *flowCheckpoint) buildSnapshot() (err error) {
-	secret := getSecret(point)
+	secret := createSecret(point)
 	ctx := make(map[string]any)
 	for k, v := range point.table {
 		ctx[k], err = encryptIfNeed(k, v, secret)
@@ -576,7 +572,7 @@ func (point *procCheckpoint) setRecoverId(id string) {
 }
 
 func (point *procCheckpoint) buildSnapshot() (err error) {
-	secret := getSecret(point)
+	secret := createSecret(point)
 	snapshot := make(map[string][]node)
 	for k := range point.nodes {
 		for head := point.nodes[k]; head != nil; head = head.Next {
@@ -639,7 +635,7 @@ func (rf *runFlow) loadCheckpoint(checkpoint CheckPoint) error {
 	snapshot := combine[0]
 	for k := range snapshot {
 		v := snapshot[k]
-		snapshot[k], err = decryptIfNeed(k, v, getSecret(checkpoint))
+		snapshot[k], err = decryptIfNeed(k, v, createSecret(checkpoint))
 		if err != nil {
 			return err
 		}
@@ -650,24 +646,18 @@ func (rf *runFlow) loadCheckpoint(checkpoint CheckPoint) error {
 	return nil
 }
 
-func (rf *runFlow) isRecoverable() bool {
+func (rf *runFlow) canRecover() bool {
+	if !rf.isRecoverable() {
+		return false
+	}
 	// multiple recoveries are not supported
-	if rf.Has(Recovering) {
-		return false
-	}
-	if rf.enableRecover < 0 || rf.Success() {
-		return false
-	}
-	if rf.enableRecover == 0 && !enableRecover {
-		return false
-	}
-	return true
+	return !rf.Has(Recovering)
 }
 
 func (rf *runFlow) saveCheckpoints() {
 	defer func() {
 		if r := recover(); r != nil {
-			// todo send panic event
+			logger.Errorf(saveLog, rf.name, rf.id, r, stack())
 		}
 	}()
 	checkpoints := make([]CheckPoint, 0)
@@ -696,7 +686,9 @@ func (rf *runFlow) saveCheckpoints() {
 		Status:    RecoverIdle,
 		Name:      rf.name,
 	}
-	persister.SaveCheckpointAndRecord(checkpoints, record)
+	if err := persister.SaveCheckpointAndRecord(checkpoints, record); err != nil {
+		panic(err)
+	}
 }
 
 func (process *runProcess) loadCheckpoint(checkpoint CheckPoint) error {
@@ -713,7 +705,7 @@ func (process *runProcess) loadCheckpoint(checkpoint CheckPoint) error {
 				Path: nodeList[i].Path,
 				Next: head,
 			}
-			newNode.Value, err = decryptIfNeed(k, nodeList[i].Value, getSecret(checkpoint))
+			newNode.Value, err = decryptIfNeed(k, nodeList[i].Value, createSecret(checkpoint))
 			if err != nil {
 				return err
 			}

@@ -35,7 +35,7 @@ const (
 )
 
 const (
-	panicLog = "%s-Callback execute panic;\n Scope=%s, Stage=%s, Iteration=%d;\n Panic=%v\n%s"
+	panicLog = "%s-Callback trigger panic;\n Scope=%s, Stage=%s, Iteration=%d;\n Panic=%v\n%s"
 	errorLog = "%s-Callback execute error;\n Scope=%s, Stage=%s, Iteration=%d;\n Error=%s"
 )
 
@@ -158,7 +158,8 @@ func (f *flowCallback) DisableDefaultCallback() {
 	if f.beforeFlow.Scope == defaultScope {
 		panic("default callback can't disable itself")
 	}
-	f.procCallback.disableDefault = true
+	f.disableDefault = true
+	return
 }
 
 func (f *flowCallback) BeforeFlow(must bool, callback func(WorkFlow) (keepOn bool, err error)) *decorator[WorkFlow] {
@@ -262,7 +263,7 @@ func (chain *funcChain[T]) filter(runtime T) (runNext bool) {
 		if chain.Before {
 			runtime.append(Cancel)
 		}
-		if !runtime.isRecoverable() {
+		if !runtime.canRecover() {
 			return
 		}
 		point := &breakPoint{

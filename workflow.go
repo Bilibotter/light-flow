@@ -16,19 +16,9 @@ var (
 	allProcess sync.Map
 )
 
-var (
-	defaultConfig *FlowConfig
-)
-
-type FlowConfig struct {
-	ProcessConfig `flow:"skip"`
-	enableRecover int8
-}
-
 type FlowMeta struct {
-	FlowConfig
+	flowConfig
 	flowCallback
-	init              sync.Once
 	name              string
 	flowNotUseDefault bool
 	processes         []*ProcessMeta
@@ -57,10 +47,7 @@ func SetIdGenerator(method func() string) {
 	generateId = method
 }
 
-func CreateDefaultConfig() *FlowConfig {
-	defaultConfig = &FlowConfig{
-		ProcessConfig: newProcessConfig(),
-	}
+func DefaultConfig() FlowConfig {
 	return defaultConfig
 }
 
@@ -68,7 +55,6 @@ func RegisterFlow(name string) *FlowMeta {
 	flow := FlowMeta{
 		name:         name,
 		flowCallback: buildFlowCallback(flowScope),
-		init:         sync.Once{},
 	}
 	flow.register()
 	return &flow
@@ -93,22 +79,6 @@ func DoneFlow(name string, input map[string]any) FinishedWorkFlow {
 	return flow.Done()
 }
 
-func (fm *FlowMeta) initialize() {
-	fm.init.Do(func() {
-		if fm.flowNotUseDefault || defaultConfig == nil {
-			return
-		}
-		copyPropertiesSkipNotEmpty(defaultConfig, &fm.FlowConfig)
-		copyPropertiesSkipNotEmpty(&defaultConfig.ProcessConfig, &fm.FlowConfig.ProcessConfig)
-		for _, meta := range fm.processes {
-			if meta.ProcNotUseDefault {
-				continue
-			}
-			copyPropertiesSkipNotEmpty(&fm.ProcessConfig, &meta.ProcessConfig)
-		}
-	})
-}
-
 func (fm *FlowMeta) register() *FlowMeta {
 	if len(fm.name) == 0 {
 		panic("can't register flow with empty name")
@@ -124,21 +94,6 @@ func (fm *FlowMeta) register() *FlowMeta {
 
 func (fm *FlowMeta) Name() string {
 	return fm.name
-}
-
-func (fm *FlowMeta) NoUseDefault() *FlowMeta {
-	fm.flowNotUseDefault = true
-	return fm
-}
-
-func (fm *FlowMeta) EnableRecover() *FlowMeta {
-	fm.enableRecover = 1
-	return fm
-}
-
-func (fm *FlowMeta) DisableRecover() *FlowMeta {
-	fm.enableRecover = -1
-	return fm
 }
 
 func (fm *FlowMeta) buildRunFlow(input map[string]any) *runFlow {
@@ -183,7 +138,7 @@ func (fm *FlowMeta) Process(name string) *ProcessMeta {
 		init:         sync.Once{},
 		steps:        make(map[string]*StepMeta),
 	}
-
+	pm.procCfg = append(pm.procCfg, &fm.processConfig)
 	pm.register()
 	fm.processes = append(fm.processes, &pm)
 	return &pm
@@ -209,6 +164,13 @@ func (rf *runFlow) Exceptions() []FinishedProcess {
 		}
 	}
 	return res
+}
+
+func (rf *runFlow) Recover() (FinishedWorkFlow, error) {
+	if !rf.Has(Failed) {
+		return nil, fmt.Errorf("WorkFlow[%s] is not failed, can't recover", rf.name)
+	}
+	return RecoverFlow(rf.id)
 }
 
 func (rf *runFlow) ID() string {
@@ -273,7 +235,6 @@ func (rf *runFlow) Done() FinishedWorkFlow {
 		return rf
 	}
 	rf.start = time.Now().UTC()
-	rf.initialize()
 	// execute before flow callback
 	rf.advertise(beforeF)
 	wg := make([]*sync.WaitGroup, 0, len(rf.processes))
@@ -314,7 +275,7 @@ func (rf *runFlow) finalize() {
 	}
 	rf.advertise(afterF)
 	rf.compress.add(rf.load())
-	if rf.isRecoverable() {
+	if !rf.Normal() && rf.canRecover() {
 		rf.saveCheckpoints()
 	}
 	rf.finish.Done()

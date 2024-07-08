@@ -45,8 +45,8 @@ func (process *runProcess) CostTime() time.Duration {
 	return process.end.Sub(process.start)
 }
 
-func (process *runProcess) isRecoverable() bool {
-	return process.belong.isRecoverable()
+func (process *runProcess) canRecover() bool {
+	return process.belong.canRecover()
 }
 
 func (process *runProcess) buildRunStep(meta *StepMeta) *runStep {
@@ -169,12 +169,12 @@ func (process *runProcess) startStep(step *runStep) {
 		return
 	}
 
-	timeout := 3 * time.Hour
-	if process.StepTimeout != 0 {
-		timeout = process.StepTimeout
+	timeout := step.getStepTimeout()
+	if timeout == 0 {
+		timeout = defaultConfig.stepTimeout
 	}
-	if step.StepTimeout != 0 {
-		timeout = step.StepTimeout
+	if timeout <= 0 {
+		timeout = time.Duration(1<<63 - 1)
 	}
 
 	timer := time.NewTimer(timeout)
@@ -201,9 +201,12 @@ func (process *runProcess) evaluate(step *runStep) bool {
 }
 
 func (process *runProcess) finalize() {
-	timeout := 3 * time.Hour
-	if process.ProcTimeout != 0 {
-		timeout = process.ProcTimeout
+	timeout := process.getProcessTimeout()
+	if timeout == 0 {
+		timeout = defaultConfig.procTimeout
+	}
+	if timeout <= 0 {
+		timeout = time.Duration(1<<63 - 1)
 	}
 
 	timer := time.NewTimer(timeout)
@@ -274,12 +277,9 @@ func (process *runProcess) runStep(step *runStep) {
 		return
 	}
 
-	retry := 0
-	if process.StepRetry > 0 {
-		retry = process.StepRetry
-	}
-	if step.StepRetry > 0 {
-		retry = step.StepRetry
+	retry := step.getStepRetry()
+	if retry == 0 {
+		retry = defaultConfig.stepRetry
 	}
 
 	defer func() {
@@ -289,7 +289,7 @@ func (process *runProcess) runStep(step *runStep) {
 			step.append(Panic)
 			step.exception = panicErr
 			step.end = time.Now().UTC()
-			if step.isRecoverable() {
+			if step.canRecover() {
 				step.setInternal(fmt.Sprintf(stepBreakPoint, step.Name()), &stepPanicBreakPoint)
 			}
 		}

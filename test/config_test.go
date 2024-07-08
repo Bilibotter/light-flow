@@ -33,6 +33,9 @@ func PreProcessor(info flow.Step) (bool, error) {
 	if info.Name() == "" {
 		panic("step name is empty")
 	}
+	if info.StartTime().IsZero() {
+		panic("step start time is zero")
+	}
 	atomic.AddInt64(&current, 1)
 	fmt.Printf("..step[%s] PreProcessor exeucte\n", info.Name())
 	return true, nil
@@ -71,6 +74,9 @@ func ProcProcessor(info flow.Process) (bool, error) {
 	}
 	if len(info.FlowID()) == 0 {
 		panic("process flow id is empty")
+	}
+	if info.StartTime().IsZero() {
+		panic("process start time is zero")
 	}
 	atomic.AddInt64(&current, 1)
 	fmt.Printf("..process[%s] ProcProcessor execute \n", info.Name())
@@ -222,7 +228,7 @@ func TestProcessorWhenExceptionOccur(t *testing.T) {
 	process.NameStep(GenerateErrorStep(1), "1")
 	process.NameStep(GeneratePanicStep(2), "2")
 	step := process.NameStep(GenerateErrorStep(3, "ms"), "3")
-	step.Timeout(time.Nanosecond)
+	step.StepTimeout(time.Nanosecond)
 	workflow.AfterFlow(false, CheckResult(t, 9, flow.Timeout, flow.Error, flow.Panic))
 	flow.DoneFlow("TestProcessorWhenExceptionOccur", nil)
 	// DoneFlow return due to timeout, but step not complete
@@ -289,8 +295,8 @@ func TestParallelWithLongDefaultStepTimeout(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestParallelWithLongDefaultStepTimeout")
 	process := workflow.Process("TestParallelWithLongDefaultStepTimeout")
-	process.StepsTimeout(300 * time.Millisecond)
-	process.StepsRetry(3)
+	process.StepTimeout(300 * time.Millisecond)
+	process.StepRetry(3)
 	process.NameStep(GenerateStep(1), "1")
 	process.NameStep(GenerateStep(2), "2")
 	process.NameStep(GenerateStep(3), "3")
@@ -303,8 +309,8 @@ func TestWithLongDefaultStepTimeout(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestWithLongDefaultStepTimeout")
 	process := workflow.Process("TestWithLongDefaultStepTimeout")
-	process.StepsTimeout(1 * time.Second)
-	process.StepsRetry(3)
+	process.StepTimeout(1 * time.Second)
+	process.StepRetry(3)
 	process.NameStep(GenerateStep(1), "1")
 	process.NameStep(GenerateStep(2), "2", "1")
 	process.NameStep(GenerateStep(3), "3", "2")
@@ -318,8 +324,8 @@ func TestWithShortDefaultStepTimeout(t *testing.T) {
 	letGo = false
 	workflow := flow.RegisterFlow("TestWithShortDefaultStepTimeout")
 	process := workflow.Process("TestWithShortDefaultStepTimeout")
-	process.StepsTimeout(1 * time.Nanosecond)
-	process.StepsRetry(3)
+	process.StepTimeout(1 * time.Nanosecond)
+	process.StepRetry(3)
 	fn := Fn(t)
 	process.NameStep(fn.All(fn.WaitLetGO(), fn.Errors()), "1")
 	process.NameStep(fn.Normal(), "2", "1")
@@ -341,7 +347,7 @@ func TestAddStepTimeoutAndRetry(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestAddStepTimeoutAndRetry")
 	proc := workflow.Process("TestAddStepTimeoutAndRetry")
-	proc.StepsRetry(3).StepsTimeout(100 * time.Millisecond)
+	proc.StepRetry(3).StepTimeout(100 * time.Millisecond)
 	proc.NameStep(GenerateStep(1), "1")
 	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
 	flow.DoneFlow("TestAddStepTimeoutAndRetry", nil)
@@ -351,7 +357,7 @@ func TestWithLongStepTimeout(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestWithLongStepTimeout")
 	process := workflow.Process("TestWithLongStepTimeout")
-	process.NameStep(GenerateStep(1), "1").Retry(3).Timeout(1 * time.Second)
+	process.NameStep(GenerateStep(1), "1").StepRetry(3).StepTimeout(1 * time.Second)
 	process.NameStep(GenerateStep(2), "2", "1")
 	process.NameStep(GenerateStep(3), "3", "2")
 	process.NameStep(GenerateStep(4), "4", "3")
@@ -365,7 +371,7 @@ func TestWithShortStepTimeout(t *testing.T) {
 	workflow := flow.RegisterFlow("TestWithShortStepTimeout")
 	process := workflow.Process("TestWithShortStepTimeout")
 	fn := Fn(t)
-	process.NameStep(fn.All(fn.WaitLetGO(), fn.Errors()), "1").Retry(3).Timeout(1 * time.Nanosecond)
+	process.NameStep(fn.All(fn.WaitLetGO(), fn.Errors()), "1").StepRetry(3).StepTimeout(1 * time.Nanosecond)
 	process.NameStep(fn.Normal(), "2", "1")
 	process.NameStep(fn.Normal(), "3", "2")
 	process.NameStep(fn.Normal(), "4", "3")
@@ -385,7 +391,7 @@ func TestSingleErrorStepWithProcessRetry(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestSingleErrorStepWithProcessRetry")
 	process := workflow.Process("TestSingleErrorStepWithProcessRetry")
-	process.StepsRetry(2)
+	process.StepRetry(2)
 	process.NameStep(GenerateErrorStep(1), "1")
 	workflow.AfterFlow(false, CheckResult(t, 3, flow.Error))
 	flow.DoneFlow("TestSingleErrorStepWithProcessRetry", nil)
@@ -395,7 +401,7 @@ func TestSingleErrorStepWithStepRetry(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestSingleErrorStepWithStepRetry")
 	process := workflow.Process("TestSingleErrorStepWithStepRetry")
-	process.NameStep(GenerateErrorStep(1), "1").Retry(2)
+	process.NameStep(GenerateErrorStep(1), "1").StepRetry(2)
 	workflow.AfterFlow(false, CheckResult(t, 3, flow.Error))
 	flow.DoneFlow("TestSingleErrorStepWithStepRetry", nil)
 }
@@ -404,111 +410,8 @@ func TestSingleErrorStepWithProcessAndStepRetry(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestSingleErrorStepWithProcessAndStepRetry")
 	process := workflow.Process("TestSingleErrorStepWithProcessAndStepRetry")
-	process.StepsRetry(2)
-	process.NameStep(GenerateErrorStep(1), "1").Retry(1)
+	process.StepRetry(2)
+	process.NameStep(GenerateErrorStep(1), "1").StepRetry(1)
 	workflow.AfterFlow(false, CheckResult(t, 2, flow.Error))
 	flow.DoneFlow("TestSingleErrorStepWithProcessAndStepRetry", nil)
 }
-
-//func TestRecoverSerialStep(t *testing.T) {
-//	defer resetCurrent()
-//	workflow := flow.RegisterFlow("TestRecoverSerialStep")
-//	process := workflow.Process("TestRecoverSerialStep", nil)
-//	config := flow.stepConfig{stepRetry: 3, stepTimeout: 1 * time.Second}
-//	process.NameStep(GenerateStep(1)).Config(&config, "1")
-//	process.NameStep(GenerateStep(2), "2", "1")
-//	process.NameStep(GenerateStep(3), "3", "2")
-//	process.NameStep(GenerateStep(4), "4", "3")
-//	process.NameStep(GenerateStep(5), "5", "4")
-//	wf := flow.buildRunFlow("TestRecoverSerialStep", nil)
-//	if err := wf.SkipFinishedStep("1", nil); err != nil {
-//		panic(err.Error())
-//	}
-//	if err := wf.SkipFinishedStep("2", nil); err != nil {
-//		panic(err.Error())
-//	}
-//	features := wf.Done()
-//	for _, feature := range features {
-//		explain := strings.Join(feature.ExplainStatus(), ", ")
-//		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
-//		if !feature.Success() {
-//			t.Errorf("process[%s] failed", feature.Name)
-//		}
-//	}
-//	if atomic.LoadInt64(&current) != 3 {
-//		t.Errorf("execute 3 step, but current = %d", current)
-//	}
-//}
-//
-//func TestRecoverParallelStep(t *testing.T) {
-//	defer resetCurrent()
-//	workflow := flow.RegisterFlow("TestRecoverParallelStep")
-//	process := workflow.Process("TestRecoverParallelStep", nil)
-//	process.NameStep(GenerateStep(1), "1")
-//	process.NameStep(GenerateStep(11), "11", "1")
-//	process.NameStep(GenerateStep(2), "2")
-//	process.NameStep(GenerateStep(12), "12", "2")
-//	process.NameStep(GenerateStep(3), "3")
-//	process.NameStep(GenerateStep(13), "13", "3")
-//	process.NameStep(GenerateStep(4), "4")
-//	process.NameStep(GenerateStep(14), "14", "4")
-//	wf := flow.buildRunFlow("TestRecoverParallelStep", nil)
-//	if err := wf.SkipFinishedStep("1", nil); err != nil {
-//		panic(err.Error())
-//	}
-//	if err := wf.SkipFinishedStep("2", nil); err != nil {
-//		panic(err.Error())
-//	}
-//	if err := wf.SkipFinishedStep("3", nil); err != nil {
-//		panic(err.Error())
-//	}
-//	if err := wf.SkipFinishedStep("4", nil); err != nil {
-//		panic(err.Error())
-//	}
-//	features := wf.Done()
-//	for _, feature := range features {
-//		explain := strings.Join(feature.ExplainStatus(), ", ")
-//		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
-//		if !feature.Success() {
-//			t.Errorf("process[%s] fail", feature.Name)
-//		}
-//	}
-//	if atomic.LoadInt64(&current) != 4 {
-//		t.Errorf("execute 4 step, but current = %d", current)
-//	}
-//}
-
-//func TestRecoverAndWaitAll(t *testing.T) {
-//	defer resetCurrent()
-//	workflow := flow.RegisterFlow("TestRecoverAndWaitAll")
-//	process := workflow.Process("TestRecoverAndWaitAll", nil)
-//	process.NameStep(GenerateStep(1), "1")
-//	process.NameStep(GenerateStep(2), "2")
-//	process.NameStep(GenerateStep(3), "3")
-//	process.NameStep(GenerateStep(4), "4")
-//	process.Tail("5", GenerateStep(5))
-//	wf := flow.buildRunFlow("TestRecoverAndWaitAll", nil)
-//	if err := wf.SkipFinishedStep("1", nil); err != nil {
-//		panic(err.Error())
-//	}
-//	if err := wf.SkipFinishedStep("2", nil); err != nil {
-//		panic(err.Error())
-//	}
-//	if err := wf.SkipFinishedStep("3", nil); err != nil {
-//		panic(err.Error())
-//	}
-//	if err := wf.SkipFinishedStep("4", nil); err != nil {
-//		panic(err.Error())
-//	}
-//	features := wf.Done()
-//	for _, feature := range features {
-//		explain := strings.Join(feature.ExplainStatus(), ", ")
-//		fmt.Printf("process[%s] explain=%s\n", feature.Name, explain)
-//		if !feature.Success() {
-//			t.Errorf("process[%s] fail", feature.Name)
-//		}
-//	}
-//	if atomic.LoadInt64(&current) != 1 {
-//		t.Errorf("execute 1 step, but current = %d", current)
-//	}
-//}

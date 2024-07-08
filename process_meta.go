@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sort"
 	"sync"
-	"time"
 )
 
 const (
@@ -15,7 +14,7 @@ const (
 )
 
 type ProcessMeta struct {
-	ProcessConfig
+	processConfig
 	procCallback
 	nodeRouter
 	belong   *FlowMeta
@@ -26,34 +25,9 @@ type ProcessMeta struct {
 	nodeNum  uint
 }
 
-type ProcessConfig struct {
-	StepConfig
-	ProcTimeout       time.Duration
-	ProcNotUseDefault bool
-}
-
-func newProcessConfig() ProcessConfig {
-	config := ProcessConfig{}
+func newProcessConfig() processConfig {
+	config := processConfig{}
 	return config
-}
-
-func (pc *ProcessConfig) ProcessTimeout(timeout time.Duration) *ProcessConfig {
-	pc.ProcTimeout = timeout
-	return pc
-}
-
-func (pc *ProcessConfig) NotUseDefault() {
-	pc.ProcNotUseDefault = true
-}
-
-func (pc *ProcessConfig) StepsRetry(retry int) *ProcessConfig {
-	pc.StepConfig.StepRetry = retry
-	return pc
-}
-
-func (pc *ProcessConfig) StepsTimeout(timeout time.Duration) *ProcessConfig {
-	pc.StepConfig.StepTimeout = timeout
-	return pc
 }
 
 func (pm *ProcessMeta) Name() string {
@@ -184,6 +158,7 @@ func (pm *ProcessMeta) NameStep(run func(ctx Step) (any, error), name string, de
 	meta := &StepMeta{
 		name: name,
 	}
+	meta.stepCfg = append(meta.stepCfg, &pm.stepConfig)
 	for _, wrap := range depends {
 		dependName := toStepName(wrap)
 		depend, exist := pm.steps[dependName]

@@ -20,7 +20,7 @@ type segment int64
 type evaluators []*evaluator
 
 type StepMeta struct {
-	StepConfig
+	stepConfig
 	stepCallback
 	nodeRouter
 	belong     *ProcessMeta
@@ -45,11 +45,6 @@ type runStep struct {
 	start     time.Time
 	end       time.Time
 	exception error
-}
-
-type StepConfig struct {
-	StepTimeout time.Duration
-	StepRetry   int
 }
 
 func (seg *segment) addWaiting(i int64) int64 {
@@ -159,16 +154,6 @@ func (meta *StepMeta) backSearch(searched string) bool {
 	return false
 }
 
-func (meta *StepMeta) Timeout(timeout time.Duration) *StepMeta {
-	meta.StepConfig.StepTimeout = timeout
-	return meta
-}
-
-func (meta *StepMeta) Retry(retry int) *StepMeta {
-	meta.StepConfig.StepRetry = retry
-	return meta
-}
-
 func (step *runStep) Err() error {
 	return step.exception
 }
@@ -216,8 +201,8 @@ func (step *runStep) CostTime() time.Duration {
 	return step.end.Sub(step.start)
 }
 
-func (step *runStep) isRecoverable() bool {
-	return step.belong.isRecoverable()
+func (step *runStep) canRecover() bool {
+	return step.belong.canRecover()
 }
 
 func (step *runStep) needRecover() bool {

@@ -97,7 +97,7 @@ func TestMultipleExceptionStatus(t *testing.T) {
 	process.NameStep(Fn(t).Errors(), "1")
 	process.NameStep(Fn(t).Panic(), "2")
 	step := process.NameStep(Fn(t).WaitLetGO(1), "3")
-	step.Timeout(time.Nanosecond)
+	step.StepTimeout(time.Nanosecond)
 	workflow.AfterFlow(false, CheckResult(t, 3, flow.Timeout, flow.Error, flow.Panic))
 	flow.DoneFlow("TestMultipleExceptionStatus", nil)
 	// DoneFlow return due to timeout, but process not complete

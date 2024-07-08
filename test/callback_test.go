@@ -34,22 +34,23 @@ func BeforeFlowProcessor(info flow.WorkFlow) (bool, error) {
 func TestInfoCorrect(t *testing.T) {
 	defer resetCurrent()
 	defer flow.ResetDefaultCallback()
-	config := flow.DefaultCallback()
-	config.BeforeStep(true, StepInfoChecker("1", []string{}, []string{"2", "3"}))
-	config.BeforeStep(true, StepInfoChecker("2", []string{"1"}, []string{"4"}))
-	config.BeforeStep(true, StepInfoChecker("3", []string{"1"}, []string{"4"}))
-	config.BeforeStep(true, StepInfoChecker("4", []string{"2", "3"}, []string{}))
-	config.AfterStep(true, StepInfoChecker("1", []string{}, []string{"2", "3"}))
-	config.AfterStep(true, StepInfoChecker("2", []string{"1"}, []string{"4"}))
-	config.AfterStep(true, StepInfoChecker("3", []string{"1"}, []string{"4"}))
-	config.AfterStep(true, StepInfoChecker("4", []string{"2", "3"}, []string{}))
+	dc := flow.DefaultCallback()
+	dc.BeforeStep(true, Ck(t, "Step1").Exclude("Step2", "Step3", "Step4").Check())
+	dc.BeforeStep(true, Ck(t, "Step2").Contain("Step1").Exclude("Step3", "Step4").Check())
+	dc.BeforeStep(true, Ck(t, "Step3").Contain("Step1").Exclude("Step2", "Step4").Check())
+	dc.BeforeStep(true, Ck(t, "Step4").Contain("Step1", "Step2", "Step3").Check())
+
+	dc.AfterStep(true, Ck(t, "Step1").Exclude("Step2", "Step3", "Step4").Check())
+	dc.AfterStep(true, Ck(t, "Step2").Contain("Step1").Exclude("Step3", "Step4").Check())
+	dc.AfterStep(true, Ck(t, "Step3").Contain("Step1").Exclude("Step2", "Step4").Check())
+	dc.AfterStep(true, Ck(t, "Step4").Contain("Step1", "Step2", "Step3").Check())
 
 	workflow := flow.RegisterFlow("TestInfoCorrect")
 	process := workflow.Process("TestInfoCorrect")
-	process.NameStep(GenerateStep(1), "1")
-	process.NameStep(GenerateStep(2), "2", "1")
-	process.NameStep(GenerateStep(3), "3", "1")
-	process.NameStep(GenerateStep(4), "4", "2", "3")
+	process.NameStep(Ck(t).SetFn(), "Step1")
+	process.NameStep(Ck(t).SetFn(), "Step2", "Step1")
+	process.NameStep(Ck(t).SetFn(), "Step3", "Step1")
+	process.NameStep(Ck(t).SetFn(), "Step4", "Step2", "Step3")
 	workflow.AfterFlow(false, CheckResult(t, 12, flow.Success))
 	flow.DoneFlow("TestInfoCorrect", nil)
 }
@@ -57,9 +58,6 @@ func TestInfoCorrect(t *testing.T) {
 func TestDefaultProcessConfig(t *testing.T) {
 	defer resetCurrent()
 	defer flow.ResetDefaultCallback()
-	defer func() {
-		flow.CreateDefaultConfig()
-	}()
 	df := flow.DefaultCallback()
 	df.BeforeStep(true, PreProcessor)
 	df.AfterStep(true, PostProcessor)
@@ -70,10 +68,10 @@ func TestDefaultProcessConfig(t *testing.T) {
 
 	workflow := flow.RegisterFlow("TestDefaultProcessConfig")
 	process := workflow.Process("TestDefaultProcessConfig")
-	process.NameStep(GenerateStep(1), "1")
-	process.NameStep(GenerateStep(2), "2", "1")
-	process.NameStep(GenerateStep(3), "3", "2")
-	process.NameStep(GenerateStep(4), "4", "3")
+	process.NameStep(Fn(t).Normal(), "1")
+	process.NameStep(Fn(t).Normal(), "2", "1")
+	process.NameStep(Fn(t).Normal(), "3", "2")
+	process.NameStep(Fn(t).Normal(), "4", "3")
 	workflow.AfterFlow(false, CheckResult(t, 16, flow.Success))
 	flow.DoneFlow("TestDefaultProcessConfig", nil)
 }
@@ -81,9 +79,6 @@ func TestDefaultProcessConfig(t *testing.T) {
 func TestMergeDefaultProcessConfig(t *testing.T) {
 	defer resetCurrent()
 	defer flow.ResetDefaultCallback()
-	defer func() {
-		flow.CreateDefaultConfig()
-	}()
 	df := flow.DefaultCallback()
 	df.BeforeStep(true, PreProcessor)
 	df.AfterStep(true, PostProcessor)
@@ -109,9 +104,6 @@ func TestMergeDefaultProcessConfig(t *testing.T) {
 func TestCallbackCond(t *testing.T) {
 	defer resetCurrent()
 	defer flow.ResetDefaultCallback()
-	defer func() {
-		flow.CreateDefaultConfig()
-	}()
 	df := flow.DefaultCallback()
 	df.BeforeFlow(true, BeforeFlowProcessor).OnlyFor("TestCallbackCond")
 	df.BeforeFlow(true, BeforeFlowProcessor).OnlyFor("TestCallbackCondNotExist")
@@ -137,9 +129,6 @@ func TestCallbackCond(t *testing.T) {
 func TestCallbackCond0(t *testing.T) {
 	defer resetCurrent()
 	defer flow.ResetDefaultCallback()
-	defer func() {
-		flow.CreateDefaultConfig()
-	}()
 	df := flow.DefaultCallback()
 	df.BeforeFlow(true, BeforeFlowProcessor).NotFor("TestCallbackCond0")
 	df.BeforeFlow(true, BeforeFlowProcessor).NotFor("TestCallbackCondNotExist")
@@ -164,9 +153,6 @@ func TestCallbackCond0(t *testing.T) {
 func TestUnableDefaultProcessConfig(t *testing.T) {
 	defer resetCurrent()
 	defer flow.ResetDefaultCallback()
-	defer func() {
-		flow.CreateDefaultConfig()
-	}()
 	df := flow.DefaultCallback()
 	df.BeforeStep(true, PreProcessor)
 	df.AfterStep(true, PostProcessor)
