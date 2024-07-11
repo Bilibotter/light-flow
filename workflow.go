@@ -19,22 +19,22 @@ var (
 type FlowMeta struct {
 	flowConfig
 	flowCallback
-	name              string
-	flowNotUseDefault bool
-	processes         []*ProcessMeta
+	init      sync.Once
+	name      string
+	processes []*ProcessMeta
 }
 
 type runFlow struct {
 	*state
 	*FlowMeta
 	*simpleContext
-	id        string
-	compress  state
-	processes map[string]*runProcess
-	start     time.Time
-	end       time.Time
-	lock      sync.Mutex
-	finish    sync.WaitGroup
+	id           string
+	compress     state
+	runProcesses map[string]*runProcess
+	start        time.Time
+	end          time.Time
+	lock         sync.Mutex
+	finish       sync.WaitGroup
 }
 
 func init() {
@@ -54,6 +54,7 @@ func DefaultConfig() FlowConfig {
 func RegisterFlow(name string) *FlowMeta {
 	flow := FlowMeta{
 		name:         name,
+		init:         sync.Once{},
 		flowCallback: buildFlowCallback(flowScope),
 	}
 	flow.register()
@@ -108,7 +109,7 @@ func (fm *FlowMeta) buildRunFlow(input map[string]any) *runFlow {
 		simpleContext: &ctx,
 		id:            generateId(),
 		lock:          sync.Mutex{},
-		processes:     make(map[string]*runProcess, len(fm.processes)),
+		runProcesses:  make(map[string]*runProcess, len(fm.processes)),
 		finish:        sync.WaitGroup{},
 	}
 
@@ -118,7 +119,7 @@ func (fm *FlowMeta) buildRunFlow(input map[string]any) *runFlow {
 
 	for _, processMeta := range fm.processes {
 		process := rf.buildRunProcess(processMeta)
-		rf.processes[processMeta.name] = process
+		rf.runProcesses[processMeta.name] = process
 	}
 
 	return &rf
@@ -138,7 +139,6 @@ func (fm *FlowMeta) Process(name string) *ProcessMeta {
 		init:         sync.Once{},
 		steps:        make(map[string]*StepMeta),
 	}
-	pm.procCfg = append(pm.procCfg, &fm.processConfig)
 	pm.register()
 	fm.processes = append(fm.processes, &pm)
 	return &pm
@@ -149,7 +149,7 @@ func (rf *runFlow) HasAny(enum ...*StatusEnum) bool {
 }
 
 func (rf *runFlow) Process(name string) (ProcController, bool) {
-	res, ok := rf.processes[name]
+	res, ok := rf.runProcesses[name]
 	if ok {
 		return res, true
 	}
@@ -158,7 +158,7 @@ func (rf *runFlow) Process(name string) (ProcController, bool) {
 
 func (rf *runFlow) Exceptions() []FinishedProcess {
 	res := make([]FinishedProcess, 0)
-	for _, process := range rf.processes {
+	for _, process := range rf.runProcesses {
 		if !process.state.Normal() {
 			res = append(res, process)
 		}
@@ -206,7 +206,7 @@ func (rf *runFlow) buildRunProcess(meta *ProcessMeta) *runProcess {
 		ProcessMeta: meta,
 		belong:      rf,
 		id:          generateId(),
-		flowSteps:   make(map[string]*runStep),
+		runSteps:    make(map[string]*runStep),
 		pause:       sync.WaitGroup{},
 		running:     sync.WaitGroup{},
 		finish:      sync.WaitGroup{},
@@ -214,9 +214,9 @@ func (rf *runFlow) buildRunProcess(meta *ProcessMeta) *runProcess {
 
 	for _, stepMeta := range meta.sortedSteps() {
 		step := process.buildRunStep(stepMeta)
-		process.flowSteps[stepMeta.name] = step
+		process.runSteps[stepMeta.name] = step
 	}
-	process.running.Add(len(process.flowSteps))
+	process.running.Add(len(process.runSteps))
 
 	return &process
 }
@@ -234,11 +234,12 @@ func (rf *runFlow) Done() FinishedWorkFlow {
 	if !rf.EndTime().IsZero() {
 		return rf
 	}
+	rf.initialize()
 	rf.start = time.Now().UTC()
 	// execute before flow callback
 	rf.advertise(beforeF)
-	wg := make([]*sync.WaitGroup, 0, len(rf.processes))
-	for _, process := range rf.processes {
+	wg := make([]*sync.WaitGroup, 0, len(rf.runProcesses))
+	for _, process := range rf.runProcesses {
 		if rf.Has(CallbackFail) {
 			process.append(Cancel)
 		}
@@ -250,8 +251,14 @@ func (rf *runFlow) Done() FinishedWorkFlow {
 	}
 	// execute callback and recover after all processes are done
 	rf.finalize()
-	rf.end = time.Now().UTC()
 	return rf
+}
+
+func (rf *runFlow) initialize() {
+	rf.init.Do(func() {
+		copyProperties(defaultConfig, &rf.flowConfig, true)
+		copyProperties(&defaultConfig.processConfig, &rf.processConfig, true)
+	})
 }
 
 func (rf *runFlow) advertise(flag uint64) {
@@ -264,15 +271,18 @@ func (rf *runFlow) advertise(flag uint64) {
 }
 
 func (rf *runFlow) finalize() {
-	for _, process := range rf.processes {
+	for _, process := range rf.runProcesses {
 		rf.compress.add(process.compress.load())
 	}
 	rf.compress.add(rf.load())
 	if rf.compress.Normal() {
+		rf.compress.append(Success)
 		rf.append(Success)
 	} else {
+		rf.compress.append(Failed)
 		rf.append(Failed)
 	}
+	rf.end = time.Now().UTC()
 	rf.advertise(afterF)
 	rf.compress.add(rf.load())
 	if !rf.Normal() && rf.canRecover() {
@@ -282,8 +292,8 @@ func (rf *runFlow) finalize() {
 }
 
 func (rf *runFlow) ListProcess() []string {
-	processes := make([]string, 0, len(rf.processes))
-	for _, process := range rf.processes {
+	processes := make([]string, 0, len(rf.runProcesses))
+	for _, process := range rf.runProcesses {
 		processes = append(processes, process.name)
 	}
 	return processes
@@ -291,7 +301,7 @@ func (rf *runFlow) ListProcess() []string {
 
 func (rf *runFlow) Pause() FlowController {
 	rf.append(Pause)
-	for _, process := range rf.processes {
+	for _, process := range rf.runProcesses {
 		process.Pause()
 	}
 	return rf
@@ -299,7 +309,7 @@ func (rf *runFlow) Pause() FlowController {
 
 // Resume resumes the execution of the workflow.
 func (rf *runFlow) Resume() FlowController {
-	for _, process := range rf.processes {
+	for _, process := range rf.runProcesses {
 		process.Resume()
 	}
 	return rf
@@ -307,7 +317,7 @@ func (rf *runFlow) Resume() FlowController {
 
 // Stop stops the execution of the workflow.
 func (rf *runFlow) Stop() FlowController {
-	for _, process := range rf.processes {
+	for _, process := range rf.runProcesses {
 		process.Stop()
 	}
 	return rf

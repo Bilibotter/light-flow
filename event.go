@@ -11,7 +11,6 @@ var (
 
 type methodNotSupport struct{}
 
-// LoggerI 定义接口
 type LoggerI interface {
 	Debug(v ...interface{})
 	Info(v ...interface{})
@@ -23,7 +22,7 @@ type LoggerI interface {
 	Errorf(format string, v ...interface{})
 }
 
-// defaultLogger 结构体，嵌入 log.Logger
+// defaultLogger
 type defaultLogger struct {
 	*log.Logger
 }

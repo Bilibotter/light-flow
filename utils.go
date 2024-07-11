@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"unsafe"
 )
 
 var (
@@ -187,12 +188,6 @@ func copyProperties(src, dst interface{}, skipNotEmpty bool) {
 	srcType := srcElem.Type()
 	for i := 0; i < srcElem.NumField(); i++ {
 		srcField := srcElem.Field(i)
-		srcFieldName := srcType.Field(i).Name
-		// private field can't copy, skip it
-		if len(srcType.Field(i).PkgPath) != 0 {
-			continue
-		}
-
 		if tag := srcType.Field(i).Tag.Get("flow"); len(tag) != 0 {
 			splits := strings.Split(tag, ";")
 			skip := false
@@ -203,8 +198,14 @@ func copyProperties(src, dst interface{}, skipNotEmpty bool) {
 				continue
 			}
 		}
-
+		srcFieldName := srcType.Field(i).Name
+		if !srcField.CanInterface() {
+			srcField = reflect.NewAt(srcField.Type(), unsafe.Pointer(srcField.UnsafeAddr())).Elem()
+		}
 		if dstField := dstElem.FieldByName(srcFieldName); dstField.IsValid() && dstField.Type() == srcField.Type() {
+			if !dstField.CanSet() {
+				dstField = reflect.NewAt(dstField.Type(), unsafe.Pointer(dstField.UnsafeAddr())).Elem()
+			}
 			if skipNotEmpty && !dstField.IsZero() {
 				continue
 			}

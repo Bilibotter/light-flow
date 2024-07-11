@@ -30,13 +30,13 @@ const (
 )
 
 const (
-	mustS    = "Must"
-	nonMustS = "Non-Must"
+	mustS    = "must"
+	nonMustS = "non-must"
 )
 
 const (
-	panicLog = "%s-Callback trigger panic;\n Scope=%s, Stage=%s, Iteration=%d;\n Panic=%v\n%s"
-	errorLog = "%s-Callback execute error;\n Scope=%s, Stage=%s, Iteration=%d;\n Error=%s"
+	panicLog = "%s %s-callback trigger panic;\n Scope=%s, Stage=%s, Iteration=%d;\n Panic=%v\n%s"
+	errorLog = "%s %s-callback execute error;\n Scope=%s, Stage=%s, Iteration=%d;\n Error=%s"
 )
 
 var (
@@ -159,7 +159,6 @@ func (f *flowCallback) DisableDefaultCallback() {
 		panic("default callback can't disable itself")
 	}
 	f.disableDefault = true
-	return
 }
 
 func (f *flowCallback) BeforeFlow(must bool, callback func(WorkFlow) (keepOn bool, err error)) *decorator[WorkFlow] {
@@ -248,13 +247,13 @@ func (chain *funcChain[T]) filter(runtime T) (runNext bool) {
 		r := recover()
 		if index >= chain.Index {
 			if r != nil {
-				logger.Errorf(panicLog, chain.necessity(index), chain.Scope, chain.Stage, index, r, stack())
+				logger.Errorf(panicLog, runtime.Name(), chain.necessity(index), chain.Scope, chain.Stage, index, r, stack())
 			}
 			return
 		}
 		if r != nil {
 			runNext = false
-			logger.Errorf(panicLog, chain.necessity(index), chain.Scope, chain.Stage, index, r, stack())
+			logger.Errorf(panicLog, runtime.Name(), chain.necessity(index), chain.Scope, chain.Stage, index, r, stack())
 		}
 		if runNext {
 			return
@@ -282,7 +281,7 @@ func (chain *funcChain[T]) filter(runtime T) (runNext bool) {
 			continue
 		}
 		if err != nil {
-			logger.Errorf(errorLog, chain.necessity(index), chain.Scope, chain.Stage, index, err.Error())
+			logger.Errorf(errorLog, runtime.Name(), chain.necessity(index), chain.Scope, chain.Stage, index, err.Error())
 			runNext = index >= len(chain.Chain)
 		}
 		break

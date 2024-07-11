@@ -215,9 +215,9 @@ func loadStatus(workflow *runFlow, checkpoints []CheckPoint) error {
 	if exist && !point.(*breakPoint).SkipRun {
 		return nil
 	}
-	for _, proc := range workflow.processes {
+	for _, proc := range workflow.runProcesses {
 		proc.append(executed)
-		for _, step := range proc.flowSteps {
+		for _, step := range proc.runSteps {
 			step.append(executed)
 		}
 	}
@@ -227,11 +227,11 @@ func loadStatus(workflow *runFlow, checkpoints []CheckPoint) error {
 			continue
 		}
 		name := checkpoint.GetName()
-		workflow.processes[name].clear(executed)
-		workflow.processes[name].append(Recovering)
-		point, exist = workflow.processes[name].getInternal(fmt.Sprintf(procBreakPoint, name))
+		workflow.runProcesses[name].clear(executed)
+		workflow.runProcesses[name].append(Recovering)
+		point, exist = workflow.runProcesses[name].getInternal(fmt.Sprintf(procBreakPoint, name))
 		if exist && !point.(*breakPoint).SkipRun {
-			for _, step := range workflow.processes[name].flowSteps {
+			for _, step := range workflow.runProcesses[name].runSteps {
 				step.clear(executed)
 			}
 		}
@@ -242,11 +242,11 @@ func loadStatus(workflow *runFlow, checkpoints []CheckPoint) error {
 			continue
 		}
 		name := checkpoint.GetName()
-		proc, ok := workflow.processes[id2Name[checkpoint.GetParentId()]]
+		proc, ok := workflow.runProcesses[id2Name[checkpoint.GetParentId()]]
 		if !ok {
 			return fmt.Errorf("unable to recognize the process to which Step[%s] belongs", checkpoint.GetName())
 		}
-		current, find := proc.flowSteps[name]
+		current, find := proc.runSteps[name]
 		if !find {
 			return fmt.Errorf("Step[%s] not belong to Process[%s]", name, proc.name)
 		}
@@ -273,11 +273,11 @@ func loadCheckpoints(workflow *runFlow, checkpoints []CheckPoint) (err error) {
 		case FlowScope:
 			err = workflow.loadCheckpoint(checkpoint)
 		case ProcessScope:
-			proc := workflow.processes[id2Name[checkpoint.GetPrimaryKey()]]
+			proc := workflow.runProcesses[id2Name[checkpoint.GetPrimaryKey()]]
 			err = proc.loadCheckpoint(checkpoint)
 		case StepScope:
-			belong := workflow.processes[id2Name[checkpoint.GetParentId()]]
-			step := belong.flowSteps[checkpoint.GetName()]
+			belong := workflow.runProcesses[id2Name[checkpoint.GetParentId()]]
+			step := belong.runSteps[checkpoint.GetName()]
 			err = step.loadCheckpoint(checkpoint)
 		default:
 			err = fmt.Errorf("CheckPoint[%s] has unknown scope %d", checkpoint.GetName(), checkpoint.GetScope())
@@ -663,11 +663,11 @@ func (rf *runFlow) saveCheckpoints() {
 	checkpoints := make([]CheckPoint, 0)
 	recoverId := generateId()
 	checkpoints = append(checkpoints, &flowCheckpoint{runFlow: rf})
-	for _, proc := range rf.processes {
+	for _, proc := range rf.runProcesses {
 		if proc.Success() {
 			continue
 		}
-		for _, step := range proc.flowSteps {
+		for _, step := range proc.runSteps {
 			if step.needRecover() {
 				checkpoints = append(checkpoints, &stepCheckpoint{runStep: step})
 			}

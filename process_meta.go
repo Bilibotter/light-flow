@@ -25,11 +25,6 @@ type ProcessMeta struct {
 	nodeNum  uint
 }
 
-func newProcessConfig() processConfig {
-	config := processConfig{}
-	return config
-}
-
 func (pm *ProcessMeta) Name() string {
 	return pm.name
 }
@@ -44,6 +39,19 @@ func (pm *ProcessMeta) register() {
 func (pm *ProcessMeta) initialize() {
 	pm.init.Do(func() {
 		pm.constructVisible()
+		copyProperties(&pm.belong.processConfig, &pm.processConfig, true)
+		copyProperties(&pm.belong.stepConfig, &pm.stepConfig, true)
+		for _, step := range pm.steps {
+			if pm.stepCfgInit {
+				copyProperties(&pm.stepConfig, &step.stepConfig, true)
+			}
+			for _, cfg := range step.extern {
+				if !cfg.stepCfgInit {
+					continue
+				}
+				copyProperties(cfg, &step.stepConfig, true)
+			}
+		}
 	})
 }
 
@@ -158,7 +166,6 @@ func (pm *ProcessMeta) NameStep(run func(ctx Step) (any, error), name string, de
 	meta := &StepMeta{
 		name: name,
 	}
-	meta.stepCfg = append(meta.stepCfg, &pm.stepConfig)
 	for _, wrap := range depends {
 		dependName := toStepName(wrap)
 		depend, exist := pm.steps[dependName]

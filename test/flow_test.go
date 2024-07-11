@@ -217,7 +217,6 @@ func TestMultipleNormalSteps(t *testing.T) {
 	flow.DoneFlow("TestMultipleNormalSteps", nil)
 }
 
-// todo add it
 func TestWorkFlowPause(t *testing.T) {
 	defer resetCurrent()
 	letGo = false
