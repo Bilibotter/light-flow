@@ -35,8 +35,8 @@ const (
 )
 
 const (
-	panicLog = "%s %s-callback trigger panic;\n Scope=%s, Stage=%s, Iteration=%d;\n Panic=%v\n%s"
-	errorLog = "%s %s-callback execute error;\n Scope=%s, Stage=%s, Iteration=%d;\n Error=%s"
+	panicLog = "%s %s-callback trigger panic;\n    Scope=%s, Stage=%s, Iteration=%d;\n    Panic=%v\n%s"
+	errorLog = "%s %s-callback execute error;\n    Scope=%s, Stage=%s, Iteration=%d;\n    Error=%s"
 )
 
 var (
@@ -81,6 +81,7 @@ type breakPoint struct {
 	Stage   int
 	Index   int
 	SkipRun bool
+	Used    bool
 }
 
 type decorator[T proto] struct {
@@ -239,8 +240,10 @@ func (chain *funcChain[T]) filter(runtime T) (runNext bool) {
 	if lastTime != nil && chain.Stage0 < lastTime.Stage {
 		return
 	}
-	if runtime.Has(Recovering) && lastTime == nil && chain.Before {
-		return
+	if runtime.Has(Recovering) && lastTime == nil {
+		if chain.Before && !strings.HasSuffix(chain.Stage, stepScope) {
+			return
+		}
 	}
 	var index, begin int
 	defer func() {
@@ -262,7 +265,7 @@ func (chain *funcChain[T]) filter(runtime T) (runNext bool) {
 		if chain.Before {
 			runtime.append(Cancel)
 		}
-		if !runtime.canRecover() {
+		if !runtime.isRecoverable() {
 			return
 		}
 		point := &breakPoint{

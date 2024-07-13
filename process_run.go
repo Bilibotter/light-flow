@@ -45,8 +45,8 @@ func (process *runProcess) CostTime() time.Duration {
 	return process.end.Sub(process.start)
 }
 
-func (process *runProcess) canRecover() bool {
-	return process.belong.canRecover()
+func (process *runProcess) isRecoverable() bool {
+	return process.belong.isRecoverable()
 }
 
 func (process *runProcess) buildRunStep(meta *StepMeta) *runStep {
@@ -287,9 +287,9 @@ func (process *runProcess) runStep(step *runStep) {
 			step.append(Panic)
 			step.exception = panicErr
 			step.end = time.Now().UTC()
-			if step.canRecover() {
-				step.setInternal(fmt.Sprintf(stepBreakPoint, step.Name()), &stepPanicBreakPoint)
-			}
+		}
+		if step.isRecoverable() && !step.Normal() && !step.Has(CallbackFail) {
+			step.setInternal(fmt.Sprintf(stepBreakPoint, step.Name()), &stepPanicBreakPoint)
 		}
 		process.stepCallback(step, afterF)
 	}()

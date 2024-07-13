@@ -168,7 +168,7 @@ func (rf *runFlow) Exceptions() []FinishedProcess {
 
 func (rf *runFlow) Recover() (FinishedWorkFlow, error) {
 	if !rf.Has(Failed) {
-		return nil, fmt.Errorf("WorkFlow[%s] is not failed, can't recover", rf.name)
+		return nil, fmt.Errorf("workflow[%s] is't failed, can't recover", rf.name)
 	}
 	return RecoverFlow(rf.id)
 }
@@ -285,7 +285,7 @@ func (rf *runFlow) finalize() {
 	rf.end = time.Now().UTC()
 	rf.advertise(afterF)
 	rf.compress.add(rf.load())
-	if !rf.Normal() && rf.canRecover() {
+	if !rf.Normal() && rf.isRecoverable() {
 		rf.saveCheckpoints()
 	}
 	rf.finish.Done()

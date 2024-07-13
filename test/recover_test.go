@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 var (
@@ -25,29 +26,36 @@ var (
 )
 
 type Checkpoints struct {
-	Id        string `gorm:"column:id;primary_key"`
-	Name      string `gorm:"column:name;NOT NULL"`
-	RecoverId string `gorm:"column:recover_id"`
-	ParentId  string `gorm:"column:parent_id"`
-	RootId    string `gorm:"column:root_id"`
-	Scope     uint8  `gorm:"column:scope;NOT NULL"`
-	Snapshot  []byte `gorm:"column:snapshot"`
+	Id        string    `gorm:"column:id;primary_key"`
+	Uid       string    `gorm:"column:uid"`
+	Name      string    `gorm:"column:name;NOT NULL"`
+	RecoverId string    `gorm:"column:recover_id"`
+	ParentUid string    `gorm:"column:parent_uid"`
+	RootUid   string    `gorm:"column:root_uid"`
+	Scope     uint8     `gorm:"column:scope;NOT NULL"`
+	Snapshot  []byte    `gorm:"column:snapshot"`
+	CreatedAt time.Time `gorm:"type:datetime;column:created_at;"`
+	UpdatedAt time.Time `gorm:"type:datetime;column:updated_at;"`
 }
 
-func (c Checkpoints) GetPrimaryKey() string {
+func (c Checkpoints) GetId() string {
 	return c.Id
+}
+
+func (c Checkpoints) GetUid() string {
+	return c.Uid
 }
 
 func (c Checkpoints) GetName() string {
 	return c.Name
 }
 
-func (c Checkpoints) GetParentId() string {
-	return c.ParentId
+func (c Checkpoints) GetParentUid() string {
+	return c.ParentUid
 }
 
-func (c Checkpoints) GetRootId() string {
-	return c.RootId
+func (c Checkpoints) GetRootUid() string {
+	return c.RootUid
 }
 
 func (c Checkpoints) GetScope() uint8 {
@@ -63,14 +71,16 @@ func (c Checkpoints) GetSnapshot() []byte {
 }
 
 type RecoverRecords struct {
-	RootId    string `gorm:"column:root_id;NOT NULL"`
-	RecoverId string `gorm:"column:recover_id;primary_key"`
-	Status    uint8  `gorm:"column:status;NOT NULL"`
-	Name      string `gorm:"column:name;NOT NULL"`
+	RootUid   string    `gorm:"column:root_uid;NOT NULL"`
+	RecoverId string    `gorm:"column:recover_id;primary_key"`
+	Status    uint8     `gorm:"column:status;NOT NULL"`
+	Name      string    `gorm:"column:name;NOT NULL"`
+	CreatedAt time.Time `gorm:"type:datetime;column:created_at;"`
+	UpdatedAt time.Time `gorm:"type:datetime;column:updated_at;"`
 }
 
-func (r RecoverRecords) GetRootId() string {
-	return r.RootId
+func (r RecoverRecords) GetRootUid() string {
+	return r.RootUid
 }
 
 func (r RecoverRecords) GetRecoverId() string {
@@ -88,13 +98,13 @@ func (r RecoverRecords) GetName() string {
 type persisitImpl struct {
 }
 
-func (p persisitImpl) GetLatestRecord(rootId string) (flow.RecoverRecord, error) {
+func (p persisitImpl) GetLatestRecord(rootUid string) (flow.RecoverRecord, error) {
 	db := <-pool
 	defer func() {
 		pool <- db
 	}()
 	var record RecoverRecords
-	result := db.Where("root_id = ?", rootId).Where("status = ?", uint8(flow.RecoverIdle)).First(&record)
+	result := db.Where("root_uid = ?", rootUid).Where("status = ?", flow.RecoverIdle).First(&record)
 	if result.Error != nil {
 		return record, result.Error
 	}
@@ -139,13 +149,16 @@ func (p persisitImpl) SaveCheckpointAndRecord(cps []flow.CheckPoint, records flo
 	checkpoints := make([]Checkpoints, len(cps))
 	for i, cp := range cps {
 		checkpoints[i] = Checkpoints{
-			Id:        cp.GetPrimaryKey(),
+			Id:        cp.GetId(),
+			Uid:       cp.GetUid(),
 			Name:      cp.GetName(),
 			RecoverId: cp.GetRecoverId(),
-			ParentId:  cp.GetParentId(),
-			RootId:    cp.GetRootId(),
+			ParentUid: cp.GetParentUid(),
+			RootUid:   cp.GetRootUid(),
 			Scope:     cp.GetScope(),
 			Snapshot:  cp.GetSnapshot(),
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
 		}
 	}
 	if err := tx.Create(&checkpoints).Error; err != nil {
@@ -153,10 +166,12 @@ func (p persisitImpl) SaveCheckpointAndRecord(cps []flow.CheckPoint, records flo
 		panic(err)
 	}
 	record := RecoverRecords{
-		RootId:    records.GetRootId(),
+		RootUid:   records.GetRootUid(),
 		RecoverId: records.GetRecoverId(),
 		Status:    records.GetStatus(),
 		Name:      records.GetName(),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 	if err := tx.Create(&record).Error; err != nil {
 		tx.Rollback()
@@ -210,6 +225,20 @@ func readDBConfig(filePath string) error {
 	return nil
 }
 
+func Recover0(t *testing.T, ff flow.FinishedWorkFlow) flow.FinishedWorkFlow {
+	atomic.AddInt64(&times, 1)
+	resetCurrent()
+	println()
+	t.Logf("start [%d]times recover >>>>>>>>>>>>>>", times)
+	f, err := ff.Recover()
+	if err != nil {
+		panic(err)
+	}
+	println()
+	t.Logf("end [%d]times recover <<<<<<<<<<<<<<<", times)
+	return f
+}
+
 func Recover(name string) {
 	println("\n\t----------Recovering----------\n")
 	executeSuc = true
@@ -233,7 +262,7 @@ func getId(name string) (string, error) {
 	if result.Error != nil {
 		return "", result.Error
 	}
-	return record.GetRootId(), nil
+	return record.GetRootUid(), nil
 }
 
 func TestMain(m *testing.M) {
@@ -1322,6 +1351,78 @@ func TestStepCallbackPanicWithAllScope5(t *testing.T) {
 	wf.AfterFlow(false, CheckResult(t, 10, flow.Success)).If(execSuc)
 	flow.DoneFlow("TestStepCallbackPanicWithAllScope5", nil)
 	Recover("TestStepCallbackPanicWithAllScope5")
+}
+
+func TestMultiTimesRecover(t *testing.T) {
+	defer resetCurrent()
+	defer resetTimes()
+	wf := flow.RegisterFlow("TestMultiTimesRecover")
+	fx0 := Fx[flow.WorkFlow](t)
+	fx1 := Fx[flow.Process](t)
+	wf.BeforeFlow(true, fx0.Normal().Callback())
+	wf.BeforeProcess(true, fx1.Normal().Callback())
+	wf.EnableRecover()
+	fx2 := Fx[flow.Step](t)
+	fx3 := Fx[flow.Step](t)
+	fx4 := Fx[flow.Step](t)
+	fx5 := Fx[flow.Step](t)
+	proc := wf.Process("TestMultiTimesRecover")
+	proc.BeforeStep(true, fx2.Normal().Callback()).OnlyFor("step1")
+	proc.AfterStep(true, fx4.Normal().Callback()).OnlyFor("step1")
+	proc.NameStep(fx3.Normal().Step(), "step1")
+	proc.NameStep(fx5.Normal().Step(), "step2", "step1")
+	fx6 := Fx[flow.Process](t)
+	fx7 := Fx[flow.WorkFlow](t)
+	wf.AfterProcess(true, fx6.Normal().Callback())
+	wf.AfterFlow(true, fx7.Normal().Callback())
+	wf.AfterFlow(false, CheckResult(t, 1, flow.CallbackFail)).If(Times(0))
+	wf.AfterFlow(false, CheckResult(t, 3, flow.CallbackFail)).If(Times(1))
+	wf.AfterFlow(false, CheckResult(t, 3, flow.CallbackFail)).If(Times(2))
+	wf.AfterFlow(false, CheckResult(t, 4, flow.Error)).If(Times(3))
+	wf.AfterFlow(false, CheckResult(t, 3, flow.CallbackFail)).If(Times(4))
+	wf.AfterFlow(false, CheckResult(t, 3, flow.Error)).If(Times(5))
+	wf.AfterFlow(false, CheckResult(t, 2, flow.CallbackFail)).If(Times(6))
+	// times 7 will be skipped, so can't use CheckResult to check it.
+	wf.AfterFlow(false, CheckResult(t, 1, flow.Success)).If(Times(8))
+	fx0.Condition(0, errorRet)
+	ff := flow.DoneFlow("TestMultiTimesRecover", nil)
+
+	fx0.Condition(0, normalRet)
+	fx1.Condition(0, errorRet)
+	Recover0(t, ff)
+
+	fx1.Condition(0, normalRet)
+	fx2.Condition(0, errorRet)
+	Recover0(t, ff)
+
+	fx2.Condition(0, normalRet)
+	fx3.Condition(0, errorRet)
+	Recover0(t, ff)
+
+	fx3.Condition(0, normalRet)
+	fx4.Condition(0, errorRet)
+	Recover0(t, ff)
+
+	fx4.Condition(0, normalRet)
+	fx5.Condition(0, errorRet)
+	Recover0(t, ff)
+
+	fx5.Condition(0, normalRet)
+	fx6.Condition(0, errorRet)
+	Recover0(t, ff)
+
+	fx6.Condition(0, normalRet)
+	fx7.Condition(0, errorRet)
+	ff = Recover0(t, ff)
+	if !ff.Has(flow.CallbackFail) {
+		t.Error("TestMultiTimesRecover failed")
+	}
+	if atomic.LoadInt64(&current) != 1 {
+		t.Error("TestMultiTimesRecover failed")
+	}
+
+	fx7.Condition(0, normalRet)
+	ff = Recover0(t, ff)
 }
 
 func TestPool(t *testing.T) {

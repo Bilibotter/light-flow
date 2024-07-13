@@ -724,7 +724,7 @@ func CheckResult(t *testing.T, check int64, statuses ...*flow.StatusEnum) func(f
 		}
 		t.Logf("start check")
 		t.Logf("expect [current] = %d, [status] include {%s}", check, strings.Join(ss, ","))
-		if current != check {
+		if atomic.LoadInt64(&current) != check {
 			t.Errorf("execute %d step, but current = %d", check, current)
 		}
 		for _, status := range statuses {

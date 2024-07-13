@@ -46,9 +46,6 @@ func (pm *ProcessMeta) initialize() {
 				copyProperties(&pm.stepConfig, &step.stepConfig, true)
 			}
 			for _, cfg := range step.extern {
-				if !cfg.stepCfgInit {
-					continue
-				}
 				copyProperties(cfg, &step.stepConfig, true)
 			}
 		}
@@ -66,22 +63,28 @@ func (pm *ProcessMeta) constructVisible() {
 // Merge will not merge config,
 // because has not effective design to not use merged config.
 func (pm *ProcessMeta) Merge(name string) {
-	wrap, exist := allProcess.Load(name)
-	if !exist {
+	wrap, find := allProcess.Load(name)
+	if !find {
 		panic(fmt.Sprintf("can't merge not exist Process[%s]", name))
 	}
 	mergedProcess := wrap.(*ProcessMeta)
-	for _, merge := range mergedProcess.sortedSteps() {
-		if _, exist = pm.steps[merge.name]; exist {
-			pm.mergeStep(merge)
+	for _, merged := range mergedProcess.sortedSteps() {
+		if target, exist := pm.steps[merged.name]; exist {
+			pm.mergeStep(merged)
+			if merged.stepCfgInit {
+				target.extern = append(target.extern, &merged.stepConfig)
+			}
 			continue
 		}
-		depends := make([]any, 0, len(merge.depends))
-		for _, depend := range merge.depends {
+		depends := make([]any, 0, len(merged.depends))
+		for _, depend := range merged.depends {
 			depends = append(depends, depend.name)
 		}
-		step := pm.NameStep(merge.run, merge.name, depends...)
+		step := pm.NameStep(merged.run, merged.name, depends...)
 		step.position.append(mergedE)
+		if merged.stepCfgInit {
+			step.extern = append(step.extern, &merged.stepConfig)
+		}
 	}
 
 	// ensure step index bigger than all depends index
