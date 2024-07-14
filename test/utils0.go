@@ -81,6 +81,19 @@ func (fx *FlexibleBuilder[T]) CheckDepend() *FlexibleBuilder[T] {
 	return fx
 }
 
+func (fx *FlexibleBuilder[T]) SetCtx() *FlexibleBuilder[T] {
+	f := SetCtx0("")
+	fx.doing = append(fx.doing, func(ctx Ctx) (any, error) {
+		_, err := f(ctx)
+		if err != nil {
+			panic(err)
+		}
+		atomic.AddInt64(&current, 1)
+		return nil, nil
+	})
+	return fx
+}
+
 func (fx *FlexibleBuilder[T]) CheckCtx(preview string) *FlexibleBuilder[T] {
 	fx.doing = append(fx.doing, func(s flow.Step) (any, error) {
 		fn := CheckCtx(preview)
@@ -132,6 +145,28 @@ func (fx *FlexibleBuilder[T]) Add(f ...interface{}) *FlexibleBuilder[T] {
 	return fx
 }
 
+func (fx *FlexibleBuilder[T]) SetCond() *FlexibleBuilder[T] {
+	fx.doing = append(fx.doing, func(s flow.Step) (any, error) {
+		fx.Logf("step[%s] set condition", s.Name())
+		atomic.AddInt64(&current, 1)
+		s.SetCondition(true)
+		s.SetCondition(1)
+		s.SetCondition(uint(2))
+		s.SetCondition(float32(3))
+		s.SetCondition("condition")
+		return true, nil
+	})
+	return fx
+}
+
+func MatchCond(e *flow.StepMeta, depend string) {
+	e.EQ(depend, 1, uint(2), float32(3), "condition")
+}
+
+func NotMatchCond(e *flow.StepMeta, depend string) {
+	e.NEQ(depend, 1, uint(2), float32(3), "condition")
+}
+
 func (fx *FlexibleBuilder[T]) Condition(i int, ret int64) *FlexibleBuilder[T] {
 	atomic.StoreInt64(fx.fxRet, ret)
 	fx.index = i
@@ -156,19 +191,25 @@ func (fx *FlexibleBuilder[T]) Step() func(flow.Step) (any, error) {
 				_, err := fn(s)
 				if err != nil {
 					fx.Logf("step[%s] failed: %s", s.Name(), err)
-					return nil, err
+					return s.Name(), err
 				}
 			case func(flow.Step) (bool, error):
 				_, err := fn(s)
 				if err != nil {
 					fx.Logf("step[%s] failed: %s", s.Name(), err)
-					return nil, err
+					return s.Name(), err
 				}
 			case func(proto Proto) (any, error):
 				_, err := fn(s)
 				if err != nil {
 					fx.Logf("step[%s] failed: %s", s.Name(), err)
-					return nil, err
+					return s.Name(), err
+				}
+			case func(ctx Ctx) (any, error):
+				_, err := fn(s)
+				if err != nil {
+					fx.Logf("step[%s] failed: %s", s.Name(), err)
+					return s.Name(), err
 				}
 			default:
 				panic(fmt.Sprintf("unsupported function type: %T", fn))
@@ -181,7 +222,7 @@ func (fx *FlexibleBuilder[T]) Step() func(flow.Step) (any, error) {
 			panic("panic")
 		}
 		fx.Logf("step[%s] succeed", s.Name())
-		return nil, nil
+		return s.Name(), nil
 	}
 }
 
@@ -227,6 +268,8 @@ func (fx *FlexibleBuilder[T]) Callback() func(T) (bool, error) {
 				_, err = fn(any(arg).(flow.WorkFlow))
 			case func(flow.WorkFlow) (any, error):
 				_, err = fn(any(arg).(flow.WorkFlow))
+			case func(Ctx) (bool, error):
+				_, err = fn(any(arg).(Ctx))
 			default:
 				panic(fmt.Sprintf("unsupported function type: %T", fn))
 			}

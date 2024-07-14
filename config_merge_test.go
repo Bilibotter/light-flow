@@ -39,6 +39,12 @@ func emptyStep(ctx Step) (any, error) {
 	return nil, nil
 }
 
+func errorStep(ctx Step) (any, error) {
+	fmt.Printf("step[%s] execute error\n", ctx.Name())
+	atomic.AddInt64(&current, 1)
+	return nil, fmt.Errorf("error step")
+}
+
 func CheckResult(t *testing.T, check int64, statuses ...*StatusEnum) func(WorkFlow) (keepOn bool, err error) {
 	return func(workFlow WorkFlow) (keepOn bool, err error) {
 		ss := make([]string, len(statuses))
@@ -727,6 +733,24 @@ func TestFlowProcessConfigValid(t *testing.T) {
 	proc2.NameStep(emptyStep, "Step2")
 	wf.AfterFlow(true, CheckResult(t, 8, Success))
 	DoneFlow("TestFlowProcessConfigValid", nil)
+}
+
+func TestConfigMergeValid(t *testing.T) {
+	defer resetDefaultConfig()
+	defer resetCurrent()
+	wf1 := RegisterFlow("TestConfigMergeValid1")
+	proc1 := wf1.Process("TestConfigMergeValid1")
+	proc1.NameStep(errorStep, "Step1").StepRetry(2)
+	proc1.NameStep(errorStep, "Step2").StepRetry(5)
+	wf1.AfterFlow(false, CheckResult(t, 9, Error))
+	wf2 := RegisterFlow("TestConfigMergeValid2")
+	proc2 := wf2.Process("TestConfigMergeValid2")
+	proc2.NameStep(errorStep, "Step1")
+	proc2.Merge("TestConfigMergeValid1")
+	wf2.AfterFlow(false, CheckResult(t, 9, Error))
+	DoneFlow("TestConfigMergeValid2", nil)
+	resetCurrent()
+	DoneFlow("TestConfigMergeValid1", nil)
 }
 
 func TestStepStepConfigValid(t *testing.T) {

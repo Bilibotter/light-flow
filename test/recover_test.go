@@ -1425,6 +1425,24 @@ func TestMultiTimesRecover(t *testing.T) {
 	ff = Recover0(t, ff)
 }
 
+func TestTimeoutRecover(t *testing.T) {
+	defer resetCurrent()
+	letGo = false
+	executeSuc = false
+	wf := flow.RegisterFlow("TestTimeoutRecover")
+	wf.EnableRecover()
+	proc := wf.Process("TestTimeoutRecover")
+	proc.NameStep(Fn(t).WaitLetGO(1), "step1")
+	proc.StepTimeout(50 * time.Millisecond)
+	wf.AfterFlow(false, CheckResult(t, 1, flow.Timeout)).If(execFail)
+	wf.AfterFlow(false, CheckResult(t, 2, flow.Success)).If(execSuc)
+	flow.DoneFlow("TestTimeoutRecover", nil)
+	letGo = true
+	executeSuc = true
+	waitCurrent(2)
+	Recover("TestTimeoutRecover")
+}
+
 func TestPool(t *testing.T) {
 	db := <-pool
 	defer func() { pool <- db }()

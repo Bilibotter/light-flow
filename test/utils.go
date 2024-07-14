@@ -737,7 +737,8 @@ func CheckResult(t *testing.T, check int64, statuses ...*flow.StatusEnum) func(f
 		}
 		t.Logf("status expalin=%s", strings.Join(workFlow.ExplainStatus(), ","))
 		t.Logf("finish check")
-		t.Logf("<<<<<<<<<<<<<<<\n")
+		t.Logf("<<<<<<<<<<<<<<<")
+		println()
 		return true, nil
 	}
 }
