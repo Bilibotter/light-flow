@@ -66,6 +66,7 @@ type WorkFlow interface {
 
 type FinishedWorkFlow interface {
 	flowRuntime
+	Recover() (FinishedWorkFlow, error)
 	Exceptions() []FinishedProcess
 }
 
@@ -170,12 +171,6 @@ type context interface {
 	Set(key string, value any)
 }
 
-type PanicError interface {
-	Error() string
-	GetRecover() any
-	GetPanicStack() []byte
-}
-
 type routing interface {
 	nodeInfo
 	Prefer(key string) (index uint64, exist bool)
@@ -187,12 +182,6 @@ type nodeInfo interface {
 	ToIndex(name string) (uint64, bool)
 	ToName(index uint64) string
 	nodeName() string
-}
-
-type panicWrap struct {
-	err   error
-	trace []byte
-	r     any
 }
 
 type StatusEnum struct {
@@ -260,14 +249,6 @@ func toStepName(value any) string {
 		return result
 	default:
 		panic("depend must be func(ctx context) (any, error) or string")
-	}
-}
-
-func newPanicError(err error, r any, trace []byte) PanicError {
-	return &panicWrap{
-		err:   err,
-		trace: trace,
-		r:     r,
 	}
 }
 
@@ -367,18 +348,6 @@ func (s *StatusEnum) Message() string {
 	return s.msg
 }
 
-func (pw *panicWrap) Error() string {
-	return pw.err.Error()
-}
-
-func (pw *panicWrap) GetRecover() any {
-	return pw.r
-}
-
-func (pw *panicWrap) GetPanicStack() []byte {
-	return pw.trace
-}
-
 func (sc *simpleContext) Get(key string) (value any, exist bool) {
 	value, exist = sc.table[key]
 	return
@@ -450,6 +419,14 @@ func (ctx *dependentContext) EndValues(key string) map[string]any {
 }
 
 func (ctx *dependentContext) Result(key string) (value any, exist bool) {
+	index, valid := ctx.ToIndex(key)
+	if !valid {
+		return nil, false
+	}
+	access := uint64(1 << index)
+	if ctx.Access()&access != access {
+		return nil, false
+	}
 	ptr, find := ctx.getOutCome(key)
 	defer ctx.RUnlock()
 	if !find {

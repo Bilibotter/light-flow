@@ -55,6 +55,16 @@ type evaluator struct {
 	expect         flags
 }
 
+type Evaluator interface {
+	Identify(name string) Evaluator
+	EQ(value ...any) Evaluator
+	NEQ(value ...any) Evaluator
+	GT(value ...any) Evaluator
+	GTE(value ...any) Evaluator
+	LT(value ...any) Evaluator
+	LTE(value ...any) Evaluator
+}
+
 // Equality func (ei *EqualityImpl) Equal(other any) bool is invalid
 // func (ei *EqualityImpl) Equal(other any) bool is valid
 type Equality interface {
@@ -130,36 +140,36 @@ func toFloat64(i any) float64 {
 	return 0
 }
 
-func (eg *evaluator) Identify(name string) *evaluator {
+func (eg *evaluator) Identify(name string) Evaluator {
 	eg.name = name
 	return eg
 }
 
-func (eg *evaluator) EQ(value ...any) *evaluator {
+func (eg *evaluator) EQ(value ...any) Evaluator {
 	return eg.update(equalC, value...)
 }
 
-func (eg *evaluator) NEQ(value ...any) *evaluator {
+func (eg *evaluator) NEQ(value ...any) Evaluator {
 	return eg.update(notEqualC, value...)
 }
 
-func (eg *evaluator) GT(value ...any) *evaluator {
+func (eg *evaluator) GT(value ...any) Evaluator {
 	return eg.update(greaterC, value...)
 }
 
-func (eg *evaluator) GTE(value ...any) *evaluator {
+func (eg *evaluator) GTE(value ...any) Evaluator {
 	return eg.update(greaterAndEqualC, value...)
 }
 
-func (eg *evaluator) LT(value ...any) *evaluator {
+func (eg *evaluator) LT(value ...any) Evaluator {
 	return eg.update(lessC, value...)
 }
 
-func (eg *evaluator) LTE(value ...any) *evaluator {
+func (eg *evaluator) LTE(value ...any) Evaluator {
 	return eg.update(lessAndEqualC, value...)
 }
 
-func (eg *evaluator) update(cmp comparator, values ...any) *evaluator {
+func (eg *evaluator) update(cmp comparator, values ...any) Evaluator {
 	for _, value := range values {
 		normalized, flag := normalizeValue(value, cmp)
 		if _, exist := eg.typeValues[flag]; exist {
@@ -409,32 +419,32 @@ func (ss sliceSet[T]) Find(element any) bool {
 	return false
 }
 
-func (meta *StepMeta) EQ(depend interface{}, value ...any) *evaluator {
+func (meta *StepMeta) EQ(depend interface{}, value ...any) Evaluator {
 	meta.addDepend(depend)
 	return meta.addEvalGroup(toStepName(depend), equalC, value...)
 }
 
-func (meta *StepMeta) NEQ(depend interface{}, value ...any) *evaluator {
+func (meta *StepMeta) NEQ(depend interface{}, value ...any) Evaluator {
 	meta.addDepend(depend)
 	return meta.addEvalGroup(toStepName(depend), notEqualC, value...)
 }
 
-func (meta *StepMeta) GT(depend interface{}, value ...any) *evaluator {
+func (meta *StepMeta) GT(depend interface{}, value ...any) Evaluator {
 	meta.addDepend(depend)
 	return meta.addEvalGroup(toStepName(depend), greaterC, value...)
 }
 
-func (meta *StepMeta) GTE(depend interface{}, value ...any) *evaluator {
+func (meta *StepMeta) GTE(depend interface{}, value ...any) Evaluator {
 	meta.addDepend(depend)
 	return meta.addEvalGroup(toStepName(depend), greaterAndEqualC, value...)
 }
 
-func (meta *StepMeta) LT(depend interface{}, value ...any) *evaluator {
+func (meta *StepMeta) LT(depend interface{}, value ...any) Evaluator {
 	meta.addDepend(depend)
 	return meta.addEvalGroup(toStepName(depend), lessC, value...)
 }
 
-func (meta *StepMeta) LTE(depend interface{}, value ...any) *evaluator {
+func (meta *StepMeta) LTE(depend interface{}, value ...any) Evaluator {
 	meta.addDepend(depend)
 	return meta.addEvalGroup(toStepName(depend), lessAndEqualC, value...)
 }

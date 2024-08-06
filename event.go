@@ -11,7 +11,6 @@ var (
 
 type methodNotSupport struct{}
 
-// LoggerI 定义接口
 type LoggerI interface {
 	Debug(v ...interface{})
 	Info(v ...interface{})
@@ -23,16 +22,7 @@ type LoggerI interface {
 	Errorf(format string, v ...interface{})
 }
 
-type queue[T any] interface {
-	Enqueue(T) bool
-	Dequeue() (T, bool)
-	Len() int
-}
-
-type eventHandler struct {
-}
-
-// defaultLogger 结构体，嵌入 log.Logger
+// defaultLogger
 type defaultLogger struct {
 	*log.Logger
 }
@@ -43,19 +33,19 @@ func newDefaultLogger() *defaultLogger {
 	}
 }
 
-func (l *defaultLogger) Debug(v ...interface{}) {
+func (l *defaultLogger) Debug(_ ...interface{}) {
 	panic(methodNotSupport{})
 }
 
-func (l *defaultLogger) Info(v ...interface{}) {
+func (l *defaultLogger) Info(_ ...interface{}) {
 	panic(methodNotSupport{})
 }
 
-func (l *defaultLogger) Warn(v ...interface{}) {
+func (l *defaultLogger) Warn(_ ...interface{}) {
 	panic(methodNotSupport{})
 }
 
-func (l *defaultLogger) Error(v ...interface{}) {
+func (l *defaultLogger) Error(_ ...interface{}) {
 	panic(methodNotSupport{})
 }
 

@@ -56,7 +56,7 @@ func TestTypeDiff(t *testing.T) {
 
 func TestEmpty(t *testing.T) {
 	m := map[string]any{}
-	m["empty"] = shallBeforeCallback{}
+	m["empty"] = breakPoint{}
 	bs, err := serialize[map[string]any](m)
 	if err != nil {
 		t.Errorf("serialize error: %v", err)
@@ -69,12 +69,12 @@ func TestEmpty(t *testing.T) {
 	if !ok {
 		t.Errorf("deserialize falied")
 	}
-	_, ok = wrap.(shallBeforeCallback)
+	_, ok = wrap.(breakPoint)
 	if !ok {
 		t.Errorf("deserialize falied, type is%T, not InputA", wrap)
 	}
 	m0 := map[string][]node{}
-	m0["empty"] = []node{{Value: shallBeforeCallback{}}}
+	m0["empty"] = []node{{Value: breakPoint{}}}
 	bs, err = serialize[map[string][]node](m0)
 	if err != nil {
 		t.Errorf("serialize error: %v", err)
@@ -92,7 +92,7 @@ func TestEmpty(t *testing.T) {
 		t.Errorf("deserialize falied, type is%T, not InputA", wrap)
 	}
 	value := ss[0].Value
-	_, ok = value.(shallBeforeCallback)
+	_, ok = value.(breakPoint)
 	if !ok {
 		t.Errorf("deserialize falied, type is%T, not InputA", value)
 	}
@@ -120,7 +120,8 @@ func TestAllType(t *testing.T) {
 		O:     ot1,
 		Value: "Amy",
 	}
-	m1 := map[string]any{}
+	m := []map[string]any{{}}
+	m1 := m[0]
 	m1["uint"] = uint(128)
 	m1["uint8"] = uint8(1)
 	m1["uint16"] = uint16(1)
@@ -145,16 +146,17 @@ func TestAllType(t *testing.T) {
 	m1["*outcome"] = &ot1
 	m1["outcomeValue"] = otv1
 	m1["*outcomeValue"] = &otv1
-	bs, err := serialize(m1)
+	bs, err := serialize(m)
 	if err != nil {
 		t.Errorf("serialize error: %v", err)
 		return
 	}
-	m2, err := deserialize[map[string]any](bs)
+	m3, err := deserialize[[]map[string]any](bs)
 	if err != nil {
 		t.Errorf("deserialize error: %v", err)
 		return
 	}
+	m2 := m3[0]
 	if u, ok := m2["uint"].(uint); !ok {
 		t.Errorf("uint transfer to %T，value=%#v\n", m2["uint"], m2["uint"])
 	} else if u != m1["uint"].(uint) {

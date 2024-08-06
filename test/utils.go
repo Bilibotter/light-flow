@@ -38,6 +38,13 @@ type FuncBuilder struct {
 	onFail []func(ctx Ctx) (any, error)
 }
 
+type Checker struct {
+	t       *testing.T
+	target  string
+	contain []string
+	exclude []string
+}
+
 type FuncBuilder0 struct {
 	t      *testing.T
 	err    error
@@ -409,6 +416,58 @@ func (s *FuncBuilder) CheckCtx0(preview string, prefix string, notCheckResult ..
 	return f
 }
 
+func (c *Checker) Contain(cc ...string) *Checker {
+	c.contain = append(c.contain, cc...)
+	return c
+}
+
+func (c *Checker) Exclude(e ...string) *Checker {
+	c.exclude = append(c.exclude, e...)
+	return c
+}
+
+func (c *Checker) SetFn() func(flow.Step) (result any, err error) {
+	return func(step flow.Step) (result any, err error) {
+		c.t.Logf("Step[%s] start set\n", step.Name())
+		step.Set(step.Name(), step.Name())
+		atomic.AddInt64(&current, 1)
+		c.t.Logf("Step[%s] end set\n", step.Name())
+		return step.Name(), nil
+	}
+}
+
+func (c *Checker) Check() func(flow.Step) (keepOn bool, err error) {
+	return func(ctx flow.Step) (keepOn bool, err error) {
+		if ctx.Name() != c.target {
+			return true, nil
+		}
+		c.t.Logf("Step[%s] check start\n", ctx.Name())
+		for _, cc := range c.contain {
+			if wrap, exist := ctx.Get(cc); !exist {
+				c.t.Errorf("Step[%s] check failed, key[%s] not contain\n", ctx.Name(), cc)
+			} else if wrap.(string) != cc {
+				c.t.Errorf("Step[%s] check failed, key[%s] value[%v] not equal to [%s]\n", ctx.Name(), cc, wrap, cc)
+			}
+			if wrap, exist := ctx.Result(cc); !exist {
+				c.t.Errorf("Step[%s] check failed, result key[%s] not contain\n", ctx.Name(), cc)
+			} else if wrap.(string) != cc {
+				c.t.Errorf("Step[%s] check failed, result key[%s] value[%v] not equal to [%s]\n", ctx.Name(), cc, wrap, cc)
+			}
+		}
+		for _, e := range c.exclude {
+			if _, exist := ctx.Get(e); exist {
+				c.t.Errorf("Step[%s] check failed, key[%s] not exclude\n", ctx.Name(), e)
+			}
+			if _, exist := ctx.Result(e); exist {
+				c.t.Errorf("Step[%s] check failed, result key[%s] not exclude\n", ctx.Name(), e)
+			}
+		}
+		atomic.AddInt64(&current, 1)
+		c.t.Logf("Step[%s] check end\n\n", ctx.Name())
+		return true, nil
+	}
+}
+
 func resetCurrent() {
 	atomic.StoreInt64(&current, 0)
 }
@@ -435,6 +494,13 @@ func waitCurrent(i int) {
 
 func Fn(t *testing.T) *FuncBuilder {
 	return &FuncBuilder{t: t}
+}
+
+func Ck(t *testing.T, target ...string) *Checker {
+	if len(target) > 0 {
+		return &Checker{t: t, target: target[0]}
+	}
+	return &Checker{t: t}
 }
 
 func Fn0(t *testing.T) *FuncBuilder0 {
@@ -658,7 +724,7 @@ func CheckResult(t *testing.T, check int64, statuses ...*flow.StatusEnum) func(f
 		}
 		t.Logf("start check")
 		t.Logf("expect [current] = %d, [status] include {%s}", check, strings.Join(ss, ","))
-		if current != check {
+		if atomic.LoadInt64(&current) != check {
 			t.Errorf("execute %d step, but current = %d", check, current)
 		}
 		for _, status := range statuses {
@@ -671,7 +737,8 @@ func CheckResult(t *testing.T, check int64, statuses ...*flow.StatusEnum) func(f
 		}
 		t.Logf("status expalin=%s", strings.Join(workFlow.ExplainStatus(), ","))
 		t.Logf("finish check")
-		t.Logf("<<<<<<<<<<<<<<<\n")
+		t.Logf("<<<<<<<<<<<<<<<")
+		println()
 		return true, nil
 	}
 }

@@ -30,13 +30,13 @@ const (
 )
 
 const (
-	mustS    = "Must"
-	nonMustS = "Non-Must"
+	mustS    = "must"
+	nonMustS = "non-must"
 )
 
 const (
-	panicLog = "%s-Callback execute panic;\n Scope=%s, Stage=%s, Iteration=%d;\n Panic=%v\n%s"
-	errorLog = "%s-Callback execute error;\n Scope=%s, Stage=%s, Iteration=%d;\n Error=%s"
+	panicLog = "%s %s-callback trigger panic;\n    Scope=%s, Stage=%s, Iteration=%d;\n    Panic=%v\n%s"
+	errorLog = "%s %s-callback execute error;\n    Scope=%s, Stage=%s, Iteration=%d;\n    Error=%s"
 )
 
 var (
@@ -81,6 +81,7 @@ type breakPoint struct {
 	Stage   int
 	Index   int
 	SkipRun bool
+	Used    bool
 }
 
 type decorator[T proto] struct {
@@ -158,7 +159,7 @@ func (f *flowCallback) DisableDefaultCallback() {
 	if f.beforeFlow.Scope == defaultScope {
 		panic("default callback can't disable itself")
 	}
-	f.procCallback.disableDefault = true
+	f.disableDefault = true
 }
 
 func (f *flowCallback) BeforeFlow(must bool, callback func(WorkFlow) (keepOn bool, err error)) *decorator[WorkFlow] {
@@ -239,21 +240,23 @@ func (chain *funcChain[T]) filter(runtime T) (runNext bool) {
 	if lastTime != nil && chain.Stage0 < lastTime.Stage {
 		return
 	}
-	if runtime.Has(Recovering) && lastTime == nil && chain.Before {
-		return
+	if runtime.Has(Recovering) && lastTime == nil {
+		if chain.Before && !strings.HasSuffix(chain.Stage, stepScope) {
+			return
+		}
 	}
 	var index, begin int
 	defer func() {
 		r := recover()
 		if index >= chain.Index {
 			if r != nil {
-				logger.Errorf(panicLog, chain.necessity(index), chain.Scope, chain.Stage, index, r, stack())
+				logger.Errorf(panicLog, runtime.Name(), chain.necessity(index), chain.Scope, chain.Stage, index, r, stack())
 			}
 			return
 		}
 		if r != nil {
 			runNext = false
-			logger.Errorf(panicLog, chain.necessity(index), chain.Scope, chain.Stage, index, r, stack())
+			logger.Errorf(panicLog, runtime.Name(), chain.necessity(index), chain.Scope, chain.Stage, index, r, stack())
 		}
 		if runNext {
 			return
@@ -281,7 +284,7 @@ func (chain *funcChain[T]) filter(runtime T) (runNext bool) {
 			continue
 		}
 		if err != nil {
-			logger.Errorf(errorLog, chain.necessity(index), chain.Scope, chain.Stage, index, err.Error())
+			logger.Errorf(errorLog, runtime.Name(), chain.necessity(index), chain.Scope, chain.Stage, index, err.Error())
 			runNext = index >= len(chain.Chain)
 		}
 		break

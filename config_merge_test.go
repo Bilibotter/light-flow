@@ -13,6 +13,38 @@ var (
 	current int64
 )
 
+type persistMock struct{}
+
+func (p persistMock) GetLatestRecord(rootId string) (RecoverRecord, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (p persistMock) ListCheckpoints(recoveryId string) ([]CheckPoint, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (p persistMock) UpdateRecordStatus(record RecoverRecord) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (p persistMock) SaveCheckpointAndRecord(checkpoint []CheckPoint, record RecoverRecord) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func emptyStep(ctx Step) (any, error) {
+	return nil, nil
+}
+
+func errorStep(ctx Step) (any, error) {
+	fmt.Printf("step[%s] execute error\n", ctx.Name())
+	atomic.AddInt64(&current, 1)
+	return nil, fmt.Errorf("error step")
+}
+
 func CheckResult(t *testing.T, check int64, statuses ...*StatusEnum) func(WorkFlow) (keepOn bool, err error) {
 	return func(workFlow WorkFlow) (keepOn bool, err error) {
 		ss := make([]string, len(statuses))
@@ -45,6 +77,11 @@ func resetCurrent() {
 	atomic.StoreInt64(&current, 0)
 }
 
+func resetDefaultConfig() {
+	defaultConfig = createDefaultConfig()
+	persister = nil
+}
+
 func GenerateStep(i int, args ...any) func(ctx Step) (any, error) {
 	return func(ctx Step) (any, error) {
 		if len(args) > 0 {
@@ -56,36 +93,29 @@ func GenerateStep(i int, args ...any) func(ctx Step) (any, error) {
 	}
 }
 
-func CheckField(check any, fields ...string) {
-	fieldSet := createSetBySliceFunc(fields, func(s string) string {
-		return s
-	})
-	// 获取结构体的反射类型
-	t := reflect.TypeOf(check)
-	v := reflect.ValueOf(check)
-	// 遍历结构体的所有字段
-	for i := 0; i < t.NumField(); i++ {
-		// 获取当前字段的信息
-		field := t.Field(i)
-		value := v.Field(i)
-		if tag := t.Field(i).Tag.Get("flow"); len(tag) != 0 {
-			splits := strings.Split(tag, ";")
-			skip := false
-			for j := 0; j < len(splits) && !skip; j++ {
-				skip = splits[j] == "skip"
-			}
-			if skip {
-				continue
-			}
+func fieldsContainedInSet(structure interface{}, strSet *set[string]) (string, bool) {
+	value := reflect.ValueOf(structure)
+	if value.Kind() == reflect.Ptr {
+		value = value.Elem()
+	}
+	if value.Kind() != reflect.Struct {
+		panic("input must be a struct or a pointer to a struct")
+	}
+
+	structType := value.Type()
+	for i := 0; i < structType.NumField(); i++ {
+		fieldName := structType.Field(i).Name
+		if ok := strSet.Contains(fieldName); !ok {
+			return fieldName, false
 		}
-		// 检查字段名是否在集合中
-		if !fieldSet.Contains(field.Name) {
-			panic(fmt.Sprintf("field %s not in fields", field.Name))
-		}
-		if value.IsZero() {
-			panic(fmt.Sprintf("field %s is zero", field.Name))
+		strSet.Remove(fieldName)
+	}
+	if strSet.Size() != 0 {
+		for k := range strSet.Data {
+			return k, false
 		}
 	}
+	return "", true
 }
 
 func StepIncr(info Step) (bool, error) {
@@ -157,12 +187,61 @@ func FlowCurrentChecker(i int64, flag int) func(info WorkFlow) (bool, error) {
 	}
 }
 
+func FlowConfigChecker(t *testing.T, config flowConfig) func(info WorkFlow) (bool, error) {
+	return func(info WorkFlow) (bool, error) {
+		t.Logf("start check Flow[%s] config", info.Name())
+		rf := info.(*runFlow)
+		if rf.recoverable != config.recoverable {
+			return false, fmt.Errorf("flow[%s] recoverable is %d not %d", info.Name(), rf.recoverable, config.recoverable)
+		}
+		atomic.AddInt64(&current, 1)
+		t.Logf("check Flow[%s] config success", info.Name())
+		println()
+		return true, nil
+	}
+}
+
+func ProcessConfigChecker(t *testing.T, config processConfig) func(info Process) (bool, error) {
+	return func(info Process) (bool, error) {
+		t.Logf("start check Process[%s] config", info.Name())
+		rp := info.(*runProcess)
+		if rp.procTimeout != config.procTimeout {
+			return false, fmt.Errorf("process[%s] timeout is %d not %d", info.Name(), rp.procTimeout, config.procTimeout)
+		}
+		if rp.stepTimeout != config.stepTimeout {
+			return false, fmt.Errorf("process[%s] step timeout is %d not %d", info.Name(), rp.stepTimeout, config.stepTimeout)
+		}
+		if rp.stepRetry != config.stepRetry {
+			return false, fmt.Errorf("process[%s] step retry is %d not %d", info.Name(), rp.stepRetry, config.stepRetry)
+		}
+		atomic.AddInt64(&current, 1)
+		t.Logf("check Process[%s] config success", info.Name())
+		println()
+		return true, nil
+	}
+}
+
+func StepConfigChecker(t *testing.T, config stepConfig) func(info Step) (bool, error) {
+	return func(info Step) (bool, error) {
+		t.Logf("start check Step[%s] config", info.Name())
+		rs := info.(*runStep)
+		if rs.stepTimeout != config.stepTimeout {
+			return false, fmt.Errorf("step[%s] timeout is %d not %d", info.Name(), rs.stepTimeout, config.stepTimeout)
+		}
+		if rs.stepRetry != config.stepRetry {
+			return false, fmt.Errorf("step[%s] retry is %d not %d", info.Name(), rs.stepRetry, config.stepRetry)
+		}
+		atomic.AddInt64(&current, 1)
+		t.Logf("check Step[%s] config success", info.Name())
+		println()
+		return true, nil
+	}
+}
+
 func TestExecuteDefaultOrder(t *testing.T) {
 	defer resetCurrent()
-	defer func() {
-		CreateDefaultConfig()
-	}()
-	config := CreateDefaultConfig()
+	defer ResetDefaultCallback()
+	config := DefaultCallback()
 	config.BeforeFlow(true, FlowCurrentChecker(0, 0))
 	config.BeforeProcess(true, ProcessCurrentChecker(1, 0))
 	config.BeforeStep(true, StepCurrentChecker(2, 0))
@@ -178,10 +257,6 @@ func TestExecuteDefaultOrder(t *testing.T) {
 
 func TestExecuteOwnOrder(t *testing.T) {
 	defer resetCurrent()
-	defer func() {
-		CreateDefaultConfig()
-	}()
-	CreateDefaultConfig()
 	workflow := RegisterFlow("TestExecuteOwnOrder")
 	workflow.BeforeFlow(true, FlowCurrentChecker(0, 0))
 	workflow.BeforeProcess(true, ProcessCurrentChecker(1, 0))
@@ -197,10 +272,8 @@ func TestExecuteOwnOrder(t *testing.T) {
 
 func TestExecuteMixOrder(t *testing.T) {
 	defer resetCurrent()
-	defer func() {
-		CreateDefaultConfig()
-	}()
-	config := CreateDefaultConfig()
+	defer ResetDefaultCallback()
+	config := DefaultCallback()
 	config.BeforeFlow(true, FlowCurrentChecker(0, 0))
 	config.BeforeProcess(true, ProcessCurrentChecker(2, 0))
 	config.BeforeStep(true, StepCurrentChecker(4, 0))
@@ -222,10 +295,8 @@ func TestExecuteMixOrder(t *testing.T) {
 
 func TestExecuteDeepMixOrder(t *testing.T) {
 	defer resetCurrent()
-	defer func() {
-		CreateDefaultConfig()
-	}()
-	config := CreateDefaultConfig()
+	defer ResetDefaultCallback()
+	config := DefaultCallback()
 	config.BeforeFlow(true, FlowCurrentChecker(0, 0))
 	config.BeforeProcess(true, ProcessCurrentChecker(2, 0))
 	config.BeforeStep(true, StepCurrentChecker(5, 0))
@@ -251,8 +322,8 @@ func TestExecuteDeepMixOrder(t *testing.T) {
 
 func TestBreakWhileFlowError(t *testing.T) {
 	defer resetCurrent()
-	defer CreateDefaultConfig()
-	config := CreateDefaultConfig()
+	defer ResetDefaultCallback()
+	config := DefaultCallback()
 	config.BeforeFlow(true, FlowIncr("default config before panic"))
 	config.BeforeFlow(true, FlowCurrentChecker(111, 0))
 	config.BeforeFlow(true, FlowIncr("default config after panic"))
@@ -261,6 +332,7 @@ func TestBreakWhileFlowError(t *testing.T) {
 	config.AfterStep(true, StepIncr)
 	config.AfterProcess(true, ProcIncr)
 	config.AfterFlow(true, FlowIncr("default config after flow"))
+
 	workflow := RegisterFlow("TestBreakWhileFlowError")
 	workflow.BeforeFlow(true, FlowIncr("own config before flow"))
 	workflow.BeforeProcess(true, ProcIncr)
@@ -274,47 +346,434 @@ func TestBreakWhileFlowError(t *testing.T) {
 	process.AfterProcess(true, ProcIncr)
 	process.BeforeStep(true, StepIncr)
 	process.AfterStep(true, StepIncr)
-	workflow.AfterFlow(false, CheckResult(t, 4, CallbackFail))
+	workflow.AfterFlow(false, CheckResult(t, 3, CallbackFail))
 	DoneFlow("TestBreakWhileFlowError", nil)
 }
 
 func TestFieldSkip(t *testing.T) {
-	config := CreateDefaultConfig()
+	config := DefaultConfig()
 	config.ProcessTimeout(1 * time.Second)
-	config.StepsTimeout(1 * time.Second)
-	config.StepsRetry(3)
-	move := FlowConfig{}
+	config.StepTimeout(1 * time.Second)
+	config.StepRetry(3)
+	move := flowConfig{}
 	move.ProcessTimeout(2 * time.Second)
-	move.NotUseDefault()
-	move.StepsTimeout(2 * time.Second)
-	move.StepsRetry(4)
+	move.StepTimeout(2 * time.Second)
+	move.StepRetry(4)
 	tmp := move
 	copyPropertiesSkipNotEmpty(config, &move)
-	if tmp.ProcNotUseDefault != move.ProcNotUseDefault {
-		t.Errorf("not use default not equal")
-	}
-	if tmp.ProcTimeout != move.ProcTimeout {
+	if tmp.procTimeout != move.procTimeout {
 		t.Errorf("process timeout not equal")
 	}
-	if tmp.StepRetry != move.StepRetry {
+	if tmp.stepRetry != move.stepRetry {
 		t.Errorf("step retry not equal")
 	}
-	if tmp.StepTimeout != move.StepTimeout {
+	if tmp.stepTimeout != move.stepTimeout {
 		t.Errorf("step timeout not equal")
 	}
 }
 
-func TestFieldCorrect(t *testing.T) {
-	defer CreateDefaultConfig()
-	config := CreateDefaultConfig()
-	config.ProcessTimeout(1 * time.Second)
-	config.NotUseDefault()
-	config.StepsTimeout(1 * time.Second)
-	config.StepsRetry(3)
-	move := FlowConfig{}
-	copyPropertiesSkipNotEmpty(config, &move)
-	copyPropertiesSkipNotEmpty(&config.ProcessConfig, &move.ProcessConfig)
-	CheckField(move.ProcessConfig, "ProcTimeout", "ProcNotUseDefault", "StepConfig")
-	CheckField(move.ProcessConfig.StepConfig, "StepTimeout", "StepRetry")
-	return
+// restrict
+func TestMultipleCopy(t *testing.T) {
+	src := stepConfig{
+		stepTimeout: time.Hour,
+		stepRetry:   1,
+		stepCfgInit: true,
+		extern:      []*stepConfig{{nil, time.Minute, 2, true}, {nil, time.Minute, 2, true}},
+	}
+	dst := stepConfig{}
+	copyProperties(&src, &dst, true)
+	copyProperties(&src, &dst, true)
+	copyProperties(&src, &dst, true)
+	copyProperties(&src, &dst, true)
+	if dst.stepTimeout != time.Hour {
+		t.Error("stepTimeout should be time.Hour")
+	}
+	if dst.stepRetry != 1 {
+		t.Error("stepRetry should be 1")
+	}
+	if dst.stepCfgInit != true {
+		t.Error("configInit should be true")
+	}
+	if len(dst.extern) != 0 {
+		t.Error("extern should be empty")
+	}
+	src.stepTimeout = time.Minute
+	src.stepRetry = 3
+	dst = stepConfig{}
+	copyProperties(&src, &dst, true)
+	copyProperties(&src, &dst, true)
+	copyProperties(&src, &dst, true)
+	copyProperties(&src, &dst, true)
+	if dst.stepTimeout != time.Minute {
+		t.Error("stepTimeout should be time.Minute")
+	}
+	if dst.stepRetry != 3 {
+		t.Error("stepRetry should be 3")
+	}
+	if len(dst.extern) != 0 {
+		t.Error("extern should be empty")
+	}
+
+	src1 := processConfig{
+		procTimeout: time.Minute,
+		stepConfig:  src,
+	}
+	dst1 := processConfig{}
+	copyProperties(&src1, &dst1, true)
+	copyProperties(&src1, &dst1, true)
+	copyProperties(&src1, &dst1, true)
+	copyProperties(&src1, &dst1, true)
+	if dst1.procTimeout != time.Minute {
+		t.Error("procTimeout should be time.Minute")
+	}
+	if dst1.stepConfig.stepTimeout != 0 {
+		t.Error("stepConfig.stepTimeout should be time.Hour")
+	}
+	if dst1.stepConfig.stepRetry != 0 {
+		t.Error("stepConfig.stepRetry should be 0")
+	}
+	if dst1.stepConfig.stepCfgInit != false {
+		t.Error("stepConfig.configInit should be false")
+	}
+	if len(dst1.stepConfig.extern) != 0 {
+		t.Error("stepConfig.extern should be empty")
+	}
+
+	src2 := flowConfig{
+		recoverable:   1,
+		processConfig: src1,
+	}
+	dst2 := flowConfig{}
+	copyProperties(&src2, &dst2, true)
+	copyProperties(&src2, &dst2, true)
+	copyProperties(&src2, &dst2, true)
+	copyProperties(&src2, &dst2, true)
+	if dst2.recoverable != 1 {
+		t.Error("recoverable should be 1")
+	}
+	if dst2.processConfig.procTimeout != 0 {
+		t.Error("processConfig.procTimeout should be time.Minute")
+	}
+	if dst2.processConfig.stepConfig.stepTimeout != 0 {
+		t.Error("processConfig.stepConfig.stepTimeout should be time.Hour")
+	}
+	if dst2.processConfig.stepConfig.stepRetry != 0 {
+		t.Error("processConfig.stepConfig.stepRetry should be 1")
+	}
+	if dst2.processConfig.stepConfig.stepCfgInit != false {
+		t.Error("processConfig.stepConfig.configInit should be false")
+	}
+	if len(dst2.processConfig.stepConfig.extern) != 0 {
+		t.Error("processConfig.stepConfig.extern should be empty")
+	}
+}
+
+// restrict
+func TestCopyPropertiesSkipFlowTag(t *testing.T) {
+	src := stepConfig{
+		stepTimeout: time.Hour,
+		stepRetry:   1,
+		stepCfgInit: true,
+		extern:      []*stepConfig{{nil, time.Minute, 2, true}, {nil, time.Minute, 2, true}},
+	}
+	dst := stepConfig{}
+	copyProperties(&src, &dst, true)
+	if dst.stepTimeout != time.Hour {
+		t.Error("stepTimeout should be time.Hour")
+	}
+	if dst.stepRetry != 1 {
+		t.Error("stepRetry should be 1")
+	}
+	if dst.stepCfgInit != true {
+		t.Error("configInit should be true")
+	}
+	if len(dst.extern) != 0 {
+		t.Error("extern should be empty")
+	}
+
+	src1 := processConfig{
+		procTimeout: time.Minute,
+		stepConfig:  src,
+	}
+	dst1 := processConfig{}
+	copyProperties(&src1, &dst1, true)
+	if dst1.procTimeout != time.Minute {
+		t.Error("procTimeout should be time.Minute")
+	}
+	if dst1.stepConfig.stepTimeout != 0 {
+		t.Error("stepConfig.stepTimeout should be time.Hour")
+	}
+	if dst1.stepConfig.stepRetry != 0 {
+		t.Error("stepConfig.stepRetry should be 1")
+	}
+	if dst.stepCfgInit != true {
+		t.Error("configInit should be true")
+	}
+	if len(dst1.stepConfig.extern) != 0 {
+		t.Error("stepConfig.extern should be empty")
+	}
+
+	src2 := flowConfig{
+		recoverable:   1,
+		processConfig: src1,
+	}
+	dst2 := flowConfig{}
+	copyProperties(&src2, &dst2, true)
+	if dst2.recoverable != 1 {
+		t.Error("recoverable should be 1")
+	}
+	if dst2.processConfig.procTimeout != 0 {
+		t.Error("processConfig.procTimeout should be time.Minute")
+	}
+	if dst2.processConfig.stepConfig.stepTimeout != 0 {
+		t.Error("processConfig.stepConfig.stepTimeout should be time.Hour")
+	}
+	if dst2.processConfig.stepConfig.stepRetry != 0 {
+		t.Error("processConfig.stepConfig.stepRetry should be 1")
+	}
+	if dst2.stepCfgInit != false {
+		t.Error("configInit should be true")
+	}
+	if len(dst2.processConfig.stepConfig.extern) != 0 {
+		t.Error("processConfig.stepConfig.extern should be empty")
+	}
+}
+
+// restrict
+func TestCopyPropertiesSkipNotEmpty(t *testing.T) {
+	src := stepConfig{
+		stepTimeout: time.Hour,
+		stepRetry:   1,
+		extern:      []*stepConfig{{nil, time.Minute, 2, true}},
+	}
+	dst := stepConfig{
+		stepTimeout: time.Minute,
+		stepRetry:   2,
+		stepCfgInit: true,
+		extern:      []*stepConfig{{nil, time.Second, 3, true}, {nil, time.Second, 3, true}},
+	}
+	copyProperties(&src, &dst, true)
+	if dst.stepTimeout != time.Minute {
+		t.Error("stepTimeout should be time.Minute")
+	}
+	if dst.stepRetry != 2 {
+		t.Error("stepRetry should be 2")
+	}
+	if dst.stepCfgInit != true {
+		t.Error("configInit should be true")
+	}
+	if len(dst.extern) != 2 {
+		t.Error("extern should have 2 elements")
+	} else if dst.extern[0].stepTimeout != time.Second {
+		t.Error("extern[0].stepTimeout should be time.Second")
+	} else if dst.extern[0].stepRetry != 3 {
+		t.Error("extern[0].stepRetry should be 3")
+	}
+
+	src1 := processConfig{
+		procTimeout: time.Minute,
+		stepConfig:  src,
+	}
+	dst1 := processConfig{
+		procTimeout: time.Second,
+		stepConfig:  dst,
+	}
+	copyProperties(&src1, &dst1, true)
+	if dst1.procTimeout != time.Second {
+		t.Error("procTimeout should be time.Minute")
+	}
+	if dst1.stepConfig.stepTimeout != time.Minute {
+		t.Error("stepConfig.stepTimeout should be time.Hour")
+	}
+	if dst1.stepConfig.stepRetry != 2 {
+		t.Error("stepConfig.stepRetry should be 1")
+	}
+	if dst.stepCfgInit != true {
+		t.Error("configInit should be true")
+	}
+	if len(dst1.stepConfig.extern) != 2 {
+		t.Error("stepConfig.extern should have 2 elements")
+	} else if dst1.stepConfig.extern[0].stepTimeout != time.Second {
+		t.Error("stepConfig.extern[0].stepTimeout should be time.Second")
+	} else if dst1.stepConfig.extern[0].stepRetry != 3 {
+		t.Error("stepConfig.extern[0].stepRetry should be 3")
+	}
+
+	src2 := flowConfig{recoverable: 2, processConfig: src1}
+	dst2 := flowConfig{recoverable: 3, processConfig: dst1}
+	copyProperties(&src2, &dst2, true)
+	if dst2.recoverable != 3 {
+		t.Error("recoverable should be 3")
+	}
+	if dst2.processConfig.procTimeout != time.Second {
+		t.Error("processConfig.procTimeout should be time.Minute")
+	}
+	if dst2.processConfig.stepConfig.stepRetry != 2 {
+		t.Error("processConfig.stepConfig.stepRetry should be 1")
+	}
+	if dst.stepCfgInit != true {
+		t.Error("configInit should be true")
+	}
+	if len(dst2.processConfig.stepConfig.extern) != 2 {
+		t.Error("processConfig.stepConfig.extern should have 2 elements")
+	} else if dst2.processConfig.stepConfig.extern[0].stepTimeout != time.Second {
+		t.Error("processConfig.stepConfig.extern[0].stepTimeout should be time.Second")
+	} else if dst2.processConfig.stepConfig.extern[0].stepRetry != 3 {
+		t.Error("processConfig.stepConfig.extern[0].stepRetry should be 3")
+	}
+}
+
+// restrict
+func TestFieldRestrict(t *testing.T) {
+	restrict := newRoutineUnsafeSet[string]("extern", "stepTimeout", "stepRetry", "stepCfgInit")
+	exclude, ok := fieldsContainedInSet(stepConfig{}, restrict)
+	if !ok {
+		t.Errorf("update step config merge test case while new fields are added to stepConfig!!")
+		t.Errorf("field %s matched failed", exclude)
+	}
+
+	restrict = newRoutineUnsafeSet[string]("procTimeout", "stepConfig")
+	exclude, ok = fieldsContainedInSet(processConfig{}, restrict)
+	if !ok {
+		t.Errorf("update process config merge test case while new fields are added to processConfig!!")
+		t.Errorf("field %s matched failed", exclude)
+	}
+
+	restrict = newRoutineUnsafeSet[string]("recoverable", "processConfig")
+	exclude, ok = fieldsContainedInSet(flowConfig{}, restrict)
+	if !ok {
+		t.Errorf("update flow config merge test case while new fields are added to flowConfig!!")
+		t.Errorf("field %s matched failed", exclude)
+	}
+}
+
+// restrict
+func TestDefaultFlowConfigValid(t *testing.T) {
+	defer resetDefaultConfig()
+	defer resetCurrent()
+	SetPersist(persistMock{})
+	DefaultConfig().EnableRecover()
+	wf1 := RegisterFlow("TestDefaultFlowConfigValid1")
+	wf1.DisableRecover()
+	wf1.BeforeFlow(true, FlowConfigChecker(t, flowConfig{recoverable: -1}))
+	wf1.AfterFlow(true, FlowConfigChecker(t, flowConfig{recoverable: -1}))
+	wf1.AfterFlow(false, CheckResult(t, 2, Success))
+
+	wf2 := RegisterFlow("TestDefaultFlowConfigValid2")
+	wf2.BeforeFlow(true, FlowConfigChecker(t, flowConfig{recoverable: 1}))
+	wf2.AfterFlow(true, FlowConfigChecker(t, flowConfig{recoverable: 1}))
+	wf2.AfterFlow(false, CheckResult(t, 2, Success))
+	DoneFlow("TestDefaultFlowConfigValid2", nil)
+}
+
+// restrict
+func TestDefaultProcessConfigValid(t *testing.T) {
+	defer resetDefaultConfig()
+	defer resetCurrent()
+	SetPersist(persistMock{})
+	DefaultConfig().EnableRecover()
+	DefaultConfig().StepRetry(1)
+	DefaultConfig().StepTimeout(time.Hour)
+	DefaultConfig().ProcessTimeout(time.Minute)
+	wf := RegisterFlow("TestDefaultProcessConfigValid")
+	proc1 := wf.Process("ProcConfigFill_1")
+	proc1.StepRetry(3)
+	proc1.StepTimeout(3 * time.Hour)
+	proc1.ProcessTimeout(3 * time.Minute)
+	copy1 := processConfig{stepConfig: stepConfig{stepTimeout: 3 * time.Hour, stepRetry: 3, stepCfgInit: true}, procTimeout: 3 * time.Minute}
+	proc1.BeforeProcess(true, ProcessConfigChecker(t, copy1))
+	proc1.AfterProcess(true, ProcessConfigChecker(t, copy1))
+	proc1.BeforeStep(true, StepConfigChecker(t, copy1.stepConfig))
+	proc1.AfterStep(true, StepConfigChecker(t, copy1.stepConfig))
+	proc1.NameStep(emptyStep, "Step1")
+
+	proc2 := wf.Process("ProcConfigEmpty_1")
+	copy2 := processConfig{procTimeout: 1 * time.Minute}
+	proc2.BeforeProcess(true, ProcessConfigChecker(t, copy2))
+	proc2.AfterProcess(true, ProcessConfigChecker(t, copy2))
+	proc2.BeforeStep(true, StepConfigChecker(t, stepConfig{}))
+	proc2.AfterStep(true, StepConfigChecker(t, stepConfig{}))
+	proc2.NameStep(emptyStep, "Step2")
+	wf.AfterFlow(true, CheckResult(t, 8, Success))
+	DoneFlow("TestDefaultProcessConfigValid", nil)
+}
+
+// restrict
+func TestFlowProcessConfigValid(t *testing.T) {
+	defer resetDefaultConfig()
+	defer resetCurrent()
+	SetPersist(persistMock{})
+	DefaultConfig().EnableRecover()
+	DefaultConfig().StepRetry(1)
+	DefaultConfig().StepTimeout(time.Hour)
+	DefaultConfig().ProcessTimeout(time.Minute)
+	wf := RegisterFlow("TestFlowProcessConfigValid")
+	wf.ProcessTimeout(2 * time.Minute)
+	wf.StepTimeout(2 * time.Hour)
+	wf.StepRetry(2)
+
+	proc1 := wf.Process("ProcConfigFill_2")
+	proc1.StepRetry(3)
+	proc1.StepTimeout(3 * time.Hour)
+	proc1.ProcessTimeout(3 * time.Minute)
+	copy1 := processConfig{stepConfig: stepConfig{stepTimeout: 3 * time.Hour, stepRetry: 3}, procTimeout: 3 * time.Minute}
+	proc1.BeforeProcess(true, ProcessConfigChecker(t, copy1))
+	proc1.AfterProcess(true, ProcessConfigChecker(t, copy1))
+	proc1.BeforeStep(true, StepConfigChecker(t, copy1.stepConfig))
+	proc1.AfterStep(true, StepConfigChecker(t, copy1.stepConfig))
+	proc1.NameStep(emptyStep, "Step1")
+
+	proc2 := wf.Process("ProcConfigEmpty_2")
+	copy2 := processConfig{procTimeout: 2 * time.Minute, stepConfig: stepConfig{stepTimeout: 2 * time.Hour, stepRetry: 2}}
+	proc2.BeforeProcess(true, ProcessConfigChecker(t, copy2))
+	proc2.AfterProcess(true, ProcessConfigChecker(t, copy2))
+	fc := stepConfig{stepTimeout: 2 * time.Hour, stepRetry: 2, stepCfgInit: true}
+	proc2.BeforeStep(true, StepConfigChecker(t, fc))
+	proc2.AfterStep(true, StepConfigChecker(t, fc))
+	proc2.NameStep(emptyStep, "Step2")
+	wf.AfterFlow(true, CheckResult(t, 8, Success))
+	DoneFlow("TestFlowProcessConfigValid", nil)
+}
+
+func TestConfigMergeValid(t *testing.T) {
+	defer resetDefaultConfig()
+	defer resetCurrent()
+	wf1 := RegisterFlow("TestConfigMergeValid1")
+	proc1 := wf1.Process("TestConfigMergeValid1")
+	proc1.NameStep(errorStep, "Step1").StepRetry(2)
+	proc1.NameStep(errorStep, "Step2").StepRetry(5)
+	wf1.AfterFlow(false, CheckResult(t, 9, Error))
+	wf2 := RegisterFlow("TestConfigMergeValid2")
+	proc2 := wf2.Process("TestConfigMergeValid2")
+	proc2.NameStep(errorStep, "Step1")
+	proc2.Merge("TestConfigMergeValid1")
+	wf2.AfterFlow(false, CheckResult(t, 9, Error))
+	DoneFlow("TestConfigMergeValid2", nil)
+	resetCurrent()
+	DoneFlow("TestConfigMergeValid1", nil)
+}
+
+func TestStepStepConfigValid(t *testing.T) {
+	defer resetDefaultConfig()
+	defer resetCurrent()
+	SetPersist(persistMock{})
+	DefaultConfig().EnableRecover()
+	DefaultConfig().StepRetry(1)
+	DefaultConfig().StepTimeout(time.Hour)
+	DefaultConfig().ProcessTimeout(time.Minute)
+	wf := RegisterFlow("TestStepStepConfigValid")
+	wf.ProcessTimeout(2 * time.Minute)
+	wf.StepTimeout(2 * time.Hour)
+	wf.StepRetry(2)
+
+	proc1 := wf.Process("TestStepStepConfigValid")
+	proc1.StepRetry(3)
+	proc1.StepTimeout(3 * time.Hour)
+	proc1.ProcessTimeout(3 * time.Minute)
+	copy1 := stepConfig{stepTimeout: 4 * time.Hour, stepRetry: 4, stepCfgInit: true}
+	proc1.NameStep(emptyStep, "Step1").StepRetry(4).StepTimeout(4 * time.Hour)
+	proc1.BeforeStep(true, StepConfigChecker(t, copy1))
+	proc1.AfterStep(true, StepConfigChecker(t, copy1))
+	wf.AfterFlow(true, CheckResult(t, 2, Success))
+	DoneFlow("TestStepStepConfigValid", nil)
 }

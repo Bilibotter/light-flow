@@ -11,15 +11,15 @@ type runProcess struct {
 	*state
 	*ProcessMeta
 	*dependentContext
-	belong    *runFlow
-	id        string
-	compress  state
-	flowSteps map[string]*runStep
-	start     time.Time
-	end       time.Time
-	pause     sync.WaitGroup
-	running   sync.WaitGroup
-	finish    sync.WaitGroup
+	belong   *runFlow
+	id       string
+	compress state
+	runSteps map[string]*runStep
+	start    time.Time
+	end      time.Time
+	pause    sync.WaitGroup
+	running  sync.WaitGroup
+	finish   sync.WaitGroup
 }
 
 func (process *runProcess) HasAny(enum ...*StatusEnum) bool {
@@ -64,13 +64,13 @@ func (process *runProcess) buildRunStep(meta *StepMeta) *runStep {
 		finish:   make(chan bool, 1),
 	}
 
-	process.flowSteps[meta.name] = &step
+	process.runSteps[meta.name] = &step
 
 	return &step
 }
 
 func (process *runProcess) clearExecutedFromRoot(root string) {
-	current := process.flowSteps[root]
+	current := process.runSteps[root]
 	current.clear(executed)
 	for _, meta := range current.waiters {
 		process.clearExecutedFromRoot(meta.name)
@@ -78,7 +78,7 @@ func (process *runProcess) clearExecutedFromRoot(root string) {
 }
 
 func (process *runProcess) Step(name string) (StepController, bool) {
-	if step, ok := process.flowSteps[name]; ok {
+	if step, ok := process.runSteps[name]; ok {
 		return step, true
 	}
 	return nil, false
@@ -86,7 +86,7 @@ func (process *runProcess) Step(name string) (StepController, bool) {
 
 func (process *runProcess) Exceptions() []FinishedStep {
 	finished := make([]FinishedStep, 0)
-	for _, step := range process.flowSteps {
+	for _, step := range process.runSteps {
 		if !step.Normal() {
 			finished = append(finished, step)
 		}
@@ -127,7 +127,7 @@ func (process *runProcess) schedule() (finish *sync.WaitGroup) {
 	process.start = time.Now().UTC()
 	process.append(Running)
 	process.advertise(beforeF)
-	for _, step := range process.flowSteps {
+	for _, step := range process.runSteps {
 		if step.layer == 1 {
 			go process.startStep(step)
 		}
@@ -169,12 +169,11 @@ func (process *runProcess) startStep(step *runStep) {
 		return
 	}
 
-	timeout := 3 * time.Hour
-	if process.StepTimeout != 0 {
-		timeout = process.StepTimeout
-	}
-	if step.StepTimeout != 0 {
-		timeout = step.StepTimeout
+	timeout := step.stepTimeout
+	if timeout == 0 {
+		timeout = 3 * time.Hour
+	} else if timeout < 0 {
+		timeout = time.Duration(1<<63 - 1)
 	}
 
 	timer := time.NewTimer(timeout)
@@ -201,9 +200,11 @@ func (process *runProcess) evaluate(step *runStep) bool {
 }
 
 func (process *runProcess) finalize() {
-	timeout := 3 * time.Hour
-	if process.ProcTimeout != 0 {
-		timeout = process.ProcTimeout
+	timeout := process.procTimeout
+	if timeout == 0 {
+		timeout = 3 * time.Hour
+	} else if timeout < 0 {
+		timeout = time.Duration(1<<63 - 1)
 	}
 
 	timer := time.NewTimer(timeout)
@@ -218,7 +219,7 @@ func (process *runProcess) finalize() {
 	case <-finish:
 	}
 
-	for _, step := range process.flowSteps {
+	for _, step := range process.runSteps {
 		process.compress.add(step.load())
 	}
 	process.compress.add(process.load())
@@ -240,7 +241,7 @@ func (process *runProcess) startNextSteps(step *runStep) {
 	// execute the next step in the current goroutine to reduce the frequency of goroutine creation.
 	var bind *runStep
 	for _, waiter := range step.waiters {
-		next := process.flowSteps[waiter.name]
+		next := process.runSteps[waiter.name]
 		waiting := next.segments.addWaiting(-1)
 		if cancel {
 			next.append(Cancel)
@@ -274,24 +275,21 @@ func (process *runProcess) runStep(step *runStep) {
 		return
 	}
 
-	retry := 0
-	if process.StepRetry > 0 {
-		retry = process.StepRetry
-	}
-	if step.StepRetry > 0 {
-		retry = step.StepRetry
+	retry := step.stepRetry
+	if retry < 0 {
+		retry = 0
 	}
 
 	defer func() {
 		if r := recover(); r != nil {
 			panicErr := fmt.Errorf("\n[Recovery] %s panic recovered:\n%s\n%s\n", time.Now().Format("2006/01/02 - 15:04:05"), r, stack())
-			logger.Errorf("Step[%s] execute panic; Panic=%v\n%s\n", step.name, r, stack())
+			logger.Errorf("step[%s] execute panic;\n Panic=%v\n%s\n", step.name, r, stack())
 			step.append(Panic)
 			step.exception = panicErr
 			step.end = time.Now().UTC()
-			if step.isRecoverable() {
-				step.setInternal(fmt.Sprintf(stepBreakPoint, step.Name()), &stepPanicBreakPoint)
-			}
+		}
+		if step.isRecoverable() && !step.Normal() && !step.Has(CallbackFail) {
+			step.setInternal(fmt.Sprintf(stepBreakPoint, step.Name()), &stepPanicBreakPoint)
 		}
 		process.stepCallback(step, afterF)
 	}()
