@@ -346,3 +346,7 @@ func (process *runProcess) advertise(flag uint64) {
 		return
 	}
 }
+
+func (process *runProcess) Attach(resName string, initParam any) (Resource, error) {
+	return process.attach(process, resName, initParam)
+}

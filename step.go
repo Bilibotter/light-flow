@@ -201,6 +201,10 @@ func (step *runStep) CostTime() time.Duration {
 	return step.end.Sub(step.start)
 }
 
+func (step *runStep) Attach(resName string, initParam any) (Resource, error) {
+	return step.attach(step, resName, initParam)
+}
+
 func (step *runStep) isRecoverable() bool {
 	return step.belong.isRecoverable()
 }

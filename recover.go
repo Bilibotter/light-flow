@@ -150,6 +150,8 @@ func init() {
 
 	RegisterType[pointerValue]()
 	RegisterType[breakPoint]()
+
+	RegisterType[resSerializable]()
 }
 
 func DisableEncrypt() {

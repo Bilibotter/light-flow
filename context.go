@@ -1,6 +1,7 @@
 package light_flow
 
 import (
+	"bytes"
 	"fmt"
 	"math/bits"
 	"sync"
@@ -142,6 +143,10 @@ type runtimeI interface {
 	nameI
 	identifierI
 	periodI
+}
+
+type resourceI interface {
+	Attach(resName string, initParam any) (Resource, error)
 }
 
 type statusI interface {
@@ -510,6 +515,37 @@ func (ctx *dependentContext) GetByStepName(stepName, key string) (value any, exi
 		panic(fmt.Sprintf("Step[%s] not found.", stepName))
 	}
 	return ctx.matchByIndex(index, key)
+}
+
+func (ctx *dependentContext) attach(r resCtx, resName string, initParam any) (Resource, error) {
+	manager, exist := getResourceManager(resName)
+	if !exist {
+		return nil, fmt.Errorf("Resource[%s] not found", resName)
+	}
+	res := &resource{resCtx: r}
+	instance, err := manager.onInitialize(res, initParam)
+	if err != nil {
+		return nil, fmt.Errorf("Resource[%s] initialize failed:%v", resName, err)
+	}
+	res.instance = instance
+	var buffer bytes.Buffer
+	buffer.Grow(len(resName) + 1)
+	buffer.Write(resPrefix)
+	buffer.WriteString(resName)
+	if wrap, find := ctx.getInternal(buffer.String()); find {
+		return wrap.(Resource), nil
+	}
+	ctx.setInternal(buffer.String(), res)
+	return res, nil
+}
+
+func (ctx *dependentContext) Acquire(resName string) (resInstance any, exist bool) {
+	var buffer bytes.Buffer
+	buffer.Grow(len(resName) + 1)
+	buffer.Write(resPrefix)
+	buffer.WriteString(resName)
+	resInstance, exist = ctx.getInternal(buffer.String())
+	return
 }
 
 // Get method retrieves the value associated with the given key from the context path.

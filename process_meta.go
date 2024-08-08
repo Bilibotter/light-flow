@@ -168,6 +168,9 @@ func (pm *ProcessMeta) Tail(run func(ctx Step) (any, error), alias ...string) *S
 }
 
 func (pm *ProcessMeta) NameStep(run func(ctx Step) (any, error), name string, depends ...any) *StepMeta {
+	if !isValidIdentifier(name) {
+		panic(patternHint)
+	}
 	meta := &StepMeta{
 		name: name,
 	}

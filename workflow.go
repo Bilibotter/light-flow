@@ -52,6 +52,9 @@ func DefaultConfig() FlowConfig {
 }
 
 func RegisterFlow(name string) *FlowMeta {
+	if !isValidIdentifier(name) {
+		panic(patternHint)
+	}
 	flow := FlowMeta{
 		name:         name,
 		init:         sync.Once{},
@@ -126,6 +129,9 @@ func (fm *FlowMeta) buildRunFlow(input map[string]any) *runFlow {
 }
 
 func (fm *FlowMeta) Process(name string) *ProcessMeta {
+	if !isValidIdentifier(name) {
+		panic(patternHint)
+	}
 	pm := ProcessMeta{
 		nodeRouter: nodeRouter{
 			nodePath: fullAccess,

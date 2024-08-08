@@ -52,6 +52,25 @@ func fn4() {
 	fn3()
 }
 
+func TestValidIdentifier(t *testing.T) {
+	prefix := "AB"
+	identifiers := []string{prefix, "Valid123", "1234567890", "abcdefghijklmnopqrstuvwxyz", "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "ab"}
+	for _, id := range identifiers {
+		if !isValidIdentifier(id) {
+			t.Errorf("'%s' is not a valid identifier, but it should be.\n", id)
+		}
+	}
+	matches := strings.Split(`" # $ % & ' ( ) * + , - . / : ; < = > ? @ [ \ ] ^ _ { | } ~ ¢ £ ¤ ¥ ₠ ₡ ₢ ₣ ₤ ₥ ₦ ₧ ₨ ₩ ₪ ₫ € ₭ ₮ ₯ ₹ ₲ ₳ ₴ ₵ ₶ ₷ ₸ § ¶ © ® ™ ℗ ∞ ∆ ∇ ∏ ∑ ∂ ∴ ∵ ∷ ∈ ∉ ∋ ∌ ∅ ∇ ∆ ∏ ∐ ∑ ( ) [ ] { } < > ' "`, " ")
+	for _, match := range matches {
+		if isValidIdentifier(match) {
+			t.Errorf("'%s' is a valid identifier, but it should not be.\n", match)
+		}
+		if isValidIdentifier(prefix + match) {
+			t.Errorf("'%s' is a valid identifier, but it should not be.\n", prefix+match)
+		}
+	}
+}
+
 func TestNamedFuncStackTrace(t *testing.T) {
 	defer func() {
 		if r := recover(); r != nil {
