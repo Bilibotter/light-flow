@@ -2,6 +2,7 @@ package light_flow
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -229,9 +230,35 @@ func (process *runProcess) finalize() {
 		process.append(Failed)
 	}
 	process.advertise(afterF)
+	process.releaseResources()
 	process.compress.add(process.load())
 	process.end = time.Now().UTC()
 	process.finish.Done()
+}
+
+func (process *runProcess) releaseResources() {
+	if !process.Has(resAttached) {
+		return
+	}
+	defer func() {
+		_ = recover()
+	}()
+	for key, head := range process.nodes {
+		if head.Path != internalMark {
+			continue
+		}
+		if !strings.HasPrefix(key, string(resPrefix)) {
+			continue
+		}
+		res, ok := head.Value.(*resource)
+		if !ok {
+			continue
+		}
+		err := resourceManagers[key[1:]].onRelease(res)
+		if err != nil {
+			logger.Errorf("Process[ %s ] release Resource[ %s ] failed, id=%s, error=%v", process.Name(), key[1:], process.id, err)
+		}
+	}
 }
 
 func (process *runProcess) startNextSteps(step *runStep) {
@@ -283,7 +310,7 @@ func (process *runProcess) runStep(step *runStep) {
 	defer func() {
 		if r := recover(); r != nil {
 			panicErr := fmt.Errorf("\n[Recovery] %s panic recovered:\n%s\n%s\n", time.Now().Format("2006/01/02 - 15:04:05"), r, stack())
-			logger.Errorf("step[%s] execute panic;\n Panic=%v\n%s\n", step.name, r, stack())
+			logger.Errorf("Step[ %s ] execute panic;\n\tPanic=%v\n%s\n", step.name, r, stack())
 			step.append(Panic)
 			step.exception = panicErr
 			step.end = time.Now().UTC()
@@ -347,6 +374,10 @@ func (process *runProcess) advertise(flag uint64) {
 	}
 }
 
-func (process *runProcess) Attach(resName string, initParam any) (Resource, error) {
-	return process.attach(process, resName, initParam)
+func (process *runProcess) Attach(resName string, initParam any) (res Resource, err error) {
+	res, err = process.attach(process, resName, initParam)
+	if !process.Has(resAttached) {
+		process.append(resAttached)
+	}
+	return
 }

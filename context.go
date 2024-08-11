@@ -35,6 +35,7 @@ var (
 	skipped      = &StatusEnum{0b1 << 2, "skip"}
 	executed     = &StatusEnum{0b1 << 3, "executed"}
 	Recovering   = &StatusEnum{0b1 << 4, "recovering"}
+	resAttached  = &StatusEnum{0b1 << 5, "resAttached"}
 	Success      = &StatusEnum{0b1 << 15, "Success"}
 	NormalMask   = &StatusEnum{0b1<<16 - 1, "NormalMask"}
 	abnormal     = []*StatusEnum{Cancel, Timeout, Panic, Error, Stop, CallbackFail, Failed}
@@ -98,6 +99,7 @@ type ProcController interface {
 
 type procCtx interface {
 	context
+	resManagerI
 	GetByStepName(stepName, key string) (value any, exist bool)
 }
 
@@ -125,6 +127,7 @@ type StepController interface {
 
 type stepCtx interface {
 	context
+	resManagerI
 	SetCondition(value any, targets ...string) // the targets contain names of the evaluators to be matched
 	EndValues(key string) map[string]any
 	Result(key string) (value any, exist bool)
@@ -145,8 +148,9 @@ type runtimeI interface {
 	periodI
 }
 
-type resourceI interface {
+type resManagerI interface {
 	Attach(resName string, initParam any) (Resource, error)
+	Acquire(resName string) (Resource, bool)
 }
 
 type statusI interface {
@@ -512,22 +516,22 @@ func (ctx *dependentContext) GetByStepName(stepName, key string) (value any, exi
 	defer ctx.RUnlock()
 	index, ok := ctx.ToIndex(stepName)
 	if !ok {
-		panic(fmt.Sprintf("Step[%s] not found.", stepName))
+		panic(fmt.Sprintf("Step[ %s ] not found.", stepName))
 	}
 	return ctx.matchByIndex(index, key)
 }
 
-func (ctx *dependentContext) attach(r resCtx, resName string, initParam any) (Resource, error) {
+func (ctx *dependentContext) attach(r resCreator, resName string, initParam any) (Resource, error) {
 	manager, exist := getResourceManager(resName)
 	if !exist {
-		return nil, fmt.Errorf("Resource[%s] not found", resName)
+		return nil, fmt.Errorf("Resource[ %s ] not registered", resName)
 	}
-	res := &resource{resCtx: r}
+	res := &resource{resCreator: r, resName: resName}
 	instance, err := manager.onInitialize(res, initParam)
 	if err != nil {
-		return nil, fmt.Errorf("Resource[%s] initialize failed:%v", resName, err)
+		return nil, fmt.Errorf("Resource[ %s ] initialize failed:%v", resName, err)
 	}
-	res.instance = instance
+	res.entity = instance
 	var buffer bytes.Buffer
 	buffer.Grow(len(resName) + 1)
 	buffer.Write(resPrefix)
@@ -539,13 +543,16 @@ func (ctx *dependentContext) attach(r resCtx, resName string, initParam any) (Re
 	return res, nil
 }
 
-func (ctx *dependentContext) Acquire(resName string) (resInstance any, exist bool) {
+func (ctx *dependentContext) Acquire(resName string) (Resource, bool) {
 	var buffer bytes.Buffer
 	buffer.Grow(len(resName) + 1)
 	buffer.Write(resPrefix)
 	buffer.WriteString(resName)
-	resInstance, exist = ctx.getInternal(buffer.String())
-	return
+	wrap, exist := ctx.getInternal(buffer.String())
+	if !exist {
+		return nil, false
+	}
+	return wrap.(*resource), exist
 }
 
 // Get method retrieves the value associated with the given key from the context path.

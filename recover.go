@@ -36,8 +36,8 @@ var (
 )
 
 var (
-	recoverLog = "panic occur while WorkFlow[%s] recovering;\n Id=%s\n Panic=%s\n%s"
-	saveLog    = "panic occur while WorkFlow[%s] saving checkpoints;\n Id=%s\n Panic=%s\n%s"
+	recoverLog = "panic occur while WorkFlow[ %s ] recovering;\n Id=%s\n Panic=%s\n%s"
+	saveLog    = "panic occur while WorkFlow[ %s ] saving checkpoints;\n Id=%s\n Panic=%s\n%s"
 )
 
 type proto interface {
@@ -186,7 +186,7 @@ func RecoverFlow(flowId string) (ret FinishedWorkFlow, err error) {
 	}
 	factory, ok := allFlows.Load(record.GetName())
 	if !ok {
-		return nil, fmt.Errorf("flow[%s] not found", record.GetName())
+		return nil, fmt.Errorf("WorkFlow[ %s ] not found", record.GetName())
 	}
 	flow := factory.(*FlowMeta).buildRunFlow(nil)
 	flow.id = flowId
@@ -249,11 +249,11 @@ func loadStatus(workflow *runFlow, checkpoints []CheckPoint) error {
 		name := checkpoint.GetName()
 		proc, ok := workflow.runProcesses[id2Name[checkpoint.GetParentUid()]]
 		if !ok {
-			return fmt.Errorf("unable to recognize the process to which Step[%s] belongs", checkpoint.GetName())
+			return fmt.Errorf("unable to recognize the process to which Step[ %s ] belongs", checkpoint.GetName())
 		}
 		current, find := proc.runSteps[name]
 		if !find {
-			return fmt.Errorf("Step[%s] not belong to Process[%s]", name, proc.name)
+			return fmt.Errorf("Step[ %s ] not belong to Process[ %s ]", name, proc.name)
 		}
 		current.append(Recovering)
 		proc.clearExecutedFromRoot(name)

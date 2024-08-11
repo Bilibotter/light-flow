@@ -51,9 +51,9 @@ func TestTestMultipleConcurrentDependContext(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestTestMultipleConcurrentDependContext")
 	process := workflow.Process("TestTestMultipleConcurrentDependContext")
-	process.NameStep(ChangeCtxStepFunc(&current), "-1")
+	process.NameStep(ChangeCtxStepFunc(&current), "111")
 	for i := 0; i < 61; i++ {
-		process.NameStep(NoDelayContextStep, strconv.Itoa(i), "-1")
+		process.NameStep(NoDelayContextStep, strconv.Itoa(i), "111")
 	}
 	workflow.AfterFlow(false, CheckResult(t, 62, flow.Success))
 	flow.DoneFlow("TestTestMultipleConcurrentDependContext", map[string]any{addrKey: &current})
@@ -78,7 +78,7 @@ func TestMultipleConcurrentProcess(t *testing.T) {
 		process.BeforeStep(true, GenerateNoDelayProcessor)
 		process.AfterStep(true, GenerateNoDelayProcessor)
 		for j := 0; j < 62; j++ {
-			key := strconv.Itoa(i) + "|" + strconv.Itoa(j)
+			key := strconv.Itoa(i) + "a" + strconv.Itoa(j)
 			process.NameStep(GenerateNoDelayStep(i*1000+j), key)
 		}
 	}
@@ -117,7 +117,7 @@ func TestMultipleConcurrentDependStep(t *testing.T) {
 	for i := 0; i < 20; i++ {
 		prev := ""
 		for j := 0; j < 3; j++ {
-			key := strconv.Itoa(i) + "|" + strconv.Itoa(j)
+			key := strconv.Itoa(i) + "a" + strconv.Itoa(j)
 			if len(prev) == 0 {
 				process.NameStep(GenerateNoDelayStep(i*1000+j), key)
 			} else {

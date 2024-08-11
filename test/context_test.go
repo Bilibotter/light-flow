@@ -53,7 +53,7 @@ func CheckCtxResult(t *testing.T, check int64, statuses ...*flow.StatusEnum) fun
 	}
 }
 
-func GenerateSleep(duration time.Duration, args ...any) func(ctx flow.Step) (any, error) {
+func GenerateSleep(_ time.Duration, _ ...any) func(ctx flow.Step) (any, error) {
 	return func(ctx flow.Step) (any, error) {
 		addrWrap, ok := ctx.Get(addrKey)
 		if !ok {
@@ -336,60 +336,60 @@ func TestContextNameCorrect(t *testing.T) {
 	workflow := flow.RegisterFlow("TestContextNameCorrect")
 	workflow.BeforeFlow(false, func(info flow.WorkFlow) (keepOn bool, err error) {
 		if info.Name() != "TestContextNameCorrect" {
-			fmt.Printf("beforeflow workflow context name incorrect, workflow's name = %s\n", info.Name())
+			t.Errorf("beforeflow workflow context name incorrect, workflow's name = %s\n", info.Name())
 		} else {
-			fmt.Printf("workflow's context name='%s' before flow\n", info.Name())
+			t.Logf("workflow's context name='%s' before flow\n", info.Name())
 		}
 		return true, nil
 	})
 	workflow.AfterFlow(false, CheckCtxResult(t, 0, flow.Success))
 	workflow.AfterFlow(false, func(info flow.WorkFlow) (keepOn bool, err error) {
 		if info.Name() != "TestContextNameCorrect" {
-			fmt.Printf("afterflow workflow context name incorrect, workflow's name = %s\n", info.Name())
+			t.Errorf("afterflow workflow context name incorrect, workflow's name = %s\n", info.Name())
 		} else {
-			fmt.Printf("workflow's context name='%s' after flow\n", info.Name())
+			t.Logf("workflow's context name='%s' after flow\n", info.Name())
 		}
 		return true, nil
 	})
 	workflow.BeforeProcess(false, func(info flow.Process) (keepOn bool, err error) {
-		if info.Name() != "TestContextNameCorrect-Process" {
-			fmt.Printf("beforeprocess process context name incorrect, workflow's name = %s\n", info.Name())
+		if info.Name() != "TestContextNameCorrectProcess" {
+			t.Errorf("beforeprocess process context name incorrect, workflow's name = %s\n", info.Name())
 		} else {
-			fmt.Printf("process's context name='%s' before process\n", info.Name())
+			t.Logf("process's context name='%s' before process\n", info.Name())
 		}
 		return true, nil
 	})
 	workflow.AfterProcess(false, func(info flow.Process) (keepOn bool, err error) {
-		if info.Name() != "TestContextNameCorrect-Process" {
-			fmt.Printf("afterprocess process context name incorrect, workflow's name = %s\n", info.Name())
+		if info.Name() != "TestContextNameCorrectProcess" {
+			t.Errorf("afterprocess process context name incorrect, workflow's name = %s\n", info.Name())
 		} else {
-			fmt.Printf("process's context name='%s' after process\n", info.Name())
+			t.Logf("process's context name='%s' after process\n", info.Name())
 		}
 		return true, nil
 	})
 	workflow.BeforeStep(false, func(info flow.Step) (keepOn bool, err error) {
 		if info.Name() != "Step1" {
-			fmt.Printf("before step context name incorrect, step's name = %s\n", info.Name())
+			t.Errorf("before step context name incorrect, step's name = %s\n", info.Name())
 		} else {
-			fmt.Printf("step's context name='%s' before step\n", info.Name())
+			t.Logf("step's context name='%s' before step\n", info.Name())
 		}
 		return true, nil
 	})
 	workflow.AfterStep(false, func(info flow.Step) (keepOn bool, err error) {
 		if info.Name() != "Step1" {
-			fmt.Printf("afterstep step context name incorrect, step's name = %s\n", info.Name())
+			t.Errorf("afterstep step context name incorrect, step's name = %s\n", info.Name())
 		} else {
-			fmt.Printf("step's context name='%s' after step\n", info.Name())
+			t.Logf("step's context name='%s' after step\n", info.Name())
 		}
 		return true, nil
 	})
-	process := workflow.Process("TestContextNameCorrect-Process")
+	process := workflow.Process("TestContextNameCorrectProcess")
 	process.NameStep(func(ctx flow.Step) (any, error) {
 		if ctx.Name() != "Step1" {
-			fmt.Printf("run step's context name is incorrect, step's name = %s\n", ctx.Name())
+			t.Errorf("run step's context name is incorrect, step's name = %s\n", ctx.Name())
 			return nil, fmt.Errorf("step context name incorrect")
 		}
-		fmt.Printf("step name = '%s', while step running\n", ctx.Name())
+		t.Logf("step name = '%s', while step running\n", ctx.Name())
 		return nil, nil
 	}, "Step1")
 	flow.DoneFlow("TestContextNameCorrect", nil)

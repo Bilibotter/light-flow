@@ -67,7 +67,7 @@ func RegisterFlow(name string) *FlowMeta {
 func AsyncFlow(name string, input map[string]any) FlowController {
 	factory, ok := allFlows.Load(name)
 	if !ok {
-		panic(fmt.Sprintf("Flow[%s] not found", name))
+		panic(fmt.Sprintf("WorkFlow[ %s ] not found", name))
 	}
 	flow := factory.(*FlowMeta).buildRunFlow(input)
 	go flow.Done()
@@ -77,7 +77,7 @@ func AsyncFlow(name string, input map[string]any) FlowController {
 func DoneFlow(name string, input map[string]any) FinishedWorkFlow {
 	factory, ok := allFlows.Load(name)
 	if !ok {
-		panic(fmt.Sprintf("Flow[%s] not found", name))
+		panic(fmt.Sprintf("WorkFlow[ %s ] not found", name))
 	}
 	flow := factory.(*FlowMeta).buildRunFlow(input)
 	return flow.Done()
@@ -90,7 +90,7 @@ func (fm *FlowMeta) register() *FlowMeta {
 
 	_, load := allFlows.LoadOrStore(fm.name, fm)
 	if load {
-		panic(fmt.Sprintf("Flow[%s] alraedy exists", fm.name))
+		panic(fmt.Sprintf("WorkFlow[ %s ] alraedy exists", fm.name))
 	}
 
 	return fm
@@ -174,7 +174,7 @@ func (rf *runFlow) Exceptions() []FinishedProcess {
 
 func (rf *runFlow) Recover() (FinishedWorkFlow, error) {
 	if !rf.Has(Failed) {
-		return nil, fmt.Errorf("workflow[%s] is't failed, can't recover", rf.name)
+		return nil, fmt.Errorf("workFlow[ %s ] is't failed, can't recover", rf.name)
 	}
 	return RecoverFlow(rf.id)
 }

@@ -18,7 +18,7 @@ type InputB struct {
 
 func ErrorResultPrinter(info flow.Step) (bool, error) {
 	if !info.Success() {
-		fmt.Printf("step[%s] error, explain=%v, err=%v\n", info.Name(), info.ExplainStatus(), info.Err())
+		fmt.Printf("Step[ %s ] error, explain=%v, err=%v\n", info.Name(), info.ExplainStatus(), info.Err())
 	}
 	return true, nil
 }
@@ -74,7 +74,7 @@ func AfterProcProcessor(info flow.Process) (bool, error) {
 		panic("process flow id is empty")
 	}
 	atomic.AddInt64(&current, 1)
-	fmt.Printf("..process[%s] AfterProcProcessor execute \n", info.Name())
+	fmt.Printf("..Process[ %s ] AfterProcProcessor execute \n", info.Name())
 	return true, nil
 }
 
@@ -120,8 +120,8 @@ func TestGoAheadWithoutDependPanicStep(t *testing.T) {
 	workflow := flow.RegisterFlow("TestGoAheadWithoutDependPanicStep")
 	process := workflow.Process("TestGoAheadWithoutDependPanicStep")
 	process.NameStep(GeneratePanicStep(1), "1")
-	process.NameStep(GenerateStep(-1), "-1", "1")
-	process.NameStep(GenerateStep(-2), "-2", "-1")
+	process.NameStep(GenerateStep(2), "2", "1")
+	process.NameStep(GenerateStep(3), "3", "2")
 	process.NameStep(GenerateStep(11), "11")
 	process.NameStep(GenerateStep(12), "12", "11")
 	process.NameStep(GenerateStep(13), "13", "12")
@@ -144,8 +144,8 @@ func TestGoAheadWithoutDependErrorStep(t *testing.T) {
 	workflow := flow.RegisterFlow("TestGoAheadWithoutDependErrorStep")
 	process := workflow.Process("TestGoAheadWithoutDependErrorStep")
 	process.NameStep(GenerateErrorStep(1), "1")
-	process.NameStep(GenerateStep(-1), "-1", "1")
-	process.NameStep(GenerateStep(-2), "-2", "-1")
+	process.NameStep(GenerateStep(2), "2", "1")
+	process.NameStep(GenerateStep(3), "3", "2")
 	process.NameStep(GenerateStep(11), "11")
 	process.NameStep(GenerateStep(12), "12", "11")
 	process.NameStep(GenerateStep(13), "13", "12")
@@ -222,12 +222,12 @@ func TestWorkFlowPause(t *testing.T) {
 	letGo = false
 	workflow := flow.RegisterFlow("TestWorkFlowPause")
 	process := workflow.Process("TestWorkFlowPause")
-	process.NameStep(Fn(t).WaitLetGO(), "1-1")
-	process.NameStep(Fn(t).WaitLetGO(), "1-2", "1-1")
-	process.NameStep(Fn(t).WaitLetGO(), "1-3", "1-2")
-	process.NameStep(Fn(t).WaitLetGO(), "2-1")
-	process.NameStep(Fn(t).WaitLetGO(), "2-2", "2-1")
-	process.NameStep(Fn(t).WaitLetGO(), "2-3", "2-2")
+	process.NameStep(Fn(t).WaitLetGO(), "1w1")
+	process.NameStep(Fn(t).WaitLetGO(), "1w2", "1w1")
+	process.NameStep(Fn(t).WaitLetGO(), "1w3", "1w2")
+	process.NameStep(Fn(t).WaitLetGO(), "2w1")
+	process.NameStep(Fn(t).WaitLetGO(), "2w2", "2w1")
+	process.NameStep(Fn(t).WaitLetGO(), "2w3", "2w2")
 	workflow.AfterFlow(false, CheckResult(t, 6, flow.Success))
 	wf := flow.AsyncFlow("TestWorkFlowPause", nil)
 	waitCurrent(2)
@@ -254,12 +254,12 @@ func TestProcessPause(t *testing.T) {
 	workflow := flow.RegisterFlow("TestProcessPause")
 	process := workflow.Process("TestProcessPause")
 	fn := Fn(t)
-	process.NameStep(fn.WaitLetGO(), "1-1")
-	process.NameStep(fn.Normal(), "1-2", "1-1")
-	process.NameStep(fn.Normal(), "1-3", "1-2")
-	process.NameStep(fn.WaitLetGO(), "2-1")
-	process.NameStep(fn.Normal(), "2-2", "2-1")
-	process.NameStep(fn.Normal(), "2-3", "2-2")
+	process.NameStep(fn.WaitLetGO(), "1w1")
+	process.NameStep(fn.Normal(), "1w2", "1w1")
+	process.NameStep(fn.Normal(), "1w3", "1w2")
+	process.NameStep(fn.WaitLetGO(), "2w1")
+	process.NameStep(fn.Normal(), "2w2", "2w1")
+	process.NameStep(fn.Normal(), "2w3", "2w2")
 	workflow.AfterFlow(false, CheckResult(t, 6, flow.Success))
 	c := flow.AsyncFlow("TestProcessPause", nil)
 	waitCurrent(2)
