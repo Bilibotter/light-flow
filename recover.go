@@ -215,7 +215,7 @@ func SetMaxSerializeSize(size int) {
 }
 
 func loadStatus(workflow *runFlow, checkpoints []CheckPoint) error {
-	point, exist := workflow.getInternal(fmt.Sprintf(flowBreakPoint, workflow.name))
+	point, exist := workflow.getInternal(fmt.Sprintf(flowBP, workflow.name))
 	// the must before callback failed to execute last time, so all steps and processes need to be executed at this time
 	if exist && !point.(*breakPoint).SkipRun {
 		return nil
@@ -234,7 +234,7 @@ func loadStatus(workflow *runFlow, checkpoints []CheckPoint) error {
 		name := checkpoint.GetName()
 		workflow.runProcesses[name].clear(executed)
 		workflow.runProcesses[name].append(Recovering)
-		point, exist = workflow.runProcesses[name].getInternal(fmt.Sprintf(procBreakPoint, name))
+		point, exist = workflow.runProcesses[name].getInternal(fmt.Sprintf(procBP, name))
 		if exist && !point.(*breakPoint).SkipRun {
 			for _, step := range workflow.runProcesses[name].runSteps {
 				step.clear(executed)

@@ -16,6 +16,7 @@ type Resource interface {
 	Entity() any
 	Put(key string, value any) any
 	Fetch(key string) (value any, exist bool)
+	Update(entity any) any
 }
 
 type resCreator interface {
@@ -131,4 +132,11 @@ func (r *resource) Fetch(key string) (value any, exist bool) {
 	defer r.Unlock()
 	value, exist = r.ctx[key]
 	return
+}
+
+func (r *resource) Update(entity any) any {
+	r.Lock()
+	defer r.Unlock()
+	r.entity = entity
+	return entity
 }

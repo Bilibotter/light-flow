@@ -34,8 +34,9 @@ var (
 	Pause        = &StatusEnum{0b1 << 1, "Pause"}
 	skipped      = &StatusEnum{0b1 << 2, "skip"}
 	executed     = &StatusEnum{0b1 << 3, "executed"}
-	Recovering   = &StatusEnum{0b1 << 4, "recovering"}
-	resAttached  = &StatusEnum{0b1 << 5, "resAttached"}
+	Recovering   = &StatusEnum{0b1 << 4, "Recovering"}
+	Suspend      = &StatusEnum{0b1 << 5, "Suspend"}
+	resAttached  = &StatusEnum{0b1 << 6, "resAttached"}
 	Success      = &StatusEnum{0b1 << 15, "Success"}
 	NormalMask   = &StatusEnum{0b1<<16 - 1, "NormalMask"}
 	abnormal     = []*StatusEnum{Cancel, Timeout, Panic, Error, Stop, CallbackFail, Failed}

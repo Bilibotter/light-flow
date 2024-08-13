@@ -230,6 +230,9 @@ func (process *runProcess) finalize() {
 		process.append(Failed)
 	}
 	process.advertise(afterF)
+	if process.Has(Suspend) {
+		process.belong.append(Suspend)
+	}
 	process.releaseResources()
 	process.compress.add(process.load())
 	process.end = time.Now().UTC()
@@ -315,14 +318,23 @@ func (process *runProcess) runStep(step *runStep) {
 			step.exception = panicErr
 			step.end = time.Now().UTC()
 		}
-		if step.isRecoverable() && !step.Normal() && !step.Has(CallbackFail) {
-			step.setInternal(fmt.Sprintf(stepBreakPoint, step.Name()), &stepPanicBreakPoint)
+		if !step.isRecoverable() {
+			process.stepCallback(step, afterF)
+			return
+		}
+		if !step.Normal() && !step.Has(CallbackFail) {
+			step.append(Suspend)
+			step.setInternal(fmt.Sprintf(stepBP, step.Name()), &stepPanicBreakPoint)
 		}
 		process.stepCallback(step, afterF)
+		if step.Has(Suspend) {
+			step.belong.append(Suspend)
+			step.belong.belong.append(Suspend)
+		}
 	}()
 
 	if step.Has(Recovering) {
-		point, exist := step.getInternal(fmt.Sprintf(stepBreakPoint, step.Name()))
+		point, exist := step.getInternal(fmt.Sprintf(stepBP, step.Name()))
 		if exist {
 			if point.(*breakPoint).SkipRun {
 				return

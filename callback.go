@@ -24,9 +24,9 @@ const (
 )
 
 const (
-	flowBreakPoint = "fbp-%s"
-	procBreakPoint = "pbp-%s"
-	stepBreakPoint = "sbp-%s"
+	flowBP = "fbp-%s"
+	procBP = "pbp-%s"
+	stepBP = "sbp-%s"
 )
 
 const (
@@ -268,6 +268,7 @@ func (chain *funcChain[T]) filter(runtime T) (runNext bool) {
 		if !runtime.isRecoverable() {
 			return
 		}
+		runtime.append(Suspend)
 		point := &breakPoint{
 			Stage:   chain.Stage0,
 			Index:   index,
@@ -298,11 +299,11 @@ func (chain *funcChain[T]) loadBreakPoint(runtime T) (point *breakPoint) {
 	}
 	var wrap any
 	if strings.HasSuffix(chain.Stage, stepScope) {
-		wrap, _ = runtime.getInternal(fmt.Sprintf(stepBreakPoint, runtime.Name()))
+		wrap, _ = runtime.getInternal(fmt.Sprintf(stepBP, runtime.Name()))
 	} else if strings.HasSuffix(chain.Stage, procScope) {
-		wrap, _ = runtime.getInternal(fmt.Sprintf(procBreakPoint, runtime.Name()))
+		wrap, _ = runtime.getInternal(fmt.Sprintf(procBP, runtime.Name()))
 	} else if strings.HasSuffix(chain.Stage, flowScope) {
-		wrap, _ = runtime.getInternal(fmt.Sprintf(flowBreakPoint, runtime.Name()))
+		wrap, _ = runtime.getInternal(fmt.Sprintf(flowBP, runtime.Name()))
 	}
 	if wrap != nil {
 		point = wrap.(*breakPoint)
@@ -317,11 +318,11 @@ func (chain *funcChain[T]) saveBreakPoint(runtime T, point *breakPoint) {
 		point.Stage = defaultStage | afterStage
 	}
 	if strings.HasSuffix(chain.Stage, stepScope) {
-		runtime.setInternal(fmt.Sprintf(stepBreakPoint, runtime.Name()), point)
+		runtime.setInternal(fmt.Sprintf(stepBP, runtime.Name()), point)
 	} else if strings.HasSuffix(chain.Stage, procScope) {
-		runtime.setInternal(fmt.Sprintf(procBreakPoint, runtime.Name()), point)
+		runtime.setInternal(fmt.Sprintf(procBP, runtime.Name()), point)
 	} else if strings.HasSuffix(chain.Stage, flowScope) {
-		runtime.setInternal(fmt.Sprintf(flowBreakPoint, runtime.Name()), point)
+		runtime.setInternal(fmt.Sprintf(flowBP, runtime.Name()), point)
 	}
 }
 
