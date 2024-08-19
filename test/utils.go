@@ -137,7 +137,7 @@ func (s *FuncBuilder0) Suc() *FuncBuilder0 {
 		atomic.AddInt64(&current, 1)
 		s.t.Logf("Flow-Callback[ %s ] start\n", ctx.Name())
 		s.t.Logf("Flow-Callback[ %s ] suc\n", ctx.Name())
-		return true, fmt.Errorf("error")
+		return true, nil
 	}
 	s.onSuc = append(s.onSuc, f)
 	return s

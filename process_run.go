@@ -259,7 +259,7 @@ func (process *runProcess) releaseResources() {
 		}
 		err := resourceManagers[key[1:]].onRelease(res)
 		if err != nil {
-			logger.Errorf("Process[ %s ] release Resource[ %s ] failed, id=%s, error=%v", process.Name(), key[1:], process.id, err)
+			logger.Errorf("Process[ %s ] release Resource[ %s ] failed;\n    ID=%s\n,    error=%v", process.Name(), key[1:], process.id, err)
 		}
 	}
 }
@@ -312,10 +312,9 @@ func (process *runProcess) runStep(step *runStep) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			panicErr := fmt.Errorf("\n[Recovery] %s panic recovered:\n%s\n%s\n", time.Now().Format("2006/01/02 - 15:04:05"), r, stack())
-			logger.Errorf("Step[ %s ] execute panic;\n\tPanic=%v\n%s\n", step.name, r, stack())
+			logger.Errorf("Step[ %s ] execute panic;\n    ID=%s;\n    Panic=%v\n%s\n", step.name, step.id, r, stack())
 			step.append(Panic)
-			step.exception = panicErr
+			step.exception = fmt.Errorf("%v", r)
 			step.end = time.Now().UTC()
 		}
 		if !step.isRecoverable() {

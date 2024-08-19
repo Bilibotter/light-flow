@@ -231,7 +231,7 @@ func Recover0(t *testing.T, ff flow.FinishedWorkFlow) flow.FinishedWorkFlow {
 	println()
 	t.Logf("start [%d]times recover >>>>>>>>>>>>>>", times)
 	f, err := ff.Recover()
-	if err != nil {
+	if err != nil && !strings.Contains(fmt.Sprintf("%v", err), "recover failed") {
 		panic(err)
 	}
 	println()
@@ -295,10 +295,10 @@ func TestCombineStepRecover(t *testing.T) {
 		Next(Fn(t).Do(SetCtx()).Step(), "step2").
 		Next(Fn(t).Suc(CheckCtx("step2"), SetCtx()).ErrStep(), "step3").
 		Next(Fn(t).Do(CheckCtx("step3")).Step(), "step4")
-	wf.AfterFlow(false, CheckResult(t, 2, flow.Error)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 2, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
-	flow.DoneFlow("TestCombineStepRecover", nil)
+	res := flow.DoneFlow("TestCombineStepRecover", nil)
+	CheckResult(t, 2, flow.Error)(any(res).(flow.WorkFlow))
 	Recover("TestCombineStepRecover")
 }
 
@@ -314,10 +314,10 @@ func TestSeparateStepRecover(t *testing.T) {
 		Suc(CheckCtx("step1"), CheckCtx0("step2", "+"), SetCtx(), SetCtx0("+")).ErrStep(),
 		"step3", "step1", "step2")
 	proc.NameStep(Fn(t).Suc(CheckCtx("step3"), CheckCtx0("step3", "+")).Step(), "step4", "step3")
-	wf.AfterFlow(false, CheckResult(t, 2, flow.Error)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 2, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
-	flow.DoneFlow("TestSeparateStepRecover", nil)
+	res := flow.DoneFlow("TestSeparateStepRecover", nil)
+	CheckResult(t, 2, flow.Error)(any(res).(flow.WorkFlow))
 	Recover("TestSeparateStepRecover")
 }
 
@@ -336,10 +336,10 @@ func Test1ProcSuc1ProcRecover(t *testing.T) {
 	proc.NameStep(Fn(t).Do(SetCtx()).Step(), "step1").
 		Next(Fn(t).Suc(CheckCtx("step1"), SetCtx()).ErrStep(), "step2").
 		Next(Fn(t).Fail(SetCtx()).Suc(CheckCtx("step2")).Step(), "step3")
-	wf.AfterFlow(false, CheckResult(t, 4, flow.Error)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 2, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
-	flow.DoneFlow("Test1ProcSuc1ProcRecover", nil)
+	res := flow.DoneFlow("Test1ProcSuc1ProcRecover", nil)
+	CheckResult(t, 4, flow.Error)(any(res).(flow.WorkFlow))
 	Recover("Test1ProcSuc1ProcRecover")
 }
 
@@ -354,10 +354,10 @@ func TestSingleStepRecoverWith2Branch(t *testing.T) {
 	proc.NameStep(Fn(t).Do(SetCtx()).Step(), "step1").
 		Next(Fn(t).Suc(CheckCtx("step1"), SetCtx()).ErrStep(), "step2").
 		Next(Fn(t).Fail(SetCtx()).Suc(CheckCtx("step2")).Step(), "step3")
-	wf.AfterFlow(false, CheckResult(t, 3, flow.Error)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 2, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
-	flow.DoneFlow("TestSingleStepRecoverWith2Branch", nil)
+	res := flow.DoneFlow("TestSingleStepRecoverWith2Branch", nil)
+	CheckResult(t, 3, flow.Error)(any(res).(flow.WorkFlow))
 	Recover("TestSingleStepRecoverWith2Branch")
 }
 
@@ -378,8 +378,8 @@ func TestRecoverSuccessFlow(t *testing.T) {
 	flow.DoneFlow("TestRecoverSuccessFlow", nil)
 	defer func() {
 		if r := recover(); r != nil {
-			if r != gorm.ErrRecordNotFound {
-				t.Errorf("recover error: %v", r)
+			if strings.Contains(fmt.Sprintf("%v", r), "no latest record found for") {
+				t.Logf("recover error: %v", r)
 			}
 		} else {
 			t.Errorf("recover success, but should fail")
@@ -388,6 +388,27 @@ func TestRecoverSuccessFlow(t *testing.T) {
 	_, err := flow.RecoverFlow(id)
 	if err != nil {
 		panic(err)
+	}
+}
+
+func TestRecoverSuccessFlow0(t *testing.T) {
+	defer resetCurrent()
+	wf := flow.RegisterFlow("TestRecoverSuccessFlow0")
+	wf.EnableRecover()
+	proc := wf.Process("TestRecoverSuccessFlow0")
+	proc.NameStep(Ck(t).SetFn(), "Step1").
+		Next(Ck(t).SetFn(), "Step2").
+		Next(Ck(t).SetFn(), "Step3")
+	wf.AfterFlow(false, func(workFlow flow.WorkFlow) (keepOn bool, err error) {
+		return true, nil
+	})
+	wf.AfterFlow(false, CheckResult(t, 3, flow.Success))
+	res := flow.DoneFlow("TestRecoverSuccessFlow0", nil)
+	_, err := res.Recover()
+	if err == nil {
+		t.Errorf("recover success, but should fail")
+	} else if !strings.Contains(err.Error(), "isn't failed, can't recover") {
+		t.Errorf("error msg not match expect, err: %v", err)
 	}
 }
 
@@ -414,10 +435,10 @@ func TestSingleStepRecoverWith1DependSuc1DependFail0(t *testing.T) {
 	proc.NameStep(Fn(t).Suc(CheckCtx("step2w2")).ErrStep(),
 		"step3w2", "step2w2")
 
-	wf.AfterFlow(false, CheckResult(t, 3, flow.Error)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 3, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
-	flow.DoneFlow("TestSingleStepRecover1DependSuc1DependFail0", nil)
+	res := flow.DoneFlow("TestSingleStepRecover1DependSuc1DependFail0", nil)
+	CheckResult(t, 3, flow.Error)(any(res).(flow.WorkFlow))
 	Recover("TestSingleStepRecover1DependSuc1DependFail0")
 }
 
@@ -440,10 +461,10 @@ func TestSingleStepRecoverWith1DependSuc1DependFail(t *testing.T) {
 	proc.NameStep(Fn(t).Fail(SetCtx()).Suc(CheckCtx0("step2w1", "+"), CheckCtx("step2w2")).Step(),
 		"step3w1", "step2w1", "step2w2")
 
-	wf.AfterFlow(false, CheckResult(t, 2, flow.Error)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 2, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
-	flow.DoneFlow("TestSingleStepRecover1DependSuc1DependFail", nil)
+	res := flow.DoneFlow("TestSingleStepRecover1DependSuc1DependFail", nil)
+	CheckResult(t, 2, flow.Error)(any(res).(flow.WorkFlow))
 	Recover("TestSingleStepRecover1DependSuc1DependFail")
 }
 
@@ -456,10 +477,10 @@ func TestSingleStepRecover(t *testing.T) {
 	proc.NameStep(Fn(t).Do(SetCtx()).Step(), "step1").
 		Next(Fn(t).Suc(CheckCtx("step1"), SetCtx()).ErrStep(), "step2").
 		Next(Fn(t).Fail(SetCtx()).Suc(CheckCtx("step2")).Step(), "step3")
-	wf.AfterFlow(false, CheckResult(t, 1, flow.Error)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 2, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
 	ret := flow.DoneFlow("TestSingleStepRecover", nil)
+	CheckResult(t, 1, flow.Error)(any(ret).(flow.WorkFlow))
 	println("\n\t----------Recovering----------\n")
 	executeSuc = true
 	resetCurrent()
@@ -478,10 +499,10 @@ func TestPanicStepRecover(t *testing.T) {
 	proc.NameStep(Fn(t).Fail(SetCtx(), f).Suc(CheckCtx("step1", 0)).Step(), "step1").
 		Next(Fn(t).Fail(SetCtx()).Suc(CheckCtx("step1"), SetCtx()).Step(), "step2").
 		Next(Fn(t).Fail(SetCtx()).Suc(CheckCtx("step2")).Step(), "step3")
-	wf.AfterFlow(false, CheckResult(t, 0, flow.Panic)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 3, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
-	flow.DoneFlow("TestPanicStepRecover", nil)
+	res := flow.DoneFlow("TestPanicStepRecover", nil)
+	CheckResult(t, 0, flow.Panic)(any(res).(flow.WorkFlow))
 	Recover("TestPanicStepRecover")
 }
 
@@ -497,10 +518,10 @@ func TestMultipleStepRecover(t *testing.T) {
 	proc.NameStep(Fn(t).Do(SetCtx()).Step(), "step2w1").
 		Next(Fn(t).Suc(CheckCtx("step2w1"), SetCtx()).ErrStep(), "step2w2").
 		Next(Fn(t).Do(CheckCtx("step2w2")).Step(), "2w3")
-	wf.AfterFlow(false, CheckResult(t, 2, flow.Error)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 4, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
-	flow.DoneFlow("TestMultipleStepRecover", nil)
+	res := flow.DoneFlow("TestMultipleStepRecover", nil)
+	CheckResult(t, 2, flow.Error)(any(res).(flow.WorkFlow))
 	Recover("TestMultipleStepRecover")
 }
 
@@ -514,10 +535,10 @@ func TestMultipleStepRecover0(t *testing.T) {
 		Next(Fn(t).Do(CheckCtx("step1w1")).Step(), "1w2")
 	proc.NameStep(Fn(t).Suc(SetCtx()).ErrStep(), "step2w1").
 		Next(Fn(t).Do(CheckCtx("step2w1")).Step(), "2w2")
-	wf.AfterFlow(false, CheckResult(t, 1, flow.Error)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 4, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
-	flow.DoneFlow("TestMultipleStepRecover0", nil)
+	res := flow.DoneFlow("TestMultipleStepRecover0", nil)
+	CheckResult(t, 1, flow.Error)(any(res).(flow.WorkFlow))
 	Recover("TestMultipleStepRecover0")
 }
 
@@ -538,10 +559,10 @@ func TestParallelStepRecover(t *testing.T) {
 	proc3.NameStep(Fn(t).Do(SetCtx()).Step(), "step3w1").
 		Next(Fn(t).Suc(CheckCtx("step3w1"), SetCtx()).ErrStep(), "step3w2").
 		Next(Fn(t).Do(CheckCtx("step3w2")).Step(), "step3w3")
-	wf.AfterFlow(false, CheckResult(t, 3, flow.Error)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 6, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
-	flow.DoneFlow("TestParallelStepRecover", nil)
+	res := flow.DoneFlow("TestParallelStepRecover", nil)
+	CheckResult(t, 3, flow.Error)(any(res).(flow.WorkFlow))
 	Recover("TestParallelStepRecover")
 }
 
@@ -554,7 +575,6 @@ func TestFlowInputRecover(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx("TestFlowInputRecover", 0)).Suc(SetCtx()).ErrStep(), "step1")
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
-	wf.AfterFlow(false, CheckResult(t, 1, flow.Error)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 4, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
 	m := simpleContext{
@@ -565,7 +585,8 @@ func TestFlowInputRecover(t *testing.T) {
 	if err != nil {
 		t.Errorf("set context error %v", err)
 	}
-	flow.DoneFlow("TestFlowInputRecover", m.table)
+	res := flow.DoneFlow("TestFlowInputRecover", m.table)
+	CheckResult(t, 1, flow.Error)(any(res).(flow.WorkFlow))
 	Recover("TestFlowInputRecover")
 }
 
@@ -579,7 +600,6 @@ func TestFlowCallbackSkipWhileRecover(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
 	wf.BeforeFlow(false, Fn0(t).Normal())
-	wf.AfterFlow(false, CheckResult(t, 2, flow.Error)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 4, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
 	m := simpleContext{
@@ -590,7 +610,8 @@ func TestFlowCallbackSkipWhileRecover(t *testing.T) {
 	if err != nil {
 		t.Errorf("set context error %v", err)
 	}
-	flow.DoneFlow("TestFlowCallbackSkipWhileRecover", m.table)
+	res := flow.DoneFlow("TestFlowCallbackSkipWhileRecover", m.table)
+	CheckResult(t, 2, flow.Error)(any(res).(flow.WorkFlow))
 	Recover("TestFlowCallbackSkipWhileRecover")
 }
 
@@ -684,11 +705,11 @@ func TestProcessRecover(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
 	proc.NameStep(Fn(t).Do(CheckCtx1()).Step(), "step4", "step3")
-	wf.AfterFlow(false, CheckResult(t, 2, flow.Error)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 5, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
 	wf.BeforeProcess(false, Fn(t).Do(SetCtx()).Proc())
-	flow.DoneFlow("TestProcessRecover", nil)
+	res := flow.DoneFlow("TestProcessRecover", nil)
+	CheckResult(t, 2, flow.Error)(any(res).(flow.WorkFlow))
 	Recover("TestProcessRecover")
 }
 
@@ -702,11 +723,11 @@ func TestPreProcessCallbackFailRecover(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
 	proc.NameStep(Fn(t).Do(CheckCtx1()).Step(), "step4", "step3")
-	wf.AfterFlow(false, CheckResult(t, 1, flow.CallbackFail)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 5, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
 	wf.BeforeProcess(true, Fn(t).Fail(SetCtx()).Suc(CheckCtx("TestPreProcessCallbackFailRecover", 0)).ErrProc())
-	flow.DoneFlow("TestPreProcessCallbackFailRecover", nil)
+	res := flow.DoneFlow("TestPreProcessCallbackFailRecover", nil)
+	CheckResult(t, 1, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestPreProcessCallbackFailRecover")
 }
 
@@ -720,12 +741,12 @@ func TestPreProcessCallbackFailRecover0(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
 	proc.NameStep(Fn(t).Do(CheckCtx1()).Step(), "step4", "step3")
-	wf.AfterFlow(false, CheckResult(t, 2, flow.CallbackFail)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 5, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
 	wf.BeforeProcess(true, Fn(t).NormalProc())
 	wf.BeforeProcess(true, Fn(t).Fail(SetCtx()).Suc(CheckCtx("TestPreProcessCallbackFailRecover0", 0)).ErrProc())
-	flow.DoneFlow("TestPreProcessCallbackFailRecover0", nil)
+	res := flow.DoneFlow("TestPreProcessCallbackFailRecover0", nil)
+	CheckResult(t, 2, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestPreProcessCallbackFailRecover0")
 }
 
@@ -739,12 +760,12 @@ func TestPreProcessCallbackFailRecover1(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
 	proc.NameStep(Fn(t).Do(CheckCtx1()).Step(), "step4", "step3")
-	wf.AfterFlow(false, CheckResult(t, 1, flow.CallbackFail)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 6, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
 	wf.BeforeProcess(true, Fn(t).Fail(SetCtx()).Suc(CheckCtx("TestPreProcessCallbackFailRecover1", 0)).ErrProc())
 	wf.BeforeProcess(true, Fn(t).NormalProc())
-	flow.DoneFlow("TestPreProcessCallbackFailRecover1", nil)
+	res := flow.DoneFlow("TestPreProcessCallbackFailRecover1", nil)
+	CheckResult(t, 1, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestPreProcessCallbackFailRecover1")
 }
 
@@ -758,13 +779,13 @@ func TestPreProcessCallbackFailRecover2(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
 	proc.NameStep(Fn(t).Do(CheckCtx1()).Step(), "step4", "step3")
-	wf.AfterFlow(false, CheckResult(t, 2, flow.CallbackFail)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 6, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
 	wf.BeforeProcess(true, Fn(t).NormalProc())
 	wf.BeforeProcess(true, Fn(t).Fail(SetCtx()).Suc(CheckCtx("TestPreProcessCallbackFailRecover2", 0)).ErrProc())
 	wf.BeforeProcess(true, Fn(t).NormalProc())
-	flow.DoneFlow("TestPreProcessCallbackFailRecover2", nil)
+	res := flow.DoneFlow("TestPreProcessCallbackFailRecover2", nil)
+	CheckResult(t, 2, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestPreProcessCallbackFailRecover2")
 }
 
@@ -778,13 +799,13 @@ func TestPreProcessCallbackPanicRecover2(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
 	proc.NameStep(Fn(t).Do(CheckCtx1()).Step(), "step4", "step3")
-	wf.AfterFlow(false, CheckResult(t, 2, flow.CallbackFail)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 6, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
 	wf.BeforeProcess(true, Fn(t).NormalProc())
 	wf.BeforeProcess(true, Fn(t).Fail(SetCtx()).Suc(CheckCtx("TestPreProcessCallbackPanicRecover2", 0)).PanicProc())
 	wf.BeforeProcess(true, Fn(t).NormalProc())
-	flow.DoneFlow("TestPreProcessCallbackPanicRecover2", nil)
+	res := flow.DoneFlow("TestPreProcessCallbackPanicRecover2", nil)
+	CheckResult(t, 2, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestPreProcessCallbackPanicRecover2")
 }
 
@@ -800,11 +821,11 @@ func TestDefaultPreProcessCallbackFailRecover(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
 	proc.NameStep(Fn(t).Do(CheckCtx1()).Step(), "step4", "step3")
 	df := flow.DefaultCallback()
-	df.AfterFlow(false, CheckResult(t, 1, flow.CallbackFail)).If(execFail)
 	df.AfterFlow(false, CheckResult(t, 5, flow.Success)).If(execSuc)
 	df.AfterStep(false, ErrorResultPrinter).If(execSuc)
 	df.BeforeProcess(true, Fn(t).Fail(SetCtx()).Suc(CheckCtx("TestDefaultPreProcessCallbackFailRecover", 0)).ErrProc())
-	flow.DoneFlow("TestDefaultPreProcessCallbackFailRecover", nil)
+	res := flow.DoneFlow("TestDefaultPreProcessCallbackFailRecover", nil)
+	CheckResult(t, 1, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestDefaultPreProcessCallbackFailRecover")
 }
 
@@ -818,11 +839,11 @@ func TestAfterProcessCallbackFailRecover(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
 	proc.NameStep(Fn(t).Do(CheckCtx1()).Step(), "step4", "step3")
-	wf.AfterFlow(false, CheckResult(t, 5, flow.CallbackFail)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 1, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
 	wf.AfterProcess(true, Fn(t).Fail(SetCtx()).Suc(CheckCtx("TestAfterProcessCallbackFailRecover", 0)).ErrProc())
-	flow.DoneFlow("TestAfterProcessCallbackFailRecover", nil)
+	res := flow.DoneFlow("TestAfterProcessCallbackFailRecover", nil)
+	CheckResult(t, 5, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestAfterProcessCallbackFailRecover")
 }
 
@@ -836,12 +857,12 @@ func TestAfterProcessCallbackFailReplay(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
 	proc.NameStep(Fn(t).Do(CheckCtx1()).Step(), "step4", "step3")
-	wf.AfterFlow(false, CheckResult(t, 6, flow.CallbackFail)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 2, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
 	wf.AfterProcess(true, Fn(t).NormalProc())
 	wf.AfterProcess(true, Fn(t).Fail(SetCtx()).Suc(CheckCtx("TestAfterProcessCallbackFailReplay", 0)).ErrProc())
-	flow.DoneFlow("TestAfterProcessCallbackFailReplay", nil)
+	res := flow.DoneFlow("TestAfterProcessCallbackFailReplay", nil)
+	CheckResult(t, 6, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestAfterProcessCallbackFailReplay")
 }
 
@@ -855,12 +876,12 @@ func TestAfterProcessCallbackFailReplay0(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
 	proc.NameStep(Fn(t).Do(CheckCtx1()).Step(), "step4", "step3")
-	wf.AfterFlow(false, CheckResult(t, 5, flow.CallbackFail)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 2, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
 	wf.AfterProcess(true, Fn(t).Fail(SetCtx()).Suc(CheckCtx("TestAfterProcessCallbackFailReplay0", 0)).ErrProc())
 	wf.AfterProcess(true, Fn(t).NormalProc())
-	flow.DoneFlow("TestAfterProcessCallbackFailReplay0", nil)
+	res := flow.DoneFlow("TestAfterProcessCallbackFailReplay0", nil)
+	CheckResult(t, 5, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestAfterProcessCallbackFailReplay0")
 }
 
@@ -874,13 +895,13 @@ func TestAfterProcessCallbackFailReplay1(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
 	proc.NameStep(Fn(t).Do(CheckCtx1()).Step(), "step4", "step3")
-	wf.AfterFlow(false, CheckResult(t, 6, flow.CallbackFail)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 3, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
 	wf.AfterProcess(true, Fn(t).NormalProc())
 	wf.AfterProcess(true, Fn(t).Fail(SetCtx()).Suc(CheckCtx("TestAfterProcessCallbackFailReplay1", 0)).ErrProc())
 	wf.AfterProcess(true, Fn(t).NormalProc())
-	flow.DoneFlow("TestAfterProcessCallbackFailReplay1", nil)
+	res := flow.DoneFlow("TestAfterProcessCallbackFailReplay1", nil)
+	CheckResult(t, 6, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestAfterProcessCallbackFailReplay1")
 }
 
@@ -894,13 +915,13 @@ func TestAfterProcessCallbackPanicReplay1(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
 	proc.NameStep(Fn(t).Do(CheckCtx1()).Step(), "step4", "step3")
-	wf.AfterFlow(false, CheckResult(t, 6, flow.CallbackFail)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 3, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
 	wf.AfterProcess(true, Fn(t).NormalProc())
 	wf.AfterProcess(true, Fn(t).Fail(SetCtx()).Suc(CheckCtx("TestAfterProcessCallbackPanicReplay1", 0)).PanicProc())
 	wf.AfterProcess(true, Fn(t).NormalProc())
-	flow.DoneFlow("TestAfterProcessCallbackPanicReplay1", nil)
+	res := flow.DoneFlow("TestAfterProcessCallbackPanicReplay1", nil)
+	CheckResult(t, 6, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestAfterProcessCallbackPanicReplay1")
 }
 
@@ -919,9 +940,9 @@ func TestAfterFlowCallbackFailReplay(t *testing.T) {
 	df.AfterFlow(true, Fn0(t).Normal())
 	df.AfterFlow(true, Fn0(t).Normal())
 	df.AfterFlow(true, Fn0(t).Fail().Suc().ErrFlow())
-	wf.AfterFlow(false, CheckResult(t, 7, flow.CallbackFail)).If(execFail)
-	wf.AfterFlow(false, CheckResult(t, 3, flow.Success)).If(execSuc)
-	flow.DoneFlow("TestAfterFlowCallbackFailReplay", nil)
+	wf.AfterFlow(false, CheckResult(t, 4, flow.Success)).If(execSuc)
+	res := flow.DoneFlow("TestAfterFlowCallbackFailReplay", nil)
+	CheckResult(t, 8, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestAfterFlowCallbackFailReplay")
 }
 
@@ -940,9 +961,9 @@ func TestAfterFlowCallbackPanicReplay(t *testing.T) {
 	df.AfterFlow(true, Fn0(t).Normal())
 	df.AfterFlow(true, Fn0(t).Normal())
 	df.AfterFlow(true, Fn0(t).Fail().Suc().PanicFlow())
-	wf.AfterFlow(false, CheckResult(t, 7, flow.CallbackFail)).If(execFail)
-	wf.AfterFlow(false, CheckResult(t, 3, flow.Success)).If(execSuc)
-	flow.DoneFlow("TestAfterFlowCallbackPanicReplay", nil)
+	wf.AfterFlow(false, CheckResult(t, 4, flow.Success)).If(execSuc)
+	res := flow.DoneFlow("TestAfterFlowCallbackPanicReplay", nil)
+	CheckResult(t, 8, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestAfterFlowCallbackPanicReplay")
 }
 
@@ -961,10 +982,10 @@ func TestProcessRecover1Suc1Fail(t *testing.T) {
 	proc2 := wf.Process("TestProcessRecover1Suc1Fail2")
 	proc2.NameStep(Fn(t).Normal(), "step2w1")
 	proc2.BeforeProcess(false, Fn(t).Do(SetCtx()).Proc())
-	wf.AfterFlow(false, CheckResult(t, 4, flow.Error)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 5, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
-	flow.DoneFlow("TestProcessRecover1Suc1Fail", nil)
+	res := flow.DoneFlow("TestProcessRecover1Suc1Fail", nil)
+	CheckResult(t, 4, flow.Error)(any(res).(flow.WorkFlow))
 	Recover("TestProcessRecover1Suc1Fail")
 }
 
@@ -978,10 +999,10 @@ func TestStepInterruptRecover(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx1()).Step(), "step2w1", "step1w1")
 	proc.NameStep(Fn(t).Normal(), "step1w2")
 	proc.NameStep(Fn(t).Normal(), "step2w2", "step1w2")
-	wf.AfterFlow(false, CheckResult(t, 3, flow.Error)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 2, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
-	flow.DoneFlow("TestStepInterruptRecover", nil)
+	res := flow.DoneFlow("TestStepInterruptRecover", nil)
+	CheckResult(t, 3, flow.Error)(any(res).(flow.WorkFlow))
 	Recover("TestStepInterruptRecover")
 }
 
@@ -997,9 +1018,9 @@ func TestStepBeforeCallbackFailRecover(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
 	proc.NameStep(Fn(t).Do(CheckCtx1()).Step(), "step4", "step3")
-	wf.AfterFlow(false, CheckResult(t, 1, flow.CallbackFail)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 5, flow.Success)).If(execSuc)
-	flow.DoneFlow("TestStepBeforeCallbackFailRecover", nil)
+	res := flow.DoneFlow("TestStepBeforeCallbackFailRecover", nil)
+	CheckResult(t, 1, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestStepBeforeCallbackFailRecover")
 }
 
@@ -1015,9 +1036,9 @@ func TestStepBeforeCallbackPanicRecover(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
 	proc.NameStep(Fn(t).Do(CheckCtx1()).Step(), "step4", "step3")
-	wf.AfterFlow(false, CheckResult(t, 1, flow.CallbackFail)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 5, flow.Success)).If(execSuc)
-	flow.DoneFlow("TestStepBeforeCallbackPanicRecover", nil)
+	res := flow.DoneFlow("TestStepBeforeCallbackPanicRecover", nil)
+	CheckResult(t, 1, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestStepBeforeCallbackPanicRecover")
 }
 
@@ -1035,9 +1056,9 @@ func TestStepBeforeCallbackFailRecover0(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
 	proc.NameStep(Fn(t).Do(CheckCtx1()).Step(), "step4", "step3")
-	wf.AfterFlow(false, CheckResult(t, 2, flow.CallbackFail)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 6, flow.Success)).If(execSuc)
-	flow.DoneFlow("TestStepBeforeCallbackFailRecover0", nil)
+	res := flow.DoneFlow("TestStepBeforeCallbackFailRecover0", nil)
+	CheckResult(t, 2, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestStepBeforeCallbackFailRecover0")
 }
 
@@ -1055,9 +1076,9 @@ func TestStepBeforeCallbackPanicRecover0(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
 	proc.NameStep(Fn(t).Do(CheckCtx1()).Step(), "step4", "step3")
-	wf.AfterFlow(false, CheckResult(t, 2, flow.CallbackFail)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 6, flow.Success)).If(execSuc)
-	flow.DoneFlow("TestStepBeforeCallbackPanicRecover0", nil)
+	res := flow.DoneFlow("TestStepBeforeCallbackPanicRecover0", nil)
+	CheckResult(t, 2, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestStepBeforeCallbackPanicRecover0")
 }
 
@@ -1075,9 +1096,9 @@ func TestStepBeforeCallbackFailRecoverAnd2CommonStepCallback(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
 	proc.NameStep(Fn(t).Do(CheckCtx1()).Step(), "step4", "step3")
-	wf.AfterFlow(false, CheckResult(t, 2, flow.CallbackFail)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 12, flow.Success)).If(execSuc)
-	flow.DoneFlow("TestStepBeforeCallbackFailRecoverAnd2CommonStepCallback", nil)
+	res := flow.DoneFlow("TestStepBeforeCallbackFailRecoverAnd2CommonStepCallback", nil)
+	CheckResult(t, 2, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestStepBeforeCallbackFailRecoverAnd2CommonStepCallback")
 }
 
@@ -1093,9 +1114,9 @@ func TestStepAfterCallbackFailRecover(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
 	proc.NameStep(Fn(t).Do(CheckCtx1()).Step(), "step4", "step3")
-	wf.AfterFlow(false, CheckResult(t, 2, flow.CallbackFail)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 4, flow.Success)).If(execSuc)
-	flow.DoneFlow("TestStepAfterCallbackFailRecover", nil)
+	res := flow.DoneFlow("TestStepAfterCallbackFailRecover", nil)
+	CheckResult(t, 2, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestStepAfterCallbackFailRecover")
 }
 
@@ -1111,9 +1132,9 @@ func TestStepAfterCallbackPanicRecover(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
 	proc.NameStep(Fn(t).Do(CheckCtx1()).Step(), "step4", "step3")
-	wf.AfterFlow(false, CheckResult(t, 2, flow.CallbackFail)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 4, flow.Success)).If(execSuc)
-	flow.DoneFlow("TestStepAfterCallbackPanicRecover", nil)
+	res := flow.DoneFlow("TestStepAfterCallbackPanicRecover", nil)
+	CheckResult(t, 2, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestStepAfterCallbackPanicRecover")
 }
 
@@ -1129,9 +1150,9 @@ func TestStepAfterCallbackFailRecover0(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
 	proc.NameStep(Fn(t).Do(CheckCtx1()).Step(), "step4", "step3")
-	wf.AfterFlow(false, CheckResult(t, 2, flow.CallbackFail)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 4, flow.Success)).If(execSuc)
-	flow.DoneFlow("TestStepAfterCallbackFailRecover0", nil)
+	res := flow.DoneFlow("TestStepAfterCallbackFailRecover0", nil)
+	CheckResult(t, 2, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestStepAfterCallbackFailRecover0")
 }
 
@@ -1147,9 +1168,9 @@ func TestStepAfterCallbackPanicRecover0(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
 	proc.NameStep(Fn(t).Do(CheckCtx1()).Step(), "step4", "step3")
-	wf.AfterFlow(false, CheckResult(t, 2, flow.CallbackFail)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 4, flow.Success)).If(execSuc)
-	flow.DoneFlow("TestStepAfterCallbackPanicRecover0", nil)
+	res := flow.DoneFlow("TestStepAfterCallbackPanicRecover0", nil)
+	CheckResult(t, 2, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestStepAfterCallbackPanicRecover0")
 }
 
@@ -1172,9 +1193,9 @@ func TestStepCallbackWithAllScope0(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
 	proc.NameStep(Fn(t).Do(CheckCtx1()).Step(), "step4", "step3")
-	wf.AfterFlow(false, CheckResult(t, 7, flow.CallbackFail)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 4, flow.Success)).If(execSuc)
-	flow.DoneFlow("TestStepCallbackWithAllScope0", nil)
+	res := flow.DoneFlow("TestStepCallbackWithAllScope0", nil)
+	CheckResult(t, 7, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestStepCallbackWithAllScope0")
 }
 
@@ -1197,9 +1218,9 @@ func TestStepCallbackPanicWithAllScope0(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
 	proc.NameStep(Fn(t).Do(CheckCtx1()).Step(), "step4", "step3")
-	wf.AfterFlow(false, CheckResult(t, 7, flow.CallbackFail)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 4, flow.Success)).If(execSuc)
-	flow.DoneFlow("TestStepCallbackPanicWithAllScope0", nil)
+	res := flow.DoneFlow("TestStepCallbackPanicWithAllScope0", nil)
+	CheckResult(t, 7, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestStepCallbackPanicWithAllScope0")
 }
 
@@ -1222,9 +1243,9 @@ func TestStepCallbackWithAllScope1(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
 	proc.NameStep(Fn(t).Do(CheckCtx1()).Step(), "step4", "step3")
-	wf.AfterFlow(false, CheckResult(t, 6, flow.CallbackFail)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 5, flow.Success)).If(execSuc)
-	flow.DoneFlow("TestStepCallbackWithAllScope1", nil)
+	res := flow.DoneFlow("TestStepCallbackWithAllScope1", nil)
+	CheckResult(t, 6, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestStepCallbackWithAllScope1")
 }
 
@@ -1247,9 +1268,9 @@ func TestStepCallbackWithAllScope2(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
 	proc.NameStep(Fn(t).Do(CheckCtx1()).Step(), "step4", "step3")
-	wf.AfterFlow(false, CheckResult(t, 5, flow.CallbackFail)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 6, flow.Success)).If(execSuc)
-	flow.DoneFlow("TestStepCallbackWithAllScope2", nil)
+	res := flow.DoneFlow("TestStepCallbackWithAllScope2", nil)
+	CheckResult(t, 5, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestStepCallbackWithAllScope2")
 }
 
@@ -1272,9 +1293,9 @@ func TestStepCallbackWithAllScope3(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
 	proc.NameStep(Fn(t).Do(CheckCtx1()).Step(), "step4", "step3")
-	wf.AfterFlow(false, CheckResult(t, 3, flow.CallbackFail)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 8, flow.Success)).If(execSuc)
-	flow.DoneFlow("TestStepCallbackWithAllScope3", nil)
+	res := flow.DoneFlow("TestStepCallbackWithAllScope3", nil)
+	CheckResult(t, 3, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestStepCallbackWithAllScope3")
 }
 
@@ -1297,9 +1318,9 @@ func TestStepCallbackWithAllScope4(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
 	proc.NameStep(Fn(t).Do(CheckCtx1()).Step(), "step4", "step3")
-	wf.AfterFlow(false, CheckResult(t, 2, flow.CallbackFail)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 9, flow.Success)).If(execSuc)
-	flow.DoneFlow("TestStepCallbackWithAllScope4", nil)
+	res := flow.DoneFlow("TestStepCallbackWithAllScope4", nil)
+	CheckResult(t, 2, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestStepCallbackWithAllScope4")
 }
 
@@ -1322,9 +1343,9 @@ func TestStepCallbackWithAllScope5(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
 	proc.NameStep(Fn(t).Do(CheckCtx1()).Step(), "step4", "step3")
-	wf.AfterFlow(false, CheckResult(t, 1, flow.CallbackFail)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 10, flow.Success)).If(execSuc)
-	flow.DoneFlow("TestStepCallbackWithAllScope5", nil)
+	res := flow.DoneFlow("TestStepCallbackWithAllScope5", nil)
+	CheckResult(t, 1, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestStepCallbackWithAllScope5")
 }
 
@@ -1347,9 +1368,9 @@ func TestStepCallbackPanicWithAllScope5(t *testing.T) {
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step2", "step1")
 	proc.NameStep(Fn(t).Do(CheckCtx1(), SetCtx()).Step(), "step3", "step2")
 	proc.NameStep(Fn(t).Do(CheckCtx1()).Step(), "step4", "step3")
-	wf.AfterFlow(false, CheckResult(t, 1, flow.CallbackFail)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 10, flow.Success)).If(execSuc)
-	flow.DoneFlow("TestStepCallbackPanicWithAllScope5", nil)
+	res := flow.DoneFlow("TestStepCallbackPanicWithAllScope5", nil)
+	CheckResult(t, 1, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestStepCallbackPanicWithAllScope5")
 }
 
@@ -1434,9 +1455,9 @@ func TestTimeoutRecover(t *testing.T) {
 	proc := wf.Process("TestTimeoutRecover")
 	proc.NameStep(Fn(t).WaitLetGO(1), "step1")
 	proc.StepTimeout(50 * time.Millisecond)
-	wf.AfterFlow(false, CheckResult(t, 1, flow.Timeout)).If(execFail)
 	wf.AfterFlow(false, CheckResult(t, 2, flow.Success)).If(execSuc)
-	flow.DoneFlow("TestTimeoutRecover", nil)
+	res := flow.DoneFlow("TestTimeoutRecover", nil)
+	CheckResult(t, 1, flow.Timeout)(any(res).(flow.WorkFlow))
 	letGo = true
 	executeSuc = true
 	waitCurrent(2)

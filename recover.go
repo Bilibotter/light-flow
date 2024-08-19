@@ -36,8 +36,8 @@ var (
 )
 
 var (
-	recoverLog = "panic occur while WorkFlow[ %s ] recovering;\n Id=%s\n Panic=%s\n%s"
-	saveLog    = "panic occur while WorkFlow[ %s ] saving checkpoints;\n Id=%s\n Panic=%s\n%s"
+	recoverLog = "panic occur while WorkFlow[ %s ] recovering;\n    ID=%s\n    Panic=%s\n%s"
+	saveLog    = "panic occur while WorkFlow[ %s ] saving checkpoints;\n     ID=%s\n    Panic=%s\n%s"
 )
 
 type proto interface {
@@ -178,15 +178,21 @@ func RegisterType[T any]() {
 func RecoverFlow(flowId string) (ret FinishedWorkFlow, err error) {
 	record, err := persister.GetLatestRecord(flowId)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("no latest record found for WorkFlow [ID: %s], error: %v", flowId, err)
 	}
-	checkpoints, err := persister.ListCheckpoints(record.GetRecoverId())
-	if err != nil {
-		return nil, err
+	var persistErr error
+	defer func() {
+		if persistErr != nil {
+			logger.Errorf("recovery failed for WorkFlow [Name: %s, ID: %s]. Persist error: %v", record.GetName(), flowId, persistErr)
+		}
+	}()
+	checkpoints, persistErr := persister.ListCheckpoints(record.GetRecoverId())
+	if persistErr != nil {
+		return nil, persistErr
 	}
 	factory, ok := allFlows.Load(record.GetName())
 	if !ok {
-		return nil, fmt.Errorf("WorkFlow[ %s ] not found", record.GetName())
+		return nil, fmt.Errorf("recovery failed: WorkFlow [Name: %s] not found", record.GetName())
 	}
 	flow := factory.(*FlowMeta).buildRunFlow(nil)
 	flow.id = flowId
@@ -196,16 +202,17 @@ func RecoverFlow(flowId string) (ret FinishedWorkFlow, err error) {
 	if err = loadStatus(flow, checkpoints); err != nil {
 		return
 	}
-	err = persister.UpdateRecordStatus(&recoverRecord{RecoverId: record.GetRecoverId(), Status: RecoverRunning})
-	if err != nil {
+	persistErr = persister.UpdateRecordStatus(&recoverRecord{RecoverId: record.GetRecoverId(), Status: RecoverRunning})
+	if persistErr != nil {
 		return
 	}
 	flow.append(Recovering)
 	ret = flow.Done()
 	if flow.Success() {
-		err = persister.UpdateRecordStatus(&recoverRecord{RecoverId: record.GetRecoverId(), Status: RecoverSuccess})
+		persistErr = persister.UpdateRecordStatus(&recoverRecord{RecoverId: record.GetRecoverId(), Status: RecoverSuccess})
 	} else {
-		err = persister.UpdateRecordStatus(&recoverRecord{RecoverId: record.GetRecoverId(), Status: RecoverFailed})
+		err = fmt.Errorf("Worlflow [Name: %s, ID: %s] recover failed", flow.Name(), flow.id)
+		persistErr = persister.UpdateRecordStatus(&recoverRecord{RecoverId: record.GetRecoverId(), Status: RecoverFailed})
 	}
 	return
 }

@@ -174,7 +174,7 @@ func (rf *runFlow) Exceptions() []FinishedProcess {
 
 func (rf *runFlow) Recover() (FinishedWorkFlow, error) {
 	if !rf.Has(Failed) {
-		return nil, fmt.Errorf("workFlow[ %s ] is't failed, can't recover", rf.name)
+		return nil, fmt.Errorf("workFlow[ %s ] isn't failed, can't recover", rf.name)
 	}
 	return RecoverFlow(rf.id)
 }

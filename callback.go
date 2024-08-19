@@ -35,8 +35,8 @@ const (
 )
 
 const (
-	panicLog = "%s %s-callback trigger panic;\n    Scope=%s, Stage=%s, Iteration=%d;\n    Panic=%v\n%s"
-	errorLog = "%s %s-callback execute error;\n    Scope=%s, Stage=%s, Iteration=%d;\n    Error=%s"
+	panicLog = "%s Callback panic ;\n    ID=%s;\n    Name=%s, Necessity=%s;\n    Scope=%s, Iteration=%d;\n    Panic=%v\n%s"
+	errorLog = "%s Callback error;\n    ID=%s;\n    Name=%s, Necessity=%s;\n    Scope=%s, Iteration=%d;\n    Error=%s"
 )
 
 var (
@@ -250,13 +250,13 @@ func (chain *funcChain[T]) filter(runtime T) (runNext bool) {
 		r := recover()
 		if index >= chain.Index {
 			if r != nil {
-				logger.Errorf(panicLog, runtime.Name(), chain.necessity(index), chain.Scope, chain.Stage, index, r, stack())
+				logger.Errorf(panicLog, chain.Stage, runtime.ID(), runtime.Name(), chain.necessity(index), chain.Scope, index+1, r, stack())
 			}
 			return
 		}
 		if r != nil {
 			runNext = false
-			logger.Errorf(panicLog, runtime.Name(), chain.necessity(index), chain.Scope, chain.Stage, index, r, stack())
+			logger.Errorf(panicLog, chain.Stage, runtime.ID(), runtime.Name(), chain.necessity(index), chain.Scope, index+1, r, stack())
 		}
 		if runNext {
 			return
@@ -285,7 +285,7 @@ func (chain *funcChain[T]) filter(runtime T) (runNext bool) {
 			continue
 		}
 		if err != nil {
-			logger.Errorf(errorLog, runtime.Name(), chain.necessity(index), chain.Scope, chain.Stage, index, err.Error())
+			logger.Errorf(errorLog, chain.Stage, runtime.ID(), runtime.Name(), chain.necessity(index), chain.Scope, index+1, err.Error())
 			runNext = index >= len(chain.Chain)
 		}
 		break

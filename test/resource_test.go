@@ -157,12 +157,12 @@ func TestResourceUpdate(t *testing.T) {
 	defer resetCurrent()
 	letGo = false
 	initParam := "*"
-	resName := "TestResourceUpdate"
+	resName := "TestResourceUpdate0"
 	flow.RegisterResourceManager(resName).
 		OnInitialize(resourceInit).
 		OnRelease(resourceRelease(t))
-	wf := flow.RegisterFlow("TestResourceUpdate")
-	process := wf.Process("TestResourceUpdate")
+	wf := flow.RegisterFlow("TestResourceUpdate0")
+	process := wf.Process("TestResourceUpdate0")
 	process.NameStep(Fx[flow.Step](t).Attach(resName, initParam, map[string]any{"int": 1, "str": "hello", "bool": true, "float": 3.14}).Broadcast().Step(), "1")
 	process.NameStep(Fx[flow.Step](t).Wait().Acquire(resName, initParam+resName, map[string]any{"int": 1, "str": "hello", "bool": true, "float": 3.14}).Step(), "2")
 	process.NameStep(Fx[flow.Step](t).Acquire(resName, initParam+resName, map[string]any{"int": 1, "str": "hello", "bool": true, "float": 3.14}).Step(), "3", "1")
@@ -171,10 +171,10 @@ func TestResourceUpdate(t *testing.T) {
 		r.Update("TestResourceUpdate0")
 		atomic.AddInt64(&current, 1)
 		return nil, nil
-	}, "4", "3")
+	}, "4", "2", "3")
 	process.NameStep(Fx[flow.Step](t).Acquire(resName, "TestResourceUpdate0", map[string]any{"int": 1, "str": "hello", "bool": true, "float": 3.14}).Step(), "5", "4")
 	wf.AfterFlow(false, CheckResult(t, 6, flow.Success))
-	flow.DoneFlow("TestResourceUpdate", nil)
+	flow.DoneFlow("TestResourceUpdate0", nil)
 }
 
 func TestResourceRelease(t *testing.T) {
