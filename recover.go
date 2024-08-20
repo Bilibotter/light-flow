@@ -36,8 +36,8 @@ var (
 )
 
 var (
-	recoverLog = "panic occur while WorkFlow[ %s ] recovering;\n    ID=%s\n    Panic=%s\n%s"
-	saveLog    = "panic occur while WorkFlow[ %s ] saving checkpoints;\n     ID=%s\n    Panic=%s\n%s"
+	recoverLog = "panic occur while WorkFlow[ %s ] recovering;\nID=%s\nPanic=%s\n%s"
+	saveLog    = "panic occur while WorkFlow[ %s ] saving checkpoints;\nID=%s\nPanic=%s\n%s"
 )
 
 type proto interface {
@@ -178,12 +178,12 @@ func RegisterType[T any]() {
 func RecoverFlow(flowId string) (ret FinishedWorkFlow, err error) {
 	record, err := persister.GetLatestRecord(flowId)
 	if err != nil {
-		return nil, fmt.Errorf("no latest record found for WorkFlow [ID: %s], error: %v", flowId, err)
+		return nil, fmt.Errorf("recovery failed: no latest record found for WorkFlow [ID: %s], error: %v", flowId, err)
 	}
 	var persistErr error
 	defer func() {
 		if persistErr != nil {
-			logger.Errorf("recovery failed for WorkFlow [Name: %s, ID: %s]. Persist error: %v", record.GetName(), flowId, persistErr)
+			logger.Errorf("recovery failed: WorkFlow[Name: %s, ID: %s] persist error: %v", record.GetName(), flowId, persistErr)
 		}
 	}()
 	checkpoints, persistErr := persister.ListCheckpoints(record.GetRecoverId())
@@ -211,7 +211,7 @@ func RecoverFlow(flowId string) (ret FinishedWorkFlow, err error) {
 	if flow.Success() {
 		persistErr = persister.UpdateRecordStatus(&recoverRecord{RecoverId: record.GetRecoverId(), Status: RecoverSuccess})
 	} else {
-		err = fmt.Errorf("Worlflow [Name: %s, ID: %s] recover failed", flow.Name(), flow.id)
+		err = fmt.Errorf("recovery failed: Worlflow[Name: %s, ID: %s] re-execution failed", flow.Name(), flow.id)
 		persistErr = persister.UpdateRecordStatus(&recoverRecord{RecoverId: record.GetRecoverId(), Status: RecoverFailed})
 	}
 	return
@@ -256,11 +256,11 @@ func loadStatus(workflow *runFlow, checkpoints []CheckPoint) error {
 		name := checkpoint.GetName()
 		proc, ok := workflow.runProcesses[id2Name[checkpoint.GetParentUid()]]
 		if !ok {
-			return fmt.Errorf("unable to recognize the process to which Step[ %s ] belongs", checkpoint.GetName())
+			return fmt.Errorf("recovery failed: unable to recognize the process to which Step[ %s ] belongs", checkpoint.GetName())
 		}
 		current, find := proc.runSteps[name]
 		if !find {
-			return fmt.Errorf("Step[ %s ] not belong to Process[ %s ]", name, proc.name)
+			return fmt.Errorf("recovery failed: Step[ %s ] not belong to Process[ %s ]", name, proc.name)
 		}
 		current.append(Recovering)
 		proc.clearExecutedFromRoot(name)
@@ -292,7 +292,7 @@ func loadCheckpoints(workflow *runFlow, checkpoints []CheckPoint) (err error) {
 			step := belong.runSteps[checkpoint.GetName()]
 			err = step.loadCheckpoint(checkpoint)
 		default:
-			err = fmt.Errorf("CheckPoint[%s] has unknown scope %d", checkpoint.GetName(), checkpoint.GetScope())
+			err = fmt.Errorf("recovery failed: CheckPoint[%s] has unknown scope %d", checkpoint.GetName(), checkpoint.GetScope())
 		}
 		if err != nil {
 			return err
@@ -553,6 +553,7 @@ func (point *flowCheckpoint) buildSnapshot() (err error) {
 		// remove breakpoints not saved in current recovery
 		ctx[k], err = encryptIfNeed(k, v, secret)
 		if err != nil {
+			err = fmt.Errorf("recovery failed: encrypt error: %w", err)
 			return
 		}
 	}
@@ -564,6 +565,9 @@ func (point *flowCheckpoint) buildSnapshot() (err error) {
 		}
 	}
 	point.snapshot, err = serialize([]map[string]any{ctx, point.internal})
+	if err != nil {
+		err = fmt.Errorf("recovery failed: serialize error: %w", err)
+	}
 	return
 }
 
@@ -620,6 +624,7 @@ func (point *procCheckpoint) buildSnapshot() (err error) {
 			}
 			head.Value, err = encryptIfNeed(k, head.Value, secret)
 			if err != nil {
+				err = fmt.Errorf("recovery failed: encrypt error: %w", err)
 				return
 			}
 			snapshot[k] = append(snapshot[k], *head)
@@ -680,6 +685,7 @@ func (point *stepCheckpoint) GetSnapshot() []byte {
 func (rf *runFlow) loadCheckpoint(checkpoint CheckPoint) error {
 	combine, err := deserialize[[]map[string]any](checkpoint.GetSnapshot())
 	if err != nil {
+		err = fmt.Errorf("recovery failed: deserialize error: %w", err)
 		return err
 	}
 	snapshot := combine[0]
@@ -743,6 +749,7 @@ func (process *runProcess) loadCheckpoint(checkpoint CheckPoint) error {
 	process.id = checkpoint.GetUid()
 	snapshot, err := deserialize[map[string][]node](checkpoint.GetSnapshot())
 	if err != nil {
+		err = fmt.Errorf("recovery failed: deserialize error: %w", err)
 		return err
 	}
 	for k := range snapshot {
@@ -758,6 +765,7 @@ func (process *runProcess) loadCheckpoint(checkpoint CheckPoint) error {
 			}
 			newNode.Value, err = decryptIfNeed(k, nodeList[i].Value, createSecret(checkpoint))
 			if err != nil {
+				err = fmt.Errorf("recovery failed: decrypt error: %w", err)
 				return err
 			}
 			head = newNode

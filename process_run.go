@@ -323,7 +323,11 @@ func (process *runProcess) runStep(step *runStep) {
 		}
 		if !step.Normal() && !step.Has(CallbackFail) {
 			step.append(Suspend)
-			step.setInternal(fmt.Sprintf(stepBP, step.Name()), &stepPanicBreakPoint)
+			step.setInternal(fmt.Sprintf(stepBP, step.Name()), &breakPoint{
+				Stage:   1<<0 | 1<<9, // execute default after step callback from 0
+				Index:   0,
+				SkipRun: false,
+			})
 		}
 		process.stepCallback(step, afterF)
 		if step.Has(Suspend) {

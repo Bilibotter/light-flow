@@ -231,8 +231,10 @@ func Recover0(t *testing.T, ff flow.FinishedWorkFlow) flow.FinishedWorkFlow {
 	println()
 	t.Logf("start [%d]times recover >>>>>>>>>>>>>>", times)
 	f, err := ff.Recover()
-	if err != nil && !strings.Contains(fmt.Sprintf("%v", err), "recover failed") {
-		panic(err)
+	if err != nil {
+		if !strings.Contains(fmt.Sprintf("%v", err), "recovery failed") {
+			t.Errorf("error message should contain 'recovery failed', but got %v", err)
+		}
 	}
 	println()
 	t.Logf("end [%d]times recover <<<<<<<<<<<<<<<", times)
@@ -1444,6 +1446,9 @@ func TestMultiTimesRecover(t *testing.T) {
 
 	fx7.Condition(0, normalRet)
 	ff = Recover0(t, ff)
+	if !ff.Success() {
+		t.Error("TestMultiTimesRecover failed final")
+	}
 }
 
 func TestTimeoutRecover(t *testing.T) {

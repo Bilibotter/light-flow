@@ -35,20 +35,12 @@ const (
 )
 
 const (
-	panicLog = "%s Callback panic ;\n    ID=%s;\n    Name=%s, Necessity=%s;\n    Scope=%s, Iteration=%d;\n    Panic=%v\n%s"
-	errorLog = "%s Callback error;\n    ID=%s;\n    Name=%s, Necessity=%s;\n    Scope=%s, Iteration=%d;\n    Error=%s"
+	panicLog = "%s Callback panic;\nID=%s;\nBelong=%s;\nNecessity=%s, Scope=%s, Iteration=%d;\nPanic=%v\n%s"
+	errorLog = "%s Callback error;\nID=%s;\nBelong=%s;\nNecessity=%s, Scope=%s, Iteration=%d;\nError=%s"
 )
 
 var (
 	defaultCallback = buildFlowCallback(defaultScope)
-)
-
-var (
-	stepPanicBreakPoint = breakPoint{
-		Stage:   1<<0 | 1<<9, // execute default after step callback from 0
-		Index:   0,
-		SkipRun: false,
-	}
 )
 
 type FlowCallback interface {
