@@ -312,7 +312,7 @@ func (process *runProcess) runStep(step *runStep) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Errorf("Step[ %s ] execute panic;\n    ID=%s;\n    Panic=%v\n%s\n", step.name, step.id, r, stack())
+			logger.Errorf("Step[ %s ] execute panic;\nID=%s;\nPanic=%v\n%s\n", step.name, step.id, r, stack())
 			step.append(Panic)
 			step.exception = fmt.Errorf("%v", r)
 			step.end = time.Now().UTC()

@@ -242,7 +242,7 @@ func Recover0(t *testing.T, ff flow.FinishedWorkFlow) flow.FinishedWorkFlow {
 }
 
 func Recover(name string) {
-	println("\n\t----------Recovering----------\n")
+	println("\n\t=========Recovering=========\n")
 	executeSuc = true
 	flowId, err := getId(name)
 	if err != nil {
@@ -483,7 +483,7 @@ func TestSingleStepRecover(t *testing.T) {
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
 	ret := flow.DoneFlow("TestSingleStepRecover", nil)
 	CheckResult(t, 1, flow.Error)(any(ret).(flow.WorkFlow))
-	println("\n\t----------Recovering----------\n")
+	println("\n\t=========Recovering=========\n")
 	executeSuc = true
 	resetCurrent()
 	if _, err := ret.Recover(); err != nil {
@@ -1467,6 +1467,38 @@ func TestTimeoutRecover(t *testing.T) {
 	executeSuc = true
 	waitCurrent(2)
 	Recover("TestTimeoutRecover")
+}
+
+func TestStepAndCallbackFailedSameTimeRecover(t *testing.T) {
+	defer resetCurrent()
+	executeSuc = false
+	wf := flow.RegisterFlow("TestStepAndCallbackFailedSameTimeRecover0")
+	wf.EnableRecover()
+	proc := wf.Process("TestStepAndCallbackFailedSameTimeRecover0")
+	proc.NameStep(Fn(t).Suc(CheckCtx0("1", "", 1)).Fail(SetCtx()).ErrStep(), "1")
+	proc.NameStep(Fn(t).Suc(CheckCtx("1")).Fail(SetCtx()).Step(), "2", "1")
+	proc.AfterStep(true, Fn(t).Suc(CheckCtx0("1", "", 1)).Fail(CheckCtx0("1", "", 1)).ErrStepCall()).
+		OnlyFor("1")
+	wf.AfterFlow(false, CheckResult(t, 3, flow.Success)).If(execSuc)
+	res := flow.DoneFlow("TestStepAndCallbackFailedSameTimeRecover0", nil)
+	CheckResult(t, 2, flow.Error, flow.CallbackFail)(any(res).(flow.WorkFlow))
+	Recover("TestStepAndCallbackFailedSameTimeRecover0")
+}
+
+func TestStepAndCallbackPanicSameTimeRecover(t *testing.T) {
+	defer resetCurrent()
+	executeSuc = false
+	wf := flow.RegisterFlow("TestStepAndCallbackPanicSameTimeRecover")
+	wf.EnableRecover()
+	proc := wf.Process("TestStepAndCallbackPanicSameTimeRecover")
+	proc.NameStep(Fn(t).Suc(CheckCtx0("1", "", 1)).Fail(SetCtx()).PanicStep(), "1")
+	proc.NameStep(Fn(t).Suc(CheckCtx("1")).Fail(SetCtx()).Step(), "2", "1")
+	proc.AfterStep(true, Fn(t).Suc(CheckCtx0("1", "", 1)).Fail(CheckCtx0("1", "", 1)).PanicStepCall()).
+		OnlyFor("1")
+	wf.AfterFlow(false, CheckResult(t, 3, flow.Success)).If(execSuc)
+	res := flow.DoneFlow("TestStepAndCallbackPanicSameTimeRecover", nil)
+	CheckResult(t, 2, flow.Panic, flow.CallbackFail)(any(res).(flow.WorkFlow))
+	Recover("TestStepAndCallbackPanicSameTimeRecover")
 }
 
 func TestPool(t *testing.T) {

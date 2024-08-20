@@ -218,6 +218,17 @@ func (s *FuncBuilder) ErrStep() func(ctx flow.Step) (result any, err error) {
 	}
 }
 
+func (s *FuncBuilder) PanicStep() func(ctx flow.Step) (result any, err error) {
+	s.err = fmt.Errorf("error")
+	return func(ctx flow.Step) (result any, err error) {
+		result, err = s.Fn(ctx)
+		if err != nil {
+			panic("panic")
+		}
+		return result, err
+	}
+}
+
 func (s *FuncBuilder) Proc() func(ctx flow.Process) (keepOn bool, err error) {
 	return func(ctx flow.Process) (keepOn bool, err error) {
 		_, err = s.Fn(ctx)

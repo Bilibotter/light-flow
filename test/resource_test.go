@@ -52,7 +52,7 @@ func TestNoRegisterResourceAttach(t *testing.T) {
 	wf.AfterFlow(false, CheckResult(t, 0, flow.Error))
 	flow.DoneFlow("TestNoRegisterResourceAttach1", nil)
 
-	defer resetCurrent()
+	resetCurrent()
 	letGo = false
 	wf = flow.RegisterFlow("TestNoRegisterResourceAttach2")
 	process = wf.Process("TestNoRegisterResourceAttach2")

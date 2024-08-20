@@ -24,9 +24,9 @@ const (
 )
 
 const (
-	flowBP = "fbp-%s"
-	procBP = "pbp-%s"
-	stepBP = "sbp-%s"
+	flowBP = "*%s"
+	procBP = "**%s"
+	stepBP = "***%s"
 )
 
 const (
@@ -228,27 +228,29 @@ func (chain *funcChain[T]) filter(runtime T) (runNext bool) {
 	if len(chain.Chain) == 0 {
 		return
 	}
-	lastTime := chain.loadBreakPoint(runtime)
-	if lastTime != nil && chain.Stage0 < lastTime.Stage {
-		return
-	}
-	if runtime.Has(Recovering) && lastTime == nil {
-		if chain.Before && !strings.HasSuffix(chain.Stage, stepScope) {
+	var index, begin int
+	if runtime.Has(Recovering) {
+		bp := chain.loadBreakPoint(runtime)
+		if bp != nil {
+			if chain.Stage0 < bp.Stage {
+				return
+			}
+			begin = bp.Index
+		}
+		// Don't execute ProcessCallback and WorkFlowCallback again
+		if bp == nil && chain.Before && !strings.HasSuffix(chain.Stage, stepScope) {
 			return
 		}
 	}
-	var index, begin int
 	defer func() {
 		r := recover()
-		if index >= chain.Index {
-			if r != nil {
-				logger.Errorf(panicLog, chain.Stage, runtime.ID(), runtime.Name(), chain.necessity(index), chain.Scope, index+1, r, stack())
-			}
-			return
-		}
 		if r != nil {
-			runNext = false
 			logger.Errorf(panicLog, chain.Stage, runtime.ID(), runtime.Name(), chain.necessity(index), chain.Scope, index+1, r, stack())
+			// non-must callback panic, ignore it
+			if index >= chain.Index {
+				return
+			}
+			runNext = false
 		}
 		if runNext {
 			return
@@ -261,6 +263,10 @@ func (chain *funcChain[T]) filter(runtime T) (runNext bool) {
 			return
 		}
 		runtime.append(Suspend)
+		// If both 'Step' and 'Callback' fail, then use 'Step' as the breakpoint.
+		if bp := chain.loadBreakPoint(runtime); bp != nil && !bp.Used {
+			return
+		}
 		point := &breakPoint{
 			Stage:   chain.Stage0,
 			Index:   index,
@@ -268,9 +274,7 @@ func (chain *funcChain[T]) filter(runtime T) (runNext bool) {
 		}
 		chain.saveBreakPoint(runtime, point)
 	}()
-	if lastTime != nil {
-		begin = lastTime.Index
-	}
+
 	for index = begin; index < len(chain.Chain); index++ {
 		keepOn, err := chain.Chain[index].call(runtime)
 		if keepOn && err == nil {
@@ -286,9 +290,6 @@ func (chain *funcChain[T]) filter(runtime T) (runNext bool) {
 }
 
 func (chain *funcChain[T]) loadBreakPoint(runtime T) (point *breakPoint) {
-	if !runtime.Has(Recovering) {
-		return
-	}
 	var wrap any
 	if strings.HasSuffix(chain.Stage, stepScope) {
 		wrap, _ = runtime.getInternal(fmt.Sprintf(stepBP, runtime.Name()))
