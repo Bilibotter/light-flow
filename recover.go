@@ -28,16 +28,15 @@ const (
 	RecoverFailed uint8 = 32
 )
 
+const (
+	resSerializableKey = "+resource"
+)
+
 var (
 	maxSize                          = 4096
 	enableEncrypt                    = true
 	pwdEncryptor  SymmetricEncryptor = &aes256Encryptor{newRoutineUnsafeSet[string]("pwd", "password")}
 	persister     Persist
-)
-
-var (
-	recoverLog = "panic occur while WorkFlow[ %s ] recovering;\nID=%s\nPanic=%s\n%s"
-	saveLog    = "panic occur while WorkFlow[ %s ] saving checkpoints;\nID=%s\nPanic=%s\n%s"
 )
 
 type proto interface {
@@ -152,6 +151,8 @@ func init() {
 	RegisterType[breakPoint]()
 
 	RegisterType[resSerializable]()
+	// gob can't recognize
+	RegisterType[map[string]*resSerializable]()
 }
 
 func DisableEncrypt() {
@@ -553,7 +554,7 @@ func (point *flowCheckpoint) buildSnapshot() (err error) {
 		// remove breakpoints not saved in current recovery
 		ctx[k], err = encryptIfNeed(k, v, secret)
 		if err != nil {
-			err = fmt.Errorf("recovery failed: encrypt error: %w", err)
+			logger.Errorf(snapshotErrorLog, "WorkFlow", point.GetName(), point.GetUid(), "encrypt", err.Error())
 			return
 		}
 	}
@@ -566,7 +567,7 @@ func (point *flowCheckpoint) buildSnapshot() (err error) {
 	}
 	point.snapshot, err = serialize([]map[string]any{ctx, point.internal})
 	if err != nil {
-		err = fmt.Errorf("recovery failed: serialize error: %w", err)
+		logger.Errorf(snapshotErrorLog, "WorkFlow", point.GetName(), point.GetUid(), "serialize", err.Error())
 	}
 	return
 }
@@ -624,7 +625,7 @@ func (point *procCheckpoint) buildSnapshot() (err error) {
 			}
 			head.Value, err = encryptIfNeed(k, head.Value, secret)
 			if err != nil {
-				err = fmt.Errorf("recovery failed: encrypt error: %w", err)
+				logger.Errorf(snapshotErrorLog, "Process", point.GetName(), point.GetUid(), "encrypt", err.Error())
 				return
 			}
 			snapshot[k] = append(snapshot[k], *head)
@@ -731,7 +732,7 @@ func (rf *runFlow) saveCheckpoints() {
 		checkpoint.(checkpointBuilder).setId(generateId())
 		checkpoint.(checkpointBuilder).setRecoverId(recoverId)
 		if err := checkpoint.(checkpointBuilder).buildSnapshot(); err != nil {
-			break
+			return
 		}
 	}
 	record := &recoverRecord{
@@ -750,6 +751,9 @@ func (process *runProcess) loadCheckpoint(checkpoint CheckPoint) error {
 	snapshot, err := deserialize[map[string][]node](checkpoint.GetSnapshot())
 	if err != nil {
 		err = fmt.Errorf("recovery failed: deserialize error: %w", err)
+		return err
+	}
+	if err = process.loadResource(snapshot); err != nil {
 		return err
 	}
 	for k := range snapshot {
@@ -780,5 +784,34 @@ func (process *runProcess) loadCheckpoint(checkpoint CheckPoint) error {
 
 func (step *runStep) loadCheckpoint(checkpoint CheckPoint) error {
 	step.id = checkpoint.GetUid()
+	return nil
+}
+
+func (process *runProcess) loadResource(snapshot map[string][]node) error {
+	nodes := snapshot[resSerializableKey]
+	if nodes == nil {
+		return nil
+	}
+	head := nodes[0]
+	if head.Path != internalMark {
+		return nil
+	}
+	saver, ok := head.Value.(map[string]*resSerializable)
+	if !ok {
+		return fmt.Errorf("recovery failed: resource serializable type error")
+	}
+	process.resources = make(map[string]*resource, len(saver))
+	for k, v := range saver {
+		process.resources[k] = &resource{
+			boundProc: process,
+			resName:   v.Name,
+			ctx:       v.Ctx,
+			entity:    v.Entity,
+		}
+	}
+	snapshot[resSerializableKey] = nodes[1:]
+	if len(nodes) == 1 {
+		delete(snapshot, resSerializableKey)
+	}
 	return nil
 }

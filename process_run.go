@@ -2,7 +2,6 @@ package light_flow
 
 import (
 	"fmt"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -12,15 +11,16 @@ type runProcess struct {
 	*state
 	*ProcessMeta
 	*dependentContext
-	belong   *runFlow
-	id       string
-	compress state
-	runSteps map[string]*runStep
-	start    time.Time
-	end      time.Time
-	pause    sync.WaitGroup
-	running  sync.WaitGroup
-	finish   sync.WaitGroup
+	belong    *runFlow
+	id        string
+	compress  state
+	runSteps  map[string]*runStep
+	resources map[string]*resource
+	start     time.Time
+	end       time.Time
+	pause     sync.WaitGroup
+	running   sync.WaitGroup
+	finish    sync.WaitGroup
 }
 
 func (process *runProcess) HasAny(enum ...*StatusEnum) bool {
@@ -126,6 +126,9 @@ func (process *runProcess) schedule() (finish *sync.WaitGroup) {
 		return
 	}
 	process.start = time.Now().UTC()
+	if process.Has(Recovering) {
+		process.manageResources(recoverR)
+	}
 	process.append(Running)
 	process.advertise(beforeF)
 	for _, step := range process.runSteps {
@@ -133,7 +136,6 @@ func (process *runProcess) schedule() (finish *sync.WaitGroup) {
 			go process.startStep(step)
 		}
 	}
-
 	process.finish.Add(1)
 	go process.finalize()
 	return
@@ -232,36 +234,57 @@ func (process *runProcess) finalize() {
 	process.advertise(afterF)
 	if process.Has(Suspend) {
 		process.belong.append(Suspend)
+		process.manageResources(suspendR)
 	}
-	process.releaseResources()
+	process.manageResources(releaseR)
 	process.compress.add(process.load())
 	process.end = time.Now().UTC()
 	process.finish.Done()
 }
 
-func (process *runProcess) releaseResources() {
-	if !process.Has(resAttached) {
+func (process *runProcess) manageResources(action string) {
+	if process.resources == nil {
 		return
 	}
+	var resName string
 	defer func() {
-		_ = recover()
+		if r := recover(); r != nil {
+			logger.Errorf(resourcePanicFmt, process.Name(), process.id, action, resName, r, stack())
+		}
 	}()
-	for key, head := range process.nodes {
-		if head.Path != internalMark {
-			continue
+	var err error
+	for name, res := range process.resources {
+		resName = name
+		switch action {
+		case releaseR:
+			err = resourceManagers[resName].onRelease(res)
+		case recoverR:
+			err = resourceManagers[resName].onRecover(res)
+		case suspendR:
+			err = resourceManagers[resName].onSuspend(res)
 		}
-		if !strings.HasPrefix(key, string(resPrefix)) {
-			continue
-		}
-		res, ok := head.Value.(*resource)
-		if !ok {
-			continue
-		}
-		err := resourceManagers[key[1:]].onRelease(res)
 		if err != nil {
-			logger.Errorf("Process[ %s ] release Resource[ %s ] failed;\n    ID=%s\n,    error=%v", process.Name(), key[1:], process.id, err)
+			logger.Errorf(resourceErrorFmt, process.Name(), process.id, action, resName, err.Error())
 		}
 	}
+	if action == suspendR {
+		process.makeResSerializable()
+	}
+}
+
+func (process *runProcess) makeResSerializable() {
+	if process.resources == nil {
+		return
+	}
+	saver := make(map[string]*resSerializable, len(process.resources))
+	for k, v := range process.resources {
+		saver[k] = &resSerializable{
+			Name:   v.resName,
+			Ctx:    v.ctx,
+			Entity: v.entity,
+		}
+	}
+	process.setInternal(resSerializableKey, saver)
 }
 
 func (process *runProcess) startNextSteps(step *runStep) {
@@ -389,10 +412,47 @@ func (process *runProcess) advertise(flag uint64) {
 	}
 }
 
-func (process *runProcess) Attach(resName string, initParam any) (res Resource, err error) {
-	res, err = process.attach(process, resName, initParam)
-	if !process.Has(resAttached) {
-		process.append(resAttached)
+func (process *runProcess) Attach(resName string, initParam any) (_ Resource, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Errorf(resourcePanicFmt, process.Name(), process.id, initializeR, resName, r, stack())
+			err = fmt.Errorf(resourceErrorFmt, process.Name(), process.id, attachR, resName, fmt.Sprintf("panic=%v", r))
+		}
+	}()
+	if foo, find := process.Acquire(resName); find {
+		return foo, nil
 	}
+	manager, exist := getResourceManager(resName)
+	if !exist {
+		err = fmt.Errorf(resourceErrorFmt, process.Name(), process.id, initializeR, resName, "Resource[ %s ] not registered")
+		return nil, err
+	}
+	res := &resource{boundProc: process, resName: resName}
+	instance, err := manager.onInitialize(res, initParam)
+	if err != nil {
+		err = fmt.Errorf(resourceErrorFmt, process.Name(), process.id, initializeR, resName, err.Error())
+		return nil, err
+	}
+	res.entity = instance
+	// DCL
+	if foo, find := process.Acquire(resName); find {
+		return foo, nil
+	}
+	process.Lock()
+	defer process.Unlock()
+	if process.resources == nil {
+		process.resources = make(map[string]*resource, 1)
+	}
+	process.resources[resName] = res
+	return res, nil
+}
+
+func (process *runProcess) Acquire(resName string) (res Resource, exist bool) {
+	process.RLock()
+	defer process.RUnlock()
+	if process.resources == nil {
+		return
+	}
+	res, exist = process.resources[resName]
 	return
 }

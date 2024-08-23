@@ -8,6 +8,72 @@ import (
 	"testing"
 )
 
+func suspendResource(t *testing.T, check, update any, kv map[string]any) func(res flow.Resource) error {
+	return func(res flow.Resource) error {
+		t.Logf("Process[ %s ] start suspend Resource[ %s ]", res.ProcessName(), res.Name())
+		if res.Entity() != check {
+			t.Errorf("Resource[ %s ] entity expect %v, but got %v", res.Name(), check, res.Entity())
+			return fmt.Errorf("Resource[ %s ] entity expect %v, but got %v", res.Name(), check, res.Entity())
+		}
+		last := res.Update(update)
+		if last != update {
+			t.Errorf("Resource[ %s ] update expect %v, but got %v", res.Name(), update, last)
+			return fmt.Errorf("Resource[ %s ] update expect %v, but got %v", res.Name(), update, last)
+		}
+		for k, v := range kv {
+			res.Put(k, v)
+		}
+		atomic.AddInt64(&current, 1)
+		t.Logf("Process[ %s ] finish suspend Resource[ %s ]", res.ProcessName(), res.Name())
+		return nil
+	}
+}
+
+func recoverResource(t *testing.T, check, update any, kv map[string]any) func(res flow.Resource) error {
+	return func(res flow.Resource) error {
+		t.Logf("Process[ %s ] start recover Resource[ %s ]", res.ProcessName(), res.Name())
+		if res.Entity() != check {
+			t.Errorf("Resource[ %s ] entity expect %v, but got %v", res.Name(), check, res.Entity())
+			return fmt.Errorf("Resource[ %s ] entity expect %v, but got %v", res.Name(), check, res.Entity())
+		}
+		last := res.Update(update)
+		if last != update {
+			t.Errorf("Resource[ %s ] update expect %v, but got %v", res.Name(), update, last)
+			return fmt.Errorf("Resource[ %s ] update expect %v, but got %v", res.Name(), update, last)
+		}
+		for k, v := range kv {
+			if v1, exist := res.Fetch(k); !exist || v1 != v {
+				t.Errorf("Resource[ %s ] get key %s expect %v, but got %v", res.Name(), k, v, v1)
+				return fmt.Errorf("Resource[ %s ] get key %s expect %v, but got %v", res.Name(), k, v, v1)
+			}
+		}
+		atomic.AddInt64(&current, 1)
+		t.Logf("Process[ %s ] finish recover Resource[ %s ]", res.ProcessName(), res.Name())
+		return nil
+	}
+}
+
+func recoverResource0(t *testing.T, check, update any, kv map[string]any) func(res flow.Resource) error {
+	return func(res flow.Resource) error {
+		t.Logf("Process[ %s ] start recover Resource[ %s ]", res.ProcessName(), res.Name())
+		if res.Entity() != check {
+			t.Errorf("Resource[ %s ] entity expect %v, but got %v", res.Name(), check, res.Entity())
+			return fmt.Errorf("Resource[ %s ] entity expect %v, but got %v", res.Name(), check, res.Entity())
+		}
+		last := res.Update(update)
+		if last != update {
+			t.Errorf("Resource[ %s ] update expect %v, but got %v", res.Name(), update, last)
+			return fmt.Errorf("Resource[ %s ] update expect %v, but got %v", res.Name(), update, last)
+		}
+		for k, v := range kv {
+			res.Put(k, v)
+		}
+		atomic.AddInt64(&current, 1)
+		t.Logf("Process[ %s ] finish recover Resource[ %s ]", res.ProcessName(), res.Name())
+		return nil
+	}
+}
+
 func resourceRelease(t *testing.T) func(res flow.Resource) error {
 	return func(res flow.Resource) error {
 		t.Logf("Resource[ %s ] released", res.Name())
@@ -141,7 +207,7 @@ func TestResourceInitializePanic(t *testing.T) {
 	process := wf.Process("TestResourceInitializePanic")
 	process.NameStep(Fx[flow.Step](t).Attach(resName, initParam, map[string]any{"int": 1, "str": "hello", "bool": true, "float": 3.14}).Broadcast().Step(), "1")
 	process.NameStep(Fx[flow.Step](t).Acquire(resName, initParam+resName, map[string]any{"int": 1, "str": "hello", "bool": true, "float": 3.14}).Step(), "2", "1")
-	wf.AfterFlow(false, CheckResult(t, 0, flow.Panic))
+	wf.AfterFlow(false, CheckResult(t, 0, flow.Error))
 	flow.DoneFlow("TestResourceInitializePanic", nil)
 
 	resetCurrent()
@@ -149,7 +215,7 @@ func TestResourceInitializePanic(t *testing.T) {
 	process = wf.Process("TestResourceInitializePanic1")
 	process.NameStep(Fx[flow.Step](t).Attach(resName, initParam, map[string]any{"int": 1, "str": "hello", "bool": true, "float": 3.14}).Broadcast().Step(), "1")
 	process.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
-	wf.AfterFlow(false, CheckResult(t, 0, flow.Panic))
+	wf.AfterFlow(false, CheckResult(t, 0, flow.Error))
 	flow.DoneFlow("TestResourceInitializePanic1", nil)
 }
 
@@ -280,7 +346,9 @@ func TestReleaseAttachedPanicResource(t *testing.T) {
 	process := wf.Process("TestReleaseAttachedPanicResource")
 	process.NameStep(func(ctx flow.Step) (any, error) {
 		t.Logf("Step[ %s ] start", ctx.Name())
-		ctx.Attach(resName, initParam+resName)
+		if _, err := ctx.Attach(resName, initParam+resName); err != nil {
+			panic(fmt.Sprintf("attach resource failed: %s", err.Error()))
+		}
 		atomic.AddInt64(&current, 1)
 		letGo = true
 		t.Logf("Step[ %s ] end", ctx.Name())
@@ -297,7 +365,9 @@ func TestReleaseAttachedPanicResource(t *testing.T) {
 			letGo = true
 		}()
 		t.Logf("Step[ %s ] start", ctx.Name())
-		ctx.Attach(resName, initParam+resName)
+		if _, err := ctx.Attach(resName, initParam+resName); err != nil {
+			panic(fmt.Sprintf("attach resource failed: %s", err.Error()))
+		}
 		atomic.AddInt64(&current, 1)
 		t.Logf("Step[ %s ] end", ctx.Name())
 		return ctx.Name(), nil
@@ -336,4 +406,101 @@ func TestReleaseWhileStepPanic(t *testing.T) {
 	process.NameStep(Fx[flow.Step](t).Attach(resName, initParam, map[string]any{"int": 1, "str": "hello", "bool": true, "float": 3.14}).Panic().Step(), "1")
 	wf.AfterFlow(false, CheckResult(t, 3, flow.Panic))
 	flow.DoneFlow("TestReleaseWhileStepPanic", nil)
+}
+
+func TestResourceRecover(t *testing.T) {
+	defer resetCurrent()
+	executeSuc = false
+	letGo = false
+	initParam := "*"
+	resName := "TestResourceRecover"
+	flow.RegisterResourceManager(resName).
+		OnInitialize(resourceInit).
+		OnRelease(resourceRelease(t)).
+		OnRecover(recoverResource(t, initParam+resName, initParam+initParam+resName, map[string]any{"int": 1, "str": "hello", "bool": true, "float": 3.14, "person": Person{"Tom", 20}}))
+	wf := flow.RegisterFlow("TestResourceRecover")
+	wf.EnableRecover()
+	process := wf.Process("TestResourceRecover")
+	process.NameStep(Fx[flow.Step](t).Attach(resName, initParam, map[string]any{"int": 1, "str": "hello", "bool": true, "float": 3.14, "person": Person{"Tom", 20}}).Broadcast().Step(), "1")
+	process.NameStep(Fx[flow.Step](t).Wait().SetCtx().Acquire(resName, initParam+resName, map[string]any{"int": 1, "str": "hello", "bool": true, "float": 3.14, "person": Person{"Tom", 20}}).Step(), "2")
+	process.NameStep(Fx[flow.Step](t).Acquire(resName, initParam+resName, map[string]any{"int": 1, "str": "hello", "bool": true, "float": 3.14, "person": Person{"Tom", 20}}).Step(), "3", "1")
+	process.NameStep(Fn(t).Fail(CheckCtx("2")).Suc(CheckCtx("2")).ErrStep(), "4", "2")
+	process.NameStep(Fx[flow.Step](t).Acquire(resName, initParam+initParam+resName, map[string]any{"int": 1, "str": "hello", "bool": true, "float": 3.14, "person": Person{"Tom", 20}}).Step(), "5", "4")
+	wf.AfterFlow(false, CheckResult(t, 4, flow.Success)).If(execSuc)
+	res := flow.DoneFlow("TestResourceRecover", nil)
+	CheckResult(t, 6, flow.Error)(any(res).(flow.WorkFlow))
+	Recover("TestResourceRecover")
+}
+
+func TestResourceRecover0(t *testing.T) {
+	defer resetCurrent()
+	executeSuc = false
+	letGo = false
+	initParam := "*"
+	resName := "TestResourceRecover0"
+	flow.RegisterResourceManager(resName).
+		OnInitialize(resourceInit).
+		OnRelease(resourceRelease(t)).
+		OnRecover(recoverResource0(t, initParam+resName, initParam+initParam+resName, map[string]any{"int": 10, "str": "hello0", "bool": false, "float": 33.14, "person": Person{"Amy", 21}}))
+	wf := flow.RegisterFlow("TestResourceRecover0")
+	wf.EnableRecover()
+	process := wf.Process("TestResourceRecover0")
+	process.NameStep(Fx[flow.Step](t).Attach(resName, initParam, map[string]any{"int": 1, "str": "hello", "bool": true, "float": 3.14, "person": Person{"Tom", 20}}).Broadcast().Step(), "1")
+	process.NameStep(Fx[flow.Step](t).Wait().SetCtx().Acquire(resName, initParam+resName, map[string]any{"int": 1, "str": "hello", "bool": true, "float": 3.14, "person": Person{"Tom", 20}}).Step(), "2")
+	process.NameStep(Fx[flow.Step](t).Acquire(resName, initParam+resName, map[string]any{"int": 1, "str": "hello", "bool": true, "float": 3.14, "person": Person{"Tom", 20}}).Step(), "3", "1")
+	process.NameStep(Fn(t).Fail(CheckCtx("2")).Suc(CheckCtx("2")).ErrStep(), "4", "2")
+	process.NameStep(Fx[flow.Step](t).Acquire(resName, initParam+initParam+resName, map[string]any{"int": 10, "str": "hello0", "bool": false, "float": 33.14, "person": Person{"Amy", 21}}).Step(), "5", "4")
+	wf.AfterFlow(false, CheckResult(t, 4, flow.Success)).If(execSuc)
+	res := flow.DoneFlow("TestResourceRecover0", nil)
+	CheckResult(t, 6, flow.Error)(any(res).(flow.WorkFlow))
+	Recover("TestResourceRecover0")
+}
+
+func TestResourceSuspend(t *testing.T) {
+	defer resetCurrent()
+	executeSuc = false
+	letGo = false
+	initParam := "*"
+	resName := "TestResourceSuspend"
+	flow.RegisterResourceManager(resName).
+		OnInitialize(resourceInit).
+		OnRelease(resourceRelease(t)).
+		OnSuspend(suspendResource(t, initParam+resName, initParam+initParam+resName, map[string]any{"int": 10, "str": "hello0", "bool": false, "float": 33.14, "person": Person{"Amy", 21}}))
+	wf := flow.RegisterFlow("TestResourceSuspend")
+	wf.EnableRecover()
+	process := wf.Process("TestResourceSuspend")
+	process.NameStep(Fx[flow.Step](t).Attach(resName, initParam, map[string]any{"int": 1, "str": "hello", "bool": true, "float": 3.14, "person": Person{"Tom", 20}}).Broadcast().Step(), "1")
+	process.NameStep(Fx[flow.Step](t).Wait().SetCtx().Acquire(resName, initParam+resName, map[string]any{"int": 1, "str": "hello", "bool": true, "float": 3.14, "person": Person{"Tom", 20}}).Step(), "2")
+	process.NameStep(Fx[flow.Step](t).Acquire(resName, initParam+resName, map[string]any{"int": 1, "str": "hello", "bool": true, "float": 3.14, "person": Person{"Tom", 20}}).Step(), "3", "1")
+	process.NameStep(Fn(t).Fail(CheckCtx("2")).Suc(CheckCtx("2")).ErrStep(), "4", "2")
+	process.NameStep(Fx[flow.Step](t).Acquire(resName, initParam+initParam+resName, map[string]any{"int": 10, "str": "hello0", "bool": false, "float": 33.14, "person": Person{"Amy", 21}}).Step(), "5", "4")
+	wf.AfterFlow(false, CheckResult(t, 3, flow.Success)).If(execSuc)
+	res := flow.DoneFlow("TestResourceSuspend", nil)
+	CheckResult(t, 7, flow.Error)(any(res).(flow.WorkFlow))
+	Recover("TestResourceSuspend")
+}
+
+func TestResourceSuspendAndRecover(t *testing.T) {
+	defer resetCurrent()
+	executeSuc = false
+	letGo = false
+	initParam := "*"
+	resName := "TestResourceSuspendAndRecover"
+	flow.RegisterResourceManager(resName).
+		OnInitialize(resourceInit).
+		OnRelease(resourceRelease(t)).
+		OnSuspend(suspendResource(t, initParam+resName, initParam+initParam+resName, map[string]any{"int": 10, "str": "hello0", "bool": false, "float": 33.14, "person": Person{"Amy", 21}})).
+		OnRecover(recoverResource(t, initParam+initParam+resName, initParam+initParam+resName, map[string]any{"int": 10, "str": "hello0", "bool": false, "float": 33.14, "person": Person{"Amy", 21}}))
+	wf := flow.RegisterFlow("TestResourceSuspendAndRecover")
+	wf.EnableRecover()
+	process := wf.Process("TestResourceSuspendAndRecover")
+	process.NameStep(Fx[flow.Step](t).Attach(resName, initParam, map[string]any{"int": 1, "str": "hello", "bool": true, "float": 3.14, "person": Person{"Tom", 20}}).Broadcast().Step(), "1")
+	process.NameStep(Fx[flow.Step](t).Wait().SetCtx().Acquire(resName, initParam+resName, map[string]any{"int": 1, "str": "hello", "bool": true, "float": 3.14, "person": Person{"Tom", 20}}).Step(), "2")
+	process.NameStep(Fx[flow.Step](t).Acquire(resName, initParam+resName, map[string]any{"int": 1, "str": "hello", "bool": true, "float": 3.14, "person": Person{"Tom", 20}}).Step(), "3", "1")
+	process.NameStep(Fn(t).Fail(CheckCtx("2")).Suc(CheckCtx("2")).ErrStep(), "4", "2")
+	process.NameStep(Fx[flow.Step](t).Acquire(resName, initParam+initParam+resName, map[string]any{"int": 10, "str": "hello0", "bool": false, "float": 33.14, "person": Person{"Amy", 21}}).Step(), "5", "4")
+	wf.AfterFlow(false, CheckResult(t, 4, flow.Success)).If(execSuc)
+	res := flow.DoneFlow("TestResourceSuspendAndRecover", nil)
+	CheckResult(t, 7, flow.Error)(any(res).(flow.WorkFlow))
+	Recover("TestResourceSuspendAndRecover")
 }

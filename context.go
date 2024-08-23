@@ -1,7 +1,6 @@
 package light_flow
 
 import (
-	"bytes"
 	"fmt"
 	"math/bits"
 	"sync"
@@ -36,7 +35,6 @@ var (
 	executed     = &StatusEnum{0b1 << 3, "executed"}
 	Recovering   = &StatusEnum{0b1 << 4, "Recovering"}
 	Suspend      = &StatusEnum{0b1 << 5, "Suspend"}
-	resAttached  = &StatusEnum{0b1 << 6, "resAttached"}
 	Success      = &StatusEnum{0b1 << 15, "Success"}
 	NormalMask   = &StatusEnum{0b1<<16 - 1, "NormalMask"}
 	abnormal     = []*StatusEnum{Cancel, Timeout, Panic, Error, Stop, CallbackFail, Failed}
@@ -520,40 +518,6 @@ func (ctx *dependentContext) GetByStepName(stepName, key string) (value any, exi
 		panic(fmt.Sprintf("Step[ %s ] not found.", stepName))
 	}
 	return ctx.matchByIndex(index, key)
-}
-
-func (ctx *dependentContext) attach(r resCreator, resName string, initParam any) (Resource, error) {
-	manager, exist := getResourceManager(resName)
-	if !exist {
-		return nil, fmt.Errorf("Resource[ %s ] not registered", resName)
-	}
-	res := &resource{resCreator: r, resName: resName}
-	instance, err := manager.onInitialize(res, initParam)
-	if err != nil {
-		return nil, fmt.Errorf("Resource[ %s ] initialize failed:%v", resName, err)
-	}
-	res.entity = instance
-	var buffer bytes.Buffer
-	buffer.Grow(len(resName) + 1)
-	buffer.Write(resPrefix)
-	buffer.WriteString(resName)
-	if wrap, find := ctx.getInternal(buffer.String()); find {
-		return wrap.(Resource), nil
-	}
-	ctx.setInternal(buffer.String(), res)
-	return res, nil
-}
-
-func (ctx *dependentContext) Acquire(resName string) (Resource, bool) {
-	var buffer bytes.Buffer
-	buffer.Grow(len(resName) + 1)
-	buffer.Write(resPrefix)
-	buffer.WriteString(resName)
-	wrap, exist := ctx.getInternal(buffer.String())
-	if !exist {
-		return nil, false
-	}
-	return wrap.(*resource), exist
 }
 
 // Get method retrieves the value associated with the given key from the context path.

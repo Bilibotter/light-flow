@@ -24,19 +24,14 @@ const (
 )
 
 const (
-	flowBP = "*%s"
-	procBP = "**%s"
-	stepBP = "***%s"
+	flowBP = "|||%s"
+	procBP = "||%s"
+	stepBP = "|%s"
 )
 
 const (
 	mustS    = "must"
 	nonMustS = "non-must"
-)
-
-const (
-	panicLog = "%s Callback panic;\nID=%s;\nBelong=%s;\nNecessity=%s, Scope=%s, Iteration=%d;\nPanic=%v\n%s"
-	errorLog = "%s Callback error;\nID=%s;\nBelong=%s;\nNecessity=%s, Scope=%s, Iteration=%d;\nError=%s"
 )
 
 var (
@@ -245,7 +240,7 @@ func (chain *funcChain[T]) filter(runtime T) (runNext bool) {
 	defer func() {
 		r := recover()
 		if r != nil {
-			logger.Errorf(panicLog, chain.Stage, runtime.ID(), runtime.Name(), chain.necessity(index), chain.Scope, index+1, r, stack())
+			logger.Errorf(callbackPanicLog, chain.Stage, runtime.ID(), runtime.Name(), chain.necessity(index), chain.Scope, index+1, r, stack())
 			// non-must callback panic, ignore it
 			if index >= chain.Index {
 				return
@@ -281,7 +276,7 @@ func (chain *funcChain[T]) filter(runtime T) (runNext bool) {
 			continue
 		}
 		if err != nil {
-			logger.Errorf(errorLog, chain.Stage, runtime.ID(), runtime.Name(), chain.necessity(index), chain.Scope, index+1, err.Error())
+			logger.Errorf(callbackErrorLog, chain.Stage, runtime.ID(), runtime.Name(), chain.necessity(index), chain.Scope, index+1, err.Error())
 			runNext = index >= len(chain.Chain)
 		}
 		break

@@ -1501,6 +1501,25 @@ func TestStepAndCallbackPanicSameTimeRecover(t *testing.T) {
 	Recover("TestStepAndCallbackPanicSameTimeRecover")
 }
 
+func TestDuplicateBreakPointRecover(t *testing.T) {
+	defer resetCurrent()
+	executeSuc = false
+	wf := flow.RegisterFlow("TestDuplicateBreakPointRecover")
+	wf.EnableRecover()
+	proc := wf.Process("TestDuplicateBreakPointRecover")
+	proc.NameStep(Fn(t).Suc(CheckCtx0("1", "", 1)).Fail(SetCtx()).ErrStep(), "1")
+	proc.NameStep(Fn(t).Suc(CheckCtx("1")).Step(), "2", "1")
+	proc.AfterStep(true, Fn(t).Suc(CheckCtx0("1", "", 1)).Fail(CheckCtx0("1", "", 1)).PanicStepCall()).
+		OnlyFor("1")
+	wf.AfterFlow(false, CheckResult(t, 3, flow.Success)).If(execSuc)
+	res := flow.DoneFlow("TestDuplicateBreakPointRecover", nil)
+	CheckResult(t, 2, flow.Error, flow.CallbackFail)(any(res).(flow.WorkFlow))
+	resetCurrent()
+	res, _ = res.Recover()
+	CheckResult(t, 2, flow.Error, flow.CallbackFail)(any(res).(flow.WorkFlow))
+	Recover("TestDuplicateBreakPointRecover")
+}
+
 func TestPool(t *testing.T) {
 	db := <-pool
 	defer func() { pool <- db }()

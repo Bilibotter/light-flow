@@ -202,11 +202,11 @@ func (step *runStep) CostTime() time.Duration {
 }
 
 func (step *runStep) Attach(resName string, initParam any) (res Resource, err error) {
-	res, err = step.attach(step, resName, initParam)
-	if !step.belong.Has(resAttached) {
-		step.belong.append(resAttached)
-	}
-	return
+	return step.belong.Attach(resName, initParam)
+}
+
+func (step *runStep) Acquire(resName string) (res Resource, exist bool) {
+	return step.belong.Acquire(resName)
 }
 
 func (step *runStep) isRecoverable() bool {

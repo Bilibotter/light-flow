@@ -51,23 +51,22 @@ func CheckResult(t *testing.T, check int64, statuses ...*StatusEnum) func(WorkFl
 		for i, status := range statuses {
 			ss[i] = status.Message()
 		}
-		t.Logf("start check, expected current=%d, status include %s", check, strings.Join(ss, ","))
-		if current != check {
-			t.Errorf("execute %d step, but current = %d\n", check, current)
+		t.Logf("\n")
+		t.Logf(`// ======= Start Check ======= //`)
+		t.Logf("expect [ current ] = %d, [ status ] include { %s }", check, strings.Join(ss, ","))
+		if atomic.LoadInt64(&current) != check {
+			t.Errorf("execute %d step, but current = %d", check, current)
 		}
 		for _, status := range statuses {
 			if status == Success && !workFlow.Success() {
-				t.Errorf("WorkFlow executed failed\n")
+				t.Errorf("WorkFlow executed failed")
 			}
-			//if status == Timeout {
-			//	time.Sleep(50 * time.Millisecond)
-			//}
 			if !workFlow.HasAny(status) {
-				t.Errorf("workFlow has not %s status\n", status.Message())
+				t.Errorf("workFlow has not %s status", status.Message())
 			}
 		}
-		t.Logf("status expalin=%s", strings.Join(workFlow.ExplainStatus(), ","))
-		t.Logf("finish check")
+		t.Logf("[ status ] expalin = { %s }", strings.Join(workFlow.ExplainStatus(), ","))
+		t.Logf(`// ======= Finish Check ====== //`)
 		println()
 		return true, nil
 	}

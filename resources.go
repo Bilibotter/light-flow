@@ -4,6 +4,14 @@ import (
 	"sync"
 )
 
+const (
+	initializeR = "initialize"
+	releaseR    = "release"
+	suspendR    = "suspend"
+	recoverR    = "recover"
+	attachR     = "attach"
+)
+
 var resourceManagers = make(map[string]*resourceManager)
 var resourceLock = new(sync.RWMutex)
 
@@ -11,15 +19,15 @@ var resPrefix = []byte("*")
 
 type Resource interface {
 	nameI
-	identifierI
-	AttachedBy() string
+	ProcessName() string
+	ProcessID() string
 	Entity() any
 	Put(key string, value any) any
 	Fetch(key string) (value any, exist bool)
 	Update(entity any) any
 }
 
-type resCreator interface {
+type boundProc interface {
 	nameI
 	identifierI
 	sync.Locker
@@ -41,15 +49,16 @@ type resourceManager struct {
 }
 
 type resource struct {
-	resCreator
+	boundProc
 	resName string
 	ctx     map[string]any
 	entity  any
 }
 
 type resSerializable struct {
-	Ctx      map[string]any
-	Instance any
+	Name   string
+	Ctx    map[string]any
+	Entity any
 }
 
 func RegisterResourceManager(name string) ResourceManager {
@@ -109,8 +118,12 @@ func (r *resource) Name() string {
 	return r.resName
 }
 
-func (r *resource) AttachedBy() string {
-	return r.resCreator.Name()
+func (r *resource) ProcessName() string {
+	return r.boundProc.Name()
+}
+
+func (r *resource) ProcessID() string {
+	return r.boundProc.ID()
 }
 
 func (r *resource) Entity() any {
