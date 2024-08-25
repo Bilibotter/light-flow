@@ -241,7 +241,7 @@ func Recover0(t *testing.T, ff flow.FinishedWorkFlow) flow.FinishedWorkFlow {
 	return f
 }
 
-func Recover(name string) {
+func Recover(name string) flow.FinishedWorkFlow {
 	println("\n\t=========Recovering=========\n")
 	executeSuc = true
 	flowId, err := getId(name)
@@ -249,8 +249,10 @@ func Recover(name string) {
 		panic(err)
 	}
 	resetCurrent()
-	if _, err = flow.RecoverFlow(flowId); err != nil {
+	if ff, err := flow.RecoverFlow(flowId); err != nil {
 		panic(err)
+	} else {
+		return ff
 	}
 }
 

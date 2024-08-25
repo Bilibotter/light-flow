@@ -27,14 +27,14 @@ var (
 
 // these variable are used to indicate the state of the unit
 var (
-	normal       = []*StatusEnum{Pending, Running, Pause, Success}
-	Pending      = &StatusEnum{0, "Pending"}
-	Running      = &StatusEnum{0b1, "Running"}
+	normal       = []*StatusEnum{Activated, Pause, Success, Recovering, Suspend}
+	pending      = &StatusEnum{0, "Pending"}
+	Activated    = &StatusEnum{0b1, "Activated"} // Entity not skipped or canceled.
 	Pause        = &StatusEnum{0b1 << 1, "Pause"}
 	skipped      = &StatusEnum{0b1 << 2, "skip"}
 	executed     = &StatusEnum{0b1 << 3, "executed"}
-	Recovering   = &StatusEnum{0b1 << 4, "Recovering"}
-	Suspend      = &StatusEnum{0b1 << 5, "Suspend"}
+	Recovering   = &StatusEnum{0b1 << 4, "Recovering"} // Entity recovering from suspension.
+	Suspend      = &StatusEnum{0b1 << 5, "Suspend"}    // Entity can be recovered at an appropriate time.
 	Success      = &StatusEnum{0b1 << 15, "Success"}
 	NormalMask   = &StatusEnum{0b1<<16 - 1, "NormalMask"}
 	abnormal     = []*StatusEnum{Cancel, Timeout, Panic, Error, Stop, CallbackFail, Failed}
@@ -67,6 +67,7 @@ type WorkFlow interface {
 
 type FinishedWorkFlow interface {
 	flowRuntime
+	Processes() []FinishedProcess
 	Recover() (FinishedWorkFlow, error)
 	Exceptions() []FinishedProcess
 }
@@ -85,6 +86,7 @@ type Process interface {
 
 type FinishedProcess interface {
 	procRuntime
+	Steps() []FinishedStep
 	Exceptions() []FinishedStep
 }
 
@@ -169,8 +171,8 @@ type identifierI interface {
 }
 
 type periodI interface {
-	StartTime() time.Time
-	EndTime() time.Time
+	StartTime() *time.Time
+	EndTime() *time.Time
 	CostTime() time.Duration
 }
 

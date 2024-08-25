@@ -36,8 +36,8 @@ type Proto interface {
 	Success() bool
 	Name() string
 	ID() string
-	StartTime() time.Time
-	EndTime() time.Time
+	StartTime() *time.Time
+	EndTime() *time.Time
 	CostTime() time.Duration
 }
 

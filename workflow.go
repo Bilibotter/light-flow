@@ -154,6 +154,14 @@ func (rf *runFlow) HasAny(enum ...*StatusEnum) bool {
 	return rf.compress.Has(enum...)
 }
 
+func (rf *runFlow) Processes() []FinishedProcess {
+	res := make([]FinishedProcess, 0, len(rf.runProcesses))
+	for _, process := range rf.runProcesses {
+		res = append(res, process)
+	}
+	return res
+}
+
 func (rf *runFlow) Process(name string) (ProcController, bool) {
 	res, ok := rf.runProcesses[name]
 	if ok {
@@ -183,12 +191,12 @@ func (rf *runFlow) ID() string {
 	return rf.id
 }
 
-func (rf *runFlow) StartTime() time.Time {
-	return rf.start
+func (rf *runFlow) StartTime() *time.Time {
+	return &rf.start
 }
 
-func (rf *runFlow) EndTime() time.Time {
-	return rf.end
+func (rf *runFlow) EndTime() *time.Time {
+	return &rf.end
 }
 
 func (rf *runFlow) CostTime() time.Duration {
@@ -242,11 +250,18 @@ func (rf *runFlow) Done() FinishedWorkFlow {
 	}
 	rf.initialize()
 	rf.start = time.Now().UTC()
+	if !rf.Has(Recovering) {
+		flowPersist.onBegin(rf)
+	}
 	// execute before flow callback
 	rf.advertise(beforeF)
+	cancel := rf.Has(CallbackFail)
+	if !cancel {
+		rf.append(Activated)
+	}
 	wg := make([]*sync.WaitGroup, 0, len(rf.runProcesses))
 	for _, process := range rf.runProcesses {
-		if rf.Has(CallbackFail) {
+		if cancel {
 			process.append(Cancel)
 		}
 		wg = append(wg, process.schedule())
@@ -257,6 +272,7 @@ func (rf *runFlow) Done() FinishedWorkFlow {
 	}
 	// execute callback and recover after all processes are done
 	rf.finalize()
+	flowPersist.onComplete(rf)
 	return rf
 }
 

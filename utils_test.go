@@ -245,9 +245,9 @@ func TestExplainStatus1(t *testing.T) {
 	} else if !status.Has(Pause) {
 		t.Errorf("pause status not contain after add")
 	}
-	if status := state(0); !status.append(Running) {
+	if status := state(0); !status.append(Activated) {
 		t.Errorf("running status add error")
-	} else if !status.Has(Running) {
+	} else if !status.Has(Activated) {
 		t.Errorf("running status not contain after add")
 	}
 	if status := state(0); !status.append(Success) {
@@ -307,15 +307,15 @@ func TestExplainStatus2(t *testing.T) {
 
 	status1 = state(0)
 	status1.append(Pause)
-	status1.append(Running)
-	status1.append(Pending)
+	status1.append(Activated)
+	status1.append(pending)
 	if !status1.Normal() {
 		t.Errorf("normal status judge error")
 	}
 	if !status1.Has(Pause) {
 		t.Errorf("pause status explain error")
 	}
-	if !status1.Has(Running) {
+	if !status1.Has(Activated) {
 		t.Errorf("running status explain error")
 	}
 	status1.append(Success)

@@ -186,12 +186,12 @@ func (step *runStep) ProcessID() string {
 	return step.belong.id
 }
 
-func (step *runStep) StartTime() time.Time {
-	return step.start
+func (step *runStep) StartTime() *time.Time {
+	return &step.start
 }
 
-func (step *runStep) EndTime() time.Time {
-	return step.end
+func (step *runStep) EndTime() *time.Time {
+	return &step.end
 }
 
 func (step *runStep) CostTime() time.Duration {

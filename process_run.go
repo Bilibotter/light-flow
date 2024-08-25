@@ -31,12 +31,12 @@ func (process *runProcess) ID() string {
 	return process.id
 }
 
-func (process *runProcess) StartTime() time.Time {
-	return process.start
+func (process *runProcess) StartTime() *time.Time {
+	return &process.start
 }
 
-func (process *runProcess) EndTime() time.Time {
-	return process.end
+func (process *runProcess) EndTime() *time.Time {
+	return &process.end
 }
 
 func (process *runProcess) CostTime() time.Duration {
@@ -85,6 +85,14 @@ func (process *runProcess) Step(name string) (StepController, bool) {
 	return nil, false
 }
 
+func (process *runProcess) Steps() []FinishedStep {
+	res := make([]FinishedStep, 0, len(process.runSteps))
+	for _, step := range process.runSteps {
+		res = append(res, step)
+	}
+	return res
+}
+
 func (process *runProcess) Exceptions() []FinishedStep {
 	finished := make([]FinishedStep, 0)
 	for _, step := range process.runSteps {
@@ -128,9 +136,13 @@ func (process *runProcess) schedule() (finish *sync.WaitGroup) {
 	process.start = time.Now().UTC()
 	if process.Has(Recovering) {
 		process.manageResources(recoverR)
+	} else {
+		procPersist.onBegin(process)
 	}
-	process.append(Running)
 	process.advertise(beforeF)
+	if !process.Has(CallbackFail) {
+		process.append(Activated)
+	}
 	for _, step := range process.runSteps {
 		if step.layer == 1 {
 			go process.startStep(step)
@@ -180,13 +192,14 @@ func (process *runProcess) startStep(step *runStep) {
 	}
 
 	timer := time.NewTimer(timeout)
+	defer stepPersist.onComplete(step)
 	go process.runStep(step)
 	select {
 	case <-timer.C:
 		step.append(Timeout)
 	case <-step.finish:
-		return
 	}
+	step.end = time.Now().UTC()
 }
 
 func (process *runProcess) evaluate(step *runStep) bool {
@@ -239,6 +252,7 @@ func (process *runProcess) finalize() {
 	process.manageResources(releaseR)
 	process.compress.add(process.load())
 	process.end = time.Now().UTC()
+	procPersist.onComplete(process)
 	process.finish.Done()
 }
 
@@ -302,9 +316,7 @@ func (process *runProcess) startNextSteps(step *runStep) {
 		if atomic.LoadInt64(&waiting) != 0 {
 			continue
 		}
-		if step.Success() {
-			next.append(Running)
-		} else if skip {
+		if skip {
 			next.append(skipped)
 		}
 		if bind != nil {
@@ -320,11 +332,14 @@ func (process *runProcess) startNextSteps(step *runStep) {
 
 func (process *runProcess) runStep(step *runStep) {
 	defer func() { step.finish <- true }()
-
 	step.start = time.Now().UTC()
+	// step was already inserted before recovery, avoid to insert it again.
+	if !step.Has(Recovering) {
+		stepPersist.onBegin(step)
+	}
 	process.stepCallback(step, beforeF)
 	// if beforeStep panic occur, the step will mark as panic
-	if !step.Normal() {
+	if step.Has(CallbackFail) {
 		return
 	}
 
@@ -333,13 +348,15 @@ func (process *runProcess) runStep(step *runStep) {
 		retry = 0
 	}
 
+	step.append(Activated)
+
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Errorf("Step[ %s ] execute panic;\nID=%s;\nPanic=%v\n%s\n", step.name, step.id, r, stack())
 			step.append(Panic)
 			step.exception = fmt.Errorf("%v", r)
-			step.end = time.Now().UTC()
 		}
+		step.end = time.Now().UTC()
 		if !step.isRecoverable() {
 			process.stepCallback(step, afterF)
 			return
@@ -370,7 +387,6 @@ func (process *runProcess) runStep(step *runStep) {
 
 	for i := 0; i <= retry; i++ {
 		result, err := step.run(step)
-		step.end = time.Now().UTC()
 		step.exception = err
 		if err != nil {
 			step.append(Error)

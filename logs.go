@@ -13,6 +13,8 @@ const (
 	callbackPanicLog = "%s Callback panic;\nID=%s;\nBelong=%s;\nNecessity=%s, Scope=%s, Iteration=%d;\nPanic=%v\n%s"
 	callbackErrorLog = "%s Callback error;\nID=%s;\nBelong=%s;\nNecessity=%s, Scope=%s, Iteration=%d;\nError=%s"
 	snapshotErrorLog = "build snapshot failed: %s[Name=%s, ID=%s] %s error: %s"
+	persistPanicLog  = "persist failed: %s[Name:%s, ID:%s] persist panic while %s\npanic: %v\n%s"
+	persistErrorLog  = "persist failed: %s[Name:%s, ID:%s] persist error while %s: %s"
 )
 
 var (
