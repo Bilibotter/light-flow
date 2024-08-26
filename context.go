@@ -27,14 +27,16 @@ var (
 
 // these variable are used to indicate the state of the unit
 var (
-	normal       = []*StatusEnum{Activated, Pause, Success, Recovering, Suspend}
-	pending      = &StatusEnum{0, "Pending"}
-	Activated    = &StatusEnum{0b1, "Activated"} // Entity not skipped or canceled.
-	Pause        = &StatusEnum{0b1 << 1, "Pause"}
-	skipped      = &StatusEnum{0b1 << 2, "skip"}
-	executed     = &StatusEnum{0b1 << 3, "executed"}
-	Recovering   = &StatusEnum{0b1 << 4, "Recovering"} // Entity recovering from suspension.
-	Suspend      = &StatusEnum{0b1 << 5, "Suspend"}    // Entity can be recovered at an appropriate time.
+	normal = []*StatusEnum{Pause, Success, Recovering, Suspend, Pending}
+	// Entity was not skipped, but Step may still be cancelled becasue of CallbackFail.
+	Pending  = &StatusEnum{0b1 << 0, "Pending"}
+	Pause    = &StatusEnum{0b1 << 1, "Pause"}
+	skipped  = &StatusEnum{0b1 << 2, "skip"}
+	executed = &StatusEnum{0b1 << 3, "executed"}
+	// Entity recovering from suspension.
+	Recovering = &StatusEnum{0b1 << 4, "Recovering"}
+	// Entity can be recovered at an appropriate time.
+	Suspend      = &StatusEnum{0b1 << 5, "Suspend"}
 	Success      = &StatusEnum{0b1 << 15, "Success"}
 	NormalMask   = &StatusEnum{0b1<<16 - 1, "NormalMask"}
 	abnormal     = []*StatusEnum{Cancel, Timeout, Panic, Error, Stop, CallbackFail, Failed}

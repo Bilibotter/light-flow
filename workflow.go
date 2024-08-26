@@ -250,15 +250,10 @@ func (rf *runFlow) Done() FinishedWorkFlow {
 	}
 	rf.initialize()
 	rf.start = time.Now().UTC()
-	if !rf.Has(Recovering) {
-		flowPersist.onBegin(rf)
-	}
+	flowPersist.onBegin(rf)
 	// execute before flow callback
 	rf.advertise(beforeF)
 	cancel := rf.Has(CallbackFail)
-	if !cancel {
-		rf.append(Activated)
-	}
 	wg := make([]*sync.WaitGroup, 0, len(rf.runProcesses))
 	for _, process := range rf.runProcesses {
 		if cancel {

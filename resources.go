@@ -15,8 +15,6 @@ const (
 var resourceManagers = make(map[string]*resourceManager)
 var resourceLock = new(sync.RWMutex)
 
-var resPrefix = []byte("*")
-
 type Resource interface {
 	nameI
 	ProcessName() string

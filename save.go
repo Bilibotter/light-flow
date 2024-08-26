@@ -1,5 +1,10 @@
 package light_flow
 
+const (
+	beginAction     = "begin"
+	completedAction = "completed"
+)
+
 var (
 	stepPersist = &stepPersistor{
 		onBegin:    emptyStepFunc,
@@ -46,32 +51,32 @@ type flowPersistor struct {
 }
 
 func (sp *stepPersistor) OnBegin(f func(Step) error) StepPersistor {
-	sp.onBegin = wrapPersist[Step]("initialize", f)
+	sp.onBegin = wrapPersist[Step](beginAction, f)
 	return sp
 }
 
 func (sp *stepPersistor) OnComplete(f func(Step) error) StepPersistor {
-	sp.onComplete = wrapPersist[Step]("finished", f)
+	sp.onComplete = wrapPersist[Step](completedAction, f)
 	return sp
 }
 
 func (pp *procPersistor) OnBegin(f func(Process) error) ProcPersistor {
-	pp.onBegin = wrapPersist[Process]("initialize", f)
+	pp.onBegin = wrapPersist[Process](beginAction, f)
 	return pp
 }
 
 func (pp *procPersistor) OnComplete(f func(Process) error) ProcPersistor {
-	pp.onComplete = wrapPersist[Process]("finished", f)
+	pp.onComplete = wrapPersist[Process](completedAction, f)
 	return pp
 }
 
 func (fp *flowPersistor) OnBegin(f func(WorkFlow) error) FlowPersistor {
-	fp.onBegin = wrapPersist[WorkFlow]("initialize", f)
+	fp.onBegin = wrapPersist[WorkFlow](beginAction, f)
 	return fp
 }
 
 func (fp *flowPersistor) OnComplete(f func(WorkFlow) error) FlowPersistor {
-	fp.onComplete = wrapPersist[WorkFlow]("finished", f)
+	fp.onComplete = wrapPersist[WorkFlow](completedAction, f)
 	return fp
 }
 
@@ -103,6 +108,13 @@ func wrapPersist[p proto](action string, f func(p) error) func(p) {
 				logger.Errorf(persistPanicLog, t, foo.Name(), foo.ID(), action, r, stack())
 			}
 		}()
+		if action == beginAction {
+			foo.append(Pending)
+			// Entity was already inserted before recovery, avoid to insert it again.
+			if foo.Has(Recovering) {
+				return
+			}
+		}
 		err := f(foo)
 		if err != nil {
 			var t string
@@ -119,8 +131,8 @@ func wrapPersist[p proto](action string, f func(p) error) func(p) {
 	}
 }
 
-func emptyStepFunc(_ Step) {}
+func emptyStepFunc(_ Step) {} // avoid to judge nil
 
-func emptyProcFunc(_ Process) {}
+func emptyProcFunc(_ Process) {} // avoid to judge nil
 
-func emptyFlowFunc(_ WorkFlow) {}
+func emptyFlowFunc(_ WorkFlow) {} // avoid to judge nil

@@ -17,6 +17,10 @@ const (
 	persistErrorLog  = "persist failed: %s[Name:%s, ID:%s] persist error while %s: %s"
 )
 
+const (
+	notSupport = "method not support"
+)
+
 var (
 	logger LoggerI = newDefaultLogger()
 )
@@ -44,19 +48,19 @@ func newDefaultLogger() *defaultLogger {
 }
 
 func (l *defaultLogger) Debug(_ ...interface{}) {
-	panic("method not support")
+	panic(notSupport)
 }
 
 func (l *defaultLogger) Info(_ ...interface{}) {
-	panic("method not support")
+	panic(notSupport)
 }
 
 func (l *defaultLogger) Warn(_ ...interface{}) {
-	panic("method not support")
+	panic(notSupport)
 }
 
 func (l *defaultLogger) Error(_ ...interface{}) {
-	panic("method not support")
+	panic(notSupport)
 }
 
 func (l *defaultLogger) Debugf(format string, v ...interface{}) {

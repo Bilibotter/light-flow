@@ -269,6 +269,9 @@ func CheckFlowPersist(t *testing.T, ff flow.FinishedWorkFlow, expect int) {
 	}
 	t.Logf("Check Flow[ %s ] complete", ff.Name())
 	for _, proc := range ff.Processes() {
+		if !proc.Has(flow.Pending) {
+			continue
+		}
 		var p Processes
 		if err := db.Where("id = ?", proc.ID()).First(&p).Error; err != nil {
 			t.Errorf("Error getting Process %s: %s", proc.Name(), err.Error())
@@ -297,7 +300,7 @@ func CheckFlowPersist(t *testing.T, ff flow.FinishedWorkFlow, expect int) {
 		}
 		t.Logf("Check Process[ %s ] complete", proc.Name())
 		for _, step := range proc.Steps() {
-			if !step.Has(flow.Activated) {
+			if !step.Has(flow.Pending) {
 				continue
 			}
 			var s Steps
@@ -401,4 +404,88 @@ func TestStepRecoverPersist(t *testing.T) {
 	CheckFlowPersist(t, res, 5)
 	res = Recover("TestStepRecoverPersist")
 	CheckFlowPersist(t, res, 4)
+}
+
+func TestCallbackFailedPersist(t *testing.T) {
+	defer resetCurrent()
+	defer resetPersist()
+	setPersist()
+	wf := flow.RegisterFlow("TestCallbackFailedPersist0")
+	proc := wf.Process("TestCallbackFailedPersist0")
+	wf.BeforeFlow(true, Fx[flow.WorkFlow](t).Error().Callback())
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "0")
+	ff := flow.DoneFlow("TestCallbackFailedPersist0", nil)
+	CheckResult(t, 1, flow.CallbackFail)(any(ff).(flow.WorkFlow))
+	CheckFlowPersist(t, ff, 1)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestCallbackFailedPersist1")
+	proc = wf.Process("TestCallbackFailedPersist1")
+	wf.BeforeProcess(true, Fx[flow.Process](t).Error().Callback())
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "1")
+	ff = flow.DoneFlow("TestCallbackFailedPersist1", nil)
+	CheckResult(t, 1, flow.CallbackFail)(any(ff).(flow.WorkFlow))
+	CheckFlowPersist(t, ff, 2)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestCallbackFailedPersist2")
+	proc = wf.Process("TestCallbackFailedPersist2")
+	wf.BeforeStep(true, Fx[flow.Step](t).Error().Callback())
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2")
+	ff = flow.DoneFlow("TestCallbackFailedPersist2", nil)
+	CheckResult(t, 1, flow.CallbackFail)(any(ff).(flow.WorkFlow))
+	CheckFlowPersist(t, ff, 3)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestCallbackFailedPersist3")
+	proc = wf.Process("TestCallbackFailedPersist3")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3")
+	ff = flow.DoneFlow("TestCallbackFailedPersist3", nil)
+	CheckResult(t, 1, flow.Success)(any(ff).(flow.WorkFlow))
+	CheckFlowPersist(t, ff, 3)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestCallbackFailedPersist4")
+	wf.AfterStep(true, Fx[flow.Step](t).Error().Callback())
+	proc = wf.Process("TestCallbackFailedPersist4")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4")
+	ff = flow.DoneFlow("TestCallbackFailedPersist4", nil)
+	CheckResult(t, 2, flow.CallbackFail)(any(ff).(flow.WorkFlow))
+	CheckFlowPersist(t, ff, 3)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestCallbackFailedPersist5")
+	wf.AfterProcess(true, Fx[flow.Process](t).Error().Callback())
+	proc = wf.Process("TestCallbackFailedPersist5")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "5")
+	ff = flow.DoneFlow("TestCallbackFailedPersist5", nil)
+	CheckResult(t, 2, flow.CallbackFail)(any(ff).(flow.WorkFlow))
+	CheckFlowPersist(t, ff, 3)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestCallbackFailedPersist6")
+	proc = wf.Process("TestCallbackFailedPersist6")
+	wf.AfterFlow(true, Fx[flow.WorkFlow](t).Error().Callback())
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "6")
+	ff = flow.DoneFlow("TestCallbackFailedPersist6", nil)
+	CheckResult(t, 2, flow.CallbackFail)(any(ff).(flow.WorkFlow))
+	CheckFlowPersist(t, ff, 3)
+}
+
+func TestCallbackSucceedPersist(t *testing.T) {
+	defer resetCurrent()
+	defer resetPersist()
+	setPersist()
+	wf := flow.RegisterFlow("TestCallbackSucceedPersist0")
+	proc := wf.Process("TestCallbackSucceedPersist0")
+	wf.BeforeFlow(true, Fx[flow.WorkFlow](t).Inc().Callback())
+	wf.BeforeProcess(true, Fx[flow.Process](t).Inc().Callback())
+	wf.BeforeStep(true, Fx[flow.Step](t).Inc().Callback())
+	wf.AfterStep(true, Fx[flow.Step](t).Inc().Callback())
+	wf.AfterProcess(true, Fx[flow.Process](t).Inc().Callback())
+	wf.AfterFlow(true, Fx[flow.WorkFlow](t).Inc().Callback())
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "0")
+	ff := flow.DoneFlow("TestCallbackSucceedPersist0", nil)
+	CheckResult(t, 7, flow.Success)(any(ff).(flow.WorkFlow))
+	CheckFlowPersist(t, ff, 3)
 }

@@ -136,13 +136,9 @@ func (process *runProcess) schedule() (finish *sync.WaitGroup) {
 	process.start = time.Now().UTC()
 	if process.Has(Recovering) {
 		process.manageResources(recoverR)
-	} else {
-		procPersist.onBegin(process)
 	}
+	procPersist.onBegin(process)
 	process.advertise(beforeF)
-	if !process.Has(CallbackFail) {
-		process.append(Activated)
-	}
 	for _, step := range process.runSteps {
 		if step.layer == 1 {
 			go process.startStep(step)
@@ -333,10 +329,7 @@ func (process *runProcess) startNextSteps(step *runStep) {
 func (process *runProcess) runStep(step *runStep) {
 	defer func() { step.finish <- true }()
 	step.start = time.Now().UTC()
-	// step was already inserted before recovery, avoid to insert it again.
-	if !step.Has(Recovering) {
-		stepPersist.onBegin(step)
-	}
+	stepPersist.onBegin(step)
 	process.stepCallback(step, beforeF)
 	// if beforeStep panic occur, the step will mark as panic
 	if step.Has(CallbackFail) {
@@ -347,8 +340,6 @@ func (process *runProcess) runStep(step *runStep) {
 	if retry < 0 {
 		retry = 0
 	}
-
-	step.append(Activated)
 
 	defer func() {
 		if r := recover(); r != nil {
