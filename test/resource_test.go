@@ -1,6 +1,7 @@
 package test
 
 import (
+	"errors"
 	"fmt"
 	flow "github.com/Bilibotter/light-flow"
 	"strconv"
@@ -503,4 +504,59 @@ func TestResourceSuspendAndRecover(t *testing.T) {
 	res := flow.DoneFlow("TestResourceSuspendAndRecover", nil)
 	CheckResult(t, 7, flow.Error)(any(res).(flow.WorkFlow))
 	Recover("TestResourceSuspendAndRecover")
+}
+
+func TestResourceClearAndRecover(t *testing.T) {
+	defer resetCurrent()
+	executeSuc = false
+	resName := "TestResourceClearAndRecover"
+	flow.RegisterResourceManager(resName).
+		OnInitialize(func(res flow.Resource, initParam any) (entity any, err error) {
+			res.Put("password", "******")
+			atomic.AddInt64(&current, 1)
+			return "password", nil
+		}).
+		OnSuspend(func(res flow.Resource) error {
+			res.Clear()
+			atomic.AddInt64(&current, 1)
+			return nil
+		}).
+		OnRecover(func(res flow.Resource) error {
+			if _, exist := res.Fetch("password"); exist {
+				t.Errorf("password should not exist")
+			}
+			if res.Entity() != nil {
+				t.Errorf("entity should be nil")
+			}
+			res.Put("drowssap", "+++++")
+			res.Update("drowssap")
+			atomic.AddInt64(&current, 1)
+			return nil
+		})
+	wf := flow.RegisterFlow("TestResourceClearAndRecover")
+	wf.EnableRecover()
+	process := wf.Process("TestResourceClearAndRecover")
+	process.NameStep(func(ctx flow.Step) (any, error) {
+		if !executeSuc {
+			ctx.Attach(resName, nil)
+			atomic.AddInt64(&current, 1)
+			return nil, errors.New("execute failed")
+		}
+		res, _ := ctx.Acquire(resName)
+		if res.Entity() != "drowssap" {
+			t.Errorf("entity should be drowssap")
+		}
+		if _, exist := res.Fetch("password"); exist {
+			t.Errorf("password should not exist")
+		}
+		if _, exist := res.Fetch("drowssap"); !exist {
+			t.Errorf("drowssap should exist")
+		}
+		atomic.AddInt64(&current, 1)
+		return nil, nil
+	}, "1")
+	wf.AfterFlow(false, CheckResult(t, 2, flow.Success)).If(execSuc)
+	ff := flow.DoneFlow("TestResourceClearAndRecover", nil)
+	CheckResult(t, 3, flow.Error)(any(ff).(flow.WorkFlow))
+	Recover("TestResourceClearAndRecover")
 }

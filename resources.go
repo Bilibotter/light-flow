@@ -23,6 +23,7 @@ type Resource interface {
 	Put(key string, value any) any
 	Fetch(key string) (value any, exist bool)
 	Update(entity any) any
+	Clear() any
 }
 
 type boundProc interface {
@@ -150,4 +151,13 @@ func (r *resource) Update(entity any) any {
 	defer r.Unlock()
 	r.entity = entity
 	return entity
+}
+
+func (r *resource) Clear() any {
+	r.Lock()
+	defer r.Unlock()
+	res := r.entity
+	r.ctx = nil
+	r.entity = nil
+	return res
 }
