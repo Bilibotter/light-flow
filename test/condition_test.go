@@ -535,6 +535,37 @@ func TestGetResultAfterSetCondition(t *testing.T) {
 	flow.DoneFlow("TestGetResultAfterSetCondition", map[string]any{"1": "inputdisruptions"})
 }
 
+func TestIfCondition(t *testing.T) {
+	defer resetCurrent()
+	executeSuc = false
+	workflow := flow.RegisterFlow("TestIfCondition")
+	process := workflow.Process("TestIfCondition")
+	process.BeforeStep(false, Fx[flow.Step](t).Inc().Callback()).
+		If(func() bool { return executeSuc })
+	process.NameStep(Fn(t).Normal(), "1")
+	res := flow.DoneFlow("TestIfCondition", nil)
+	fn1 := CheckResult(t, 1, flow.Success)
+	fn1(res.(flow.WorkFlow))
+	resetCurrent()
+
+	executeSuc = true
+	fn1 = CheckResult(t, 2, flow.Success)
+	res = flow.DoneFlow("TestIfCondition", nil)
+	fn1(res.(flow.WorkFlow))
+	resetCurrent()
+
+	executeSuc = true
+	workflow = flow.RegisterFlow("TestIfCondition1")
+	process = workflow.Process("TestIfCondition1")
+	process.BeforeStep(false, Fx[flow.Step](t).Inc().Callback()).
+		If(func() bool { return executeSuc })
+	process.NameStep(Fn(t).Normal(), "1")
+	res = flow.DoneFlow("TestIfCondition1", nil)
+	fn1 = CheckResult(t, 2, flow.Success)
+	fn1(res.(flow.WorkFlow))
+	resetCurrent()
+}
+
 func TestReachCondition(t *testing.T) {
 	defer resetCurrent()
 	var check interface{}
@@ -1759,13 +1790,13 @@ func TestNoCondMergedToCond(t *testing.T) {
 	defer resetCurrent()
 	wf1 := flow.RegisterFlow("TestNoCondMergedToCond1")
 	proc1 := wf1.Process("TestNoCondMergedToCond1")
-	proc1.NameStep(Fx[flow.Step](t).Normal().Step(), "step1")
+	proc1.NameStep(Fx[flow.Step](t).Inc().Step(), "step1")
 	wf1.AfterFlow(false, CheckResult(t, 1, flow.Success))
 
 	wf2 := flow.RegisterFlow("TestNoCondMergedToCond2")
 	proc2 := wf2.Process("TestNoCondMergedToCond2")
 	proc2.NameStep(Fx[flow.Step](t).SetCond().Step(), "step1")
-	MatchCond(proc2.NameStep(Fx[flow.Step](t).Normal().Step(), "step2"), "step1")
+	MatchCond(proc2.NameStep(Fx[flow.Step](t).Inc().Step(), "step2"), "step1")
 	proc2.Merge("TestNoCondMergedToCond1")
 	wf2.AfterFlow(false, CheckResult(t, 2, flow.Success))
 
@@ -1779,13 +1810,13 @@ func TestNoMatchMergedToNoCond(t *testing.T) {
 	wf1 := flow.RegisterFlow("TestNoMatchMergedToNoCond1")
 	proc1 := wf1.Process("TestNoMatchMergedToNoCond1")
 	proc1.NameStep(Fx[flow.Step](t).SetCond().Step(), "step1")
-	NotMatchCond(proc1.NameStep(Fx[flow.Step](t).Normal().Step(), "step2"), "step1")
+	NotMatchCond(proc1.NameStep(Fx[flow.Step](t).Inc().Step(), "step2"), "step1")
 	wf1.AfterFlow(false, CheckResult(t, 1, flow.Success))
 
 	wf2 := flow.RegisterFlow("TestNoMatchMergedToNoCond2")
 	proc2 := wf2.Process("TestNoMatchMergedToNoCond2")
 	proc2.Merge("TestNoMatchMergedToNoCond1")
-	proc2.NameStep(Fx[flow.Step](t).Normal().Step(), "step2")
+	proc2.NameStep(Fx[flow.Step](t).Inc().Step(), "step2")
 	wf2.AfterFlow(false, CheckResult(t, 1, flow.Success))
 
 	flow.DoneFlow("TestNoMatchMergedToNoCond2", nil)
@@ -1797,15 +1828,15 @@ func TestNoMatchMergedToMatch(t *testing.T) {
 	defer resetCurrent()
 	wf1 := flow.RegisterFlow("TestNoMatchMergedToMatch1")
 	proc1 := wf1.Process("TestNoMatchMergedToMatch1")
-	proc1.NameStep(Fx[flow.Step](t).Normal().Step(), "step1")
+	proc1.NameStep(Fx[flow.Step](t).Inc().Step(), "step1")
 	proc1.NameStep(Fx[flow.Step](t).SetCond().Step(), "step2", "step1")
-	NotMatchCond(proc1.NameStep(Fx[flow.Step](t).Normal().Step(), "step3"), "step2")
+	NotMatchCond(proc1.NameStep(Fx[flow.Step](t).Inc().Step(), "step3"), "step2")
 	wf1.AfterFlow(false, CheckResult(t, 2, flow.Success))
 
 	wf2 := flow.RegisterFlow("TestNoMatchMergedToMatch2")
 	proc2 := wf2.Process("TestNoMatchMergedToMatch2")
 	proc2.Merge("TestNoMatchMergedToMatch1")
-	MatchCond(proc2.NameStep(Fx[flow.Step](t).Normal().Step(), "step3"), "step2")
+	MatchCond(proc2.NameStep(Fx[flow.Step](t).Inc().Step(), "step3"), "step2")
 	wf2.AfterFlow(false, CheckResult(t, 2, flow.Success))
 	flow.DoneFlow("TestNoMatchMergedToMatch2", nil)
 	resetCurrent()
@@ -1816,15 +1847,15 @@ func TestMatchMergedToMatch(t *testing.T) {
 	defer resetCurrent()
 	wf1 := flow.RegisterFlow("TestMatchMergedToMatch1")
 	proc1 := wf1.Process("TestMatchMergedToMatch1")
-	proc1.NameStep(Fx[flow.Step](t).Normal().Step(), "step1")
+	proc1.NameStep(Fx[flow.Step](t).Inc().Step(), "step1")
 	proc1.NameStep(Fx[flow.Step](t).SetCond().Step(), "step2", "step1")
-	MatchCond(proc1.NameStep(Fx[flow.Step](t).Normal().Step(), "step3"), "step2")
+	MatchCond(proc1.NameStep(Fx[flow.Step](t).Inc().Step(), "step3"), "step2")
 	wf1.AfterFlow(false, CheckResult(t, 3, flow.Success))
 
 	wf2 := flow.RegisterFlow("TestMatchMergedToMatch2")
 	proc2 := wf2.Process("TestMatchMergedToMatch2")
 	proc2.Merge("TestMatchMergedToMatch1")
-	MatchCond(proc2.NameStep(Fx[flow.Step](t).Normal().Step(), "step3"), "step2")
+	MatchCond(proc2.NameStep(Fx[flow.Step](t).Inc().Step(), "step3"), "step2")
 	wf2.AfterFlow(false, CheckResult(t, 3, flow.Success))
 	flow.DoneFlow("TestMatchMergedToMatch2", nil)
 	resetCurrent()
@@ -1837,13 +1868,13 @@ func TestDiffCondMerged(t *testing.T) {
 	proc1 := wf1.Process("TestDiffCondMerged1")
 	proc1.NameStep(Fx[flow.Step](t).SetCond().Step(), "step1")
 	proc1.NameStep(Fx[flow.Step](t).SetCond().Step(), "step2", "step1")
-	MatchCond(proc1.NameStep(Fx[flow.Step](t).Normal().Step(), "step3"), "step1")
+	MatchCond(proc1.NameStep(Fx[flow.Step](t).Inc().Step(), "step3"), "step1")
 	wf1.AfterFlow(false, CheckResult(t, 3, flow.Success))
 
 	wf2 := flow.RegisterFlow("TestDiffCondMerged2")
 	proc2 := wf2.Process("TestDiffCondMerged2")
 	proc2.Merge("TestDiffCondMerged1")
-	MatchCond(proc2.NameStep(Fx[flow.Step](t).Normal().Step(), "step3"), "step2")
+	MatchCond(proc2.NameStep(Fx[flow.Step](t).Inc().Step(), "step3"), "step2")
 	wf2.AfterFlow(false, CheckResult(t, 3, flow.Success))
 
 	flow.DoneFlow("TestDiffCondMerged2", nil)
@@ -1857,13 +1888,13 @@ func TestDiffCondMerged0(t *testing.T) {
 	proc1 := wf1.Process("TestDiffCondMerged01")
 	proc1.NameStep(Fx[flow.Step](t).SetCond().Step(), "step1")
 	proc1.NameStep(Fx[flow.Step](t).SetCond().Step(), "step2", "step1")
-	MatchCond(proc1.NameStep(Fx[flow.Step](t).Normal().Step(), "step3"), "step1")
+	MatchCond(proc1.NameStep(Fx[flow.Step](t).Inc().Step(), "step3"), "step1")
 	wf1.AfterFlow(false, CheckResult(t, 3, flow.Success))
 
 	wf2 := flow.RegisterFlow("TestDiffCondMerged02")
 	proc2 := wf2.Process("TestDiffCondMerged02")
 	proc2.Merge("TestDiffCondMerged01")
-	NotMatchCond(proc2.NameStep(Fx[flow.Step](t).Normal().Step(), "step3"), "step2")
+	NotMatchCond(proc2.NameStep(Fx[flow.Step](t).Inc().Step(), "step3"), "step2")
 	wf2.AfterFlow(false, CheckResult(t, 2, flow.Success))
 
 	flow.DoneFlow("TestDiffCondMerged02", nil)

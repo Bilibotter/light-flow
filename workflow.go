@@ -52,6 +52,9 @@ func DefaultConfig() FlowConfig {
 }
 
 func RegisterFlow(name string) *FlowMeta {
+	if !isValidIdentifier(name) {
+		panic(patternHint)
+	}
 	flow := FlowMeta{
 		name:         name,
 		init:         sync.Once{},
@@ -64,7 +67,7 @@ func RegisterFlow(name string) *FlowMeta {
 func AsyncFlow(name string, input map[string]any) FlowController {
 	factory, ok := allFlows.Load(name)
 	if !ok {
-		panic(fmt.Sprintf("Flow[%s] not found", name))
+		panic(fmt.Sprintf("WorkFlow[ %s ] not found", name))
 	}
 	flow := factory.(*FlowMeta).buildRunFlow(input)
 	go flow.Done()
@@ -74,7 +77,7 @@ func AsyncFlow(name string, input map[string]any) FlowController {
 func DoneFlow(name string, input map[string]any) FinishedWorkFlow {
 	factory, ok := allFlows.Load(name)
 	if !ok {
-		panic(fmt.Sprintf("Flow[%s] not found", name))
+		panic(fmt.Sprintf("WorkFlow[ %s ] not found", name))
 	}
 	flow := factory.(*FlowMeta).buildRunFlow(input)
 	return flow.Done()
@@ -87,7 +90,7 @@ func (fm *FlowMeta) register() *FlowMeta {
 
 	_, load := allFlows.LoadOrStore(fm.name, fm)
 	if load {
-		panic(fmt.Sprintf("Flow[%s] alraedy exists", fm.name))
+		panic(fmt.Sprintf("WorkFlow[ %s ] alraedy exists", fm.name))
 	}
 
 	return fm
@@ -126,6 +129,9 @@ func (fm *FlowMeta) buildRunFlow(input map[string]any) *runFlow {
 }
 
 func (fm *FlowMeta) Process(name string) *ProcessMeta {
+	if !isValidIdentifier(name) {
+		panic(patternHint)
+	}
 	pm := ProcessMeta{
 		nodeRouter: nodeRouter{
 			nodePath: fullAccess,
@@ -148,6 +154,14 @@ func (rf *runFlow) HasAny(enum ...*StatusEnum) bool {
 	return rf.compress.Has(enum...)
 }
 
+func (rf *runFlow) Processes() []FinishedProcess {
+	res := make([]FinishedProcess, 0, len(rf.runProcesses))
+	for _, process := range rf.runProcesses {
+		res = append(res, process)
+	}
+	return res
+}
+
 func (rf *runFlow) Process(name string) (ProcController, bool) {
 	res, ok := rf.runProcesses[name]
 	if ok {
@@ -168,7 +182,7 @@ func (rf *runFlow) Exceptions() []FinishedProcess {
 
 func (rf *runFlow) Recover() (FinishedWorkFlow, error) {
 	if !rf.Has(Failed) {
-		return nil, fmt.Errorf("workflow[%s] is't failed, can't recover", rf.name)
+		return nil, fmt.Errorf("workFlow[ %s ] isn't failed, can't recover", rf.name)
 	}
 	return RecoverFlow(rf.id)
 }
@@ -177,12 +191,12 @@ func (rf *runFlow) ID() string {
 	return rf.id
 }
 
-func (rf *runFlow) StartTime() time.Time {
-	return rf.start
+func (rf *runFlow) StartTime() *time.Time {
+	return &rf.start
 }
 
-func (rf *runFlow) EndTime() time.Time {
-	return rf.end
+func (rf *runFlow) EndTime() *time.Time {
+	return &rf.end
 }
 
 func (rf *runFlow) CostTime() time.Duration {
@@ -236,11 +250,13 @@ func (rf *runFlow) Done() FinishedWorkFlow {
 	}
 	rf.initialize()
 	rf.start = time.Now().UTC()
+	flowPersist.onBegin(rf)
 	// execute before flow callback
 	rf.advertise(beforeF)
+	cancel := rf.Has(CallbackFail)
 	wg := make([]*sync.WaitGroup, 0, len(rf.runProcesses))
 	for _, process := range rf.runProcesses {
-		if rf.Has(CallbackFail) {
+		if cancel {
 			process.append(Cancel)
 		}
 		wg = append(wg, process.schedule())
@@ -251,6 +267,7 @@ func (rf *runFlow) Done() FinishedWorkFlow {
 	}
 	// execute callback and recover after all processes are done
 	rf.finalize()
+	flowPersist.onComplete(rf)
 	return rf
 }
 

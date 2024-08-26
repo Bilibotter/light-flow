@@ -12,16 +12,24 @@ import (
 )
 
 var (
-	dunno     = "???"
-	centerDot = "·"
-	dot       = "."
-	slash     = "/"
+	dunno       = "???"
+	centerDot   = "·"
+	dot         = "."
+	slash       = "/"
+	pattern     = `^[a-zA-Z0-9]+$`
+	patternHint = "the name must consist of a combination of uppercase and lowercase English letters and numbers"
 )
 
 type empty struct{}
 
 type set[T comparable] struct {
 	Data map[T]empty
+}
+
+func isValidIdentifier(identifier string) bool {
+	// 正则表达式匹配大小写英文字母及数字
+	var validIdentifier = regexp.MustCompile(pattern)
+	return validIdentifier.MatchString(identifier)
 }
 
 // This file includes a modified version of the 'stack' function from the 'gin' framework,

@@ -82,7 +82,7 @@ func (meta *StepMeta) Priority(priority map[string]any) {
 	for key, stepName := range priority {
 		step, exist := meta.belong.steps[toStepName(stepName)]
 		if !exist {
-			panic(fmt.Sprintf("step[%s] can't matchByHighest ", stepName))
+			panic(fmt.Sprintf("Step[ %s ] can't matchByHighest ", stepName))
 		}
 		meta.priority[key] = step.index
 	}
@@ -186,12 +186,12 @@ func (step *runStep) ProcessID() string {
 	return step.belong.id
 }
 
-func (step *runStep) StartTime() time.Time {
-	return step.start
+func (step *runStep) StartTime() *time.Time {
+	return &step.start
 }
 
-func (step *runStep) EndTime() time.Time {
-	return step.end
+func (step *runStep) EndTime() *time.Time {
+	return &step.end
 }
 
 func (step *runStep) CostTime() time.Duration {
@@ -199,6 +199,14 @@ func (step *runStep) CostTime() time.Duration {
 		return 0
 	}
 	return step.end.Sub(step.start)
+}
+
+func (step *runStep) Attach(resName string, initParam any) (res Resource, err error) {
+	return step.belong.Attach(resName, initParam)
+}
+
+func (step *runStep) Acquire(resName string) (res Resource, exist bool) {
+	return step.belong.Acquire(resName)
 }
 
 func (step *runStep) isRecoverable() bool {

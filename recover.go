@@ -28,16 +28,15 @@ const (
 	RecoverFailed uint8 = 32
 )
 
+const (
+	resSerializableKey = "+resource"
+)
+
 var (
 	maxSize                          = 4096
 	enableEncrypt                    = true
 	pwdEncryptor  SymmetricEncryptor = &aes256Encryptor{newRoutineUnsafeSet[string]("pwd", "password")}
 	persister     Persist
-)
-
-var (
-	recoverLog = "panic occur while WorkFlow[%s] recovering;\n Id=%s\n Panic=%s\n%s"
-	saveLog    = "panic occur while WorkFlow[%s] saving checkpoints;\n Id=%s\n Panic=%s\n%s"
 )
 
 type proto interface {
@@ -150,6 +149,10 @@ func init() {
 
 	RegisterType[pointerValue]()
 	RegisterType[breakPoint]()
+
+	RegisterType[resSerializable]()
+	// gob can't recognize
+	RegisterType[map[string]*resSerializable]()
 }
 
 func DisableEncrypt() {
@@ -176,15 +179,21 @@ func RegisterType[T any]() {
 func RecoverFlow(flowId string) (ret FinishedWorkFlow, err error) {
 	record, err := persister.GetLatestRecord(flowId)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("recovery failed: no latest record found for WorkFlow [ID: %s], error: %v", flowId, err)
 	}
-	checkpoints, err := persister.ListCheckpoints(record.GetRecoverId())
-	if err != nil {
-		return nil, err
+	var persistErr error
+	defer func() {
+		if persistErr != nil {
+			logger.Errorf("recovery failed: WorkFlow[Name: %s, ID: %s] persist error: %v", record.GetName(), flowId, persistErr)
+		}
+	}()
+	checkpoints, persistErr := persister.ListCheckpoints(record.GetRecoverId())
+	if persistErr != nil {
+		return nil, persistErr
 	}
 	factory, ok := allFlows.Load(record.GetName())
 	if !ok {
-		return nil, fmt.Errorf("flow[%s] not found", record.GetName())
+		return nil, fmt.Errorf("recovery failed: WorkFlow [Name: %s] not found", record.GetName())
 	}
 	flow := factory.(*FlowMeta).buildRunFlow(nil)
 	flow.id = flowId
@@ -194,16 +203,17 @@ func RecoverFlow(flowId string) (ret FinishedWorkFlow, err error) {
 	if err = loadStatus(flow, checkpoints); err != nil {
 		return
 	}
-	err = persister.UpdateRecordStatus(&recoverRecord{RecoverId: record.GetRecoverId(), Status: RecoverRunning})
-	if err != nil {
+	persistErr = persister.UpdateRecordStatus(&recoverRecord{RecoverId: record.GetRecoverId(), Status: RecoverRunning})
+	if persistErr != nil {
 		return
 	}
 	flow.append(Recovering)
 	ret = flow.Done()
 	if flow.Success() {
-		err = persister.UpdateRecordStatus(&recoverRecord{RecoverId: record.GetRecoverId(), Status: RecoverSuccess})
+		persistErr = persister.UpdateRecordStatus(&recoverRecord{RecoverId: record.GetRecoverId(), Status: RecoverSuccess})
 	} else {
-		err = persister.UpdateRecordStatus(&recoverRecord{RecoverId: record.GetRecoverId(), Status: RecoverFailed})
+		err = fmt.Errorf("recovery failed: Worlflow[Name: %s, ID: %s] re-execution failed", flow.Name(), flow.id)
+		persistErr = persister.UpdateRecordStatus(&recoverRecord{RecoverId: record.GetRecoverId(), Status: RecoverFailed})
 	}
 	return
 }
@@ -213,7 +223,7 @@ func SetMaxSerializeSize(size int) {
 }
 
 func loadStatus(workflow *runFlow, checkpoints []CheckPoint) error {
-	point, exist := workflow.getInternal(fmt.Sprintf(flowBreakPoint, workflow.name))
+	point, exist := workflow.getInternal(fmt.Sprintf(flowBP, workflow.name))
 	// the must before callback failed to execute last time, so all steps and processes need to be executed at this time
 	if exist && !point.(*breakPoint).SkipRun {
 		return nil
@@ -232,7 +242,7 @@ func loadStatus(workflow *runFlow, checkpoints []CheckPoint) error {
 		name := checkpoint.GetName()
 		workflow.runProcesses[name].clear(executed)
 		workflow.runProcesses[name].append(Recovering)
-		point, exist = workflow.runProcesses[name].getInternal(fmt.Sprintf(procBreakPoint, name))
+		point, exist = workflow.runProcesses[name].getInternal(fmt.Sprintf(procBP, name))
 		if exist && !point.(*breakPoint).SkipRun {
 			for _, step := range workflow.runProcesses[name].runSteps {
 				step.clear(executed)
@@ -247,11 +257,11 @@ func loadStatus(workflow *runFlow, checkpoints []CheckPoint) error {
 		name := checkpoint.GetName()
 		proc, ok := workflow.runProcesses[id2Name[checkpoint.GetParentUid()]]
 		if !ok {
-			return fmt.Errorf("unable to recognize the process to which Step[%s] belongs", checkpoint.GetName())
+			return fmt.Errorf("recovery failed: unable to recognize the process to which Step[ %s ] belongs", checkpoint.GetName())
 		}
 		current, find := proc.runSteps[name]
 		if !find {
-			return fmt.Errorf("Step[%s] not belong to Process[%s]", name, proc.name)
+			return fmt.Errorf("recovery failed: Step[ %s ] not belong to Process[ %s ]", name, proc.name)
 		}
 		current.append(Recovering)
 		proc.clearExecutedFromRoot(name)
@@ -283,7 +293,7 @@ func loadCheckpoints(workflow *runFlow, checkpoints []CheckPoint) (err error) {
 			step := belong.runSteps[checkpoint.GetName()]
 			err = step.loadCheckpoint(checkpoint)
 		default:
-			err = fmt.Errorf("CheckPoint[%s] has unknown scope %d", checkpoint.GetName(), checkpoint.GetScope())
+			err = fmt.Errorf("recovery failed: CheckPoint[%s] has unknown scope %d", checkpoint.GetName(), checkpoint.GetScope())
 		}
 		if err != nil {
 			return err
@@ -544,6 +554,7 @@ func (point *flowCheckpoint) buildSnapshot() (err error) {
 		// remove breakpoints not saved in current recovery
 		ctx[k], err = encryptIfNeed(k, v, secret)
 		if err != nil {
+			logger.Errorf(snapshotErrorLog, "WorkFlow", point.GetName(), point.GetUid(), "encrypt", err.Error())
 			return
 		}
 	}
@@ -555,6 +566,9 @@ func (point *flowCheckpoint) buildSnapshot() (err error) {
 		}
 	}
 	point.snapshot, err = serialize([]map[string]any{ctx, point.internal})
+	if err != nil {
+		logger.Errorf(snapshotErrorLog, "WorkFlow", point.GetName(), point.GetUid(), "serialize", err.Error())
+	}
 	return
 }
 
@@ -611,6 +625,7 @@ func (point *procCheckpoint) buildSnapshot() (err error) {
 			}
 			head.Value, err = encryptIfNeed(k, head.Value, secret)
 			if err != nil {
+				logger.Errorf(snapshotErrorLog, "Process", point.GetName(), point.GetUid(), "encrypt", err.Error())
 				return
 			}
 			snapshot[k] = append(snapshot[k], *head)
@@ -671,6 +686,7 @@ func (point *stepCheckpoint) GetSnapshot() []byte {
 func (rf *runFlow) loadCheckpoint(checkpoint CheckPoint) error {
 	combine, err := deserialize[[]map[string]any](checkpoint.GetSnapshot())
 	if err != nil {
+		err = fmt.Errorf("recovery failed: deserialize error: %w", err)
 		return err
 	}
 	snapshot := combine[0]
@@ -716,7 +732,7 @@ func (rf *runFlow) saveCheckpoints() {
 		checkpoint.(checkpointBuilder).setId(generateId())
 		checkpoint.(checkpointBuilder).setRecoverId(recoverId)
 		if err := checkpoint.(checkpointBuilder).buildSnapshot(); err != nil {
-			break
+			return
 		}
 	}
 	record := &recoverRecord{
@@ -734,6 +750,10 @@ func (process *runProcess) loadCheckpoint(checkpoint CheckPoint) error {
 	process.id = checkpoint.GetUid()
 	snapshot, err := deserialize[map[string][]node](checkpoint.GetSnapshot())
 	if err != nil {
+		err = fmt.Errorf("recovery failed: deserialize error: %w", err)
+		return err
+	}
+	if err = process.loadResource(snapshot); err != nil {
 		return err
 	}
 	for k := range snapshot {
@@ -749,6 +769,7 @@ func (process *runProcess) loadCheckpoint(checkpoint CheckPoint) error {
 			}
 			newNode.Value, err = decryptIfNeed(k, nodeList[i].Value, createSecret(checkpoint))
 			if err != nil {
+				err = fmt.Errorf("recovery failed: decrypt error: %w", err)
 				return err
 			}
 			head = newNode
@@ -763,5 +784,34 @@ func (process *runProcess) loadCheckpoint(checkpoint CheckPoint) error {
 
 func (step *runStep) loadCheckpoint(checkpoint CheckPoint) error {
 	step.id = checkpoint.GetUid()
+	return nil
+}
+
+func (process *runProcess) loadResource(snapshot map[string][]node) error {
+	nodes := snapshot[resSerializableKey]
+	if nodes == nil {
+		return nil
+	}
+	head := nodes[0]
+	if head.Path != internalMark {
+		return nil
+	}
+	saver, ok := head.Value.(map[string]*resSerializable)
+	if !ok {
+		return fmt.Errorf("recovery failed: resource serializable type error")
+	}
+	process.resources = make(map[string]*resource, len(saver))
+	for k, v := range saver {
+		process.resources[k] = &resource{
+			boundProc: process,
+			resName:   v.Name,
+			ctx:       v.Ctx,
+			entity:    v.Entity,
+		}
+	}
+	snapshot[resSerializableKey] = nodes[1:]
+	if len(nodes) == 1 {
+		delete(snapshot, resSerializableKey)
+	}
 	return nil
 }

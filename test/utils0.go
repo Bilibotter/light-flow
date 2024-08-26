@@ -36,8 +36,8 @@ type Proto interface {
 	Success() bool
 	Name() string
 	ID() string
-	StartTime() time.Time
-	EndTime() time.Time
+	StartTime() *time.Time
+	EndTime() *time.Time
 	CostTime() time.Duration
 }
 
@@ -59,6 +59,11 @@ type FlexibleBuilder[T Proto] struct {
 	doing []interface{}
 	fxRet *int64
 	index int
+}
+
+type ResourceI interface {
+	Attach(resName string, initParam any) (flow.Resource, error)
+	Acquire(resName string) (flow.Resource, bool)
 }
 
 func Fx[T Proto](t *testing.T) *FlexibleBuilder[T] {
@@ -116,11 +121,83 @@ func (fx *FlexibleBuilder[T]) CheckCtx0(preview, prefix string) *FlexibleBuilder
 	return fx
 }
 
-func (fx *FlexibleBuilder[T]) Normal() *FlexibleBuilder[T] {
+func (fx *FlexibleBuilder[T]) Inc() *FlexibleBuilder[T] {
 	fx.doing = append(fx.doing, func(s T) (any, error) {
 		atomic.AddInt64(&current, 1)
 		return nil, nil
 	})
+	return fx
+}
+
+func (fx *FlexibleBuilder[T]) Attach(resName string, initParam any, kv map[string]any) *FlexibleBuilder[T] {
+	fx.doing = append(fx.doing, func(s T) (any, error) {
+		res := any(s).(ResourceI)
+		resource, err := res.Attach(resName, initParam)
+		if err != nil {
+			return s.Name(), err
+		}
+		for k, v := range kv {
+			resource.Put(k, v)
+		}
+		atomic.AddInt64(&current, 1)
+		return s.Name(), nil
+	})
+	return fx
+}
+
+func (fx *FlexibleBuilder[T]) Acquire(resName string, check any, kv map[string]any) *FlexibleBuilder[T] {
+	fx.doing = append(fx.doing, func(s T) (any, error) {
+		res := any(s).(ResourceI)
+		resource, exist := res.Acquire(resName)
+		if !exist {
+			panic(fmt.Sprintf("Resource [%s] not exist", resName))
+		}
+		if resource.Entity() != check {
+			fx.Errorf("Check resource %s failed, expect %v, actual %v", resName, check, resource.Entity())
+		}
+		if resource.Entity() != nil {
+			fx.Logf("Resource[ %s ] check entity success", resName)
+		}
+		for k, v := range kv {
+			if target, find := resource.Fetch(k); !find {
+				fx.Errorf("Check resource %s failed, key %s not exist", resName, k)
+			} else if target != v {
+				fx.Errorf("Check resource %s failed, key %s expect %v, actual %v", resName, k, v, target)
+			}
+		}
+		atomic.AddInt64(&current, 1)
+		return s.Name(), nil
+	})
+	return fx
+}
+
+func (fx *FlexibleBuilder[T]) Wait() *FlexibleBuilder[T] {
+	fx.doing = append(fx.doing, func(s T) (any, error) {
+		ch := make(chan bool)
+		go func() {
+			for !letGo {
+			}
+			ch <- true
+		}()
+		select {
+		case <-ch:
+			return true, nil
+		case <-time.After(1 * time.Second):
+			fx.Errorf("Unit[%s] timeout", s.Name())
+			return false, fmt.Errorf("timeout")
+		}
+	})
+	return fx
+}
+
+func (fx *FlexibleBuilder[T]) Broadcast() *FlexibleBuilder[T] {
+	last := fx.doing[len(fx.doing)-1].(func(s T) (any, error))
+	fx.doing[len(fx.doing)-1] = func(s T) (any, error) {
+		defer func() {
+			letGo = true
+		}()
+		return last(s)
+	}
 	return fx
 }
 
@@ -147,7 +224,7 @@ func (fx *FlexibleBuilder[T]) Add(f ...interface{}) *FlexibleBuilder[T] {
 
 func (fx *FlexibleBuilder[T]) SetCond() *FlexibleBuilder[T] {
 	fx.doing = append(fx.doing, func(s flow.Step) (any, error) {
-		fx.Logf("step[%s] set condition", s.Name())
+		fx.Logf("Step[ %s ] set condition", s.Name())
 		atomic.AddInt64(&current, 1)
 		s.SetCondition(true)
 		s.SetCondition(1)
@@ -176,7 +253,7 @@ func (fx *FlexibleBuilder[T]) Condition(i int, ret int64) *FlexibleBuilder[T] {
 func (fx *FlexibleBuilder[T]) Step() func(flow.Step) (any, error) {
 	return func(s flow.Step) (_ any, errs error) {
 		defer println()
-		fx.Logf("step[%s] start running", s.Name())
+		fx.Logf("Step[ %s ] start running", s.Name())
 		for i, f := range fx.doing {
 			if i == fx.index {
 				switch atomic.LoadInt64(fx.fxRet) {
@@ -190,25 +267,25 @@ func (fx *FlexibleBuilder[T]) Step() func(flow.Step) (any, error) {
 			case func(flow.Step) (any, error):
 				_, err := fn(s)
 				if err != nil {
-					fx.Logf("step[%s] failed: %s", s.Name(), err)
+					fx.Logf("Step[ %s ] failed: %s", s.Name(), err)
 					return s.Name(), err
 				}
 			case func(flow.Step) (bool, error):
 				_, err := fn(s)
 				if err != nil {
-					fx.Logf("step[%s] failed: %s", s.Name(), err)
+					fx.Logf("Step[ %s ] failed: %s", s.Name(), err)
 					return s.Name(), err
 				}
 			case func(proto Proto) (any, error):
 				_, err := fn(s)
 				if err != nil {
-					fx.Logf("step[%s] failed: %s", s.Name(), err)
+					fx.Logf("Step[ %s ] failed: %s", s.Name(), err)
 					return s.Name(), err
 				}
 			case func(ctx Ctx) (any, error):
 				_, err := fn(s)
 				if err != nil {
-					fx.Logf("step[%s] failed: %s", s.Name(), err)
+					fx.Logf("Step[ %s ] failed: %s", s.Name(), err)
 					return s.Name(), err
 				}
 			default:
@@ -221,7 +298,7 @@ func (fx *FlexibleBuilder[T]) Step() func(flow.Step) (any, error) {
 		case panicRet:
 			panic("panic")
 		}
-		fx.Logf("step[%s] succeed", s.Name())
+		fx.Logf("Step[ %s ] succeed", s.Name())
 		return s.Name(), nil
 	}
 }
@@ -233,13 +310,13 @@ func (fx *FlexibleBuilder[T]) Callback() func(T) (bool, error) {
 		switch v := any(arg).(type) {
 		case flow.Step:
 			flag = 1
-			fx.Logf("step[%s] invoke callback", v.Name())
+			fx.Logf("Step[ %s ] invoke callback", v.Name())
 		case flow.Process:
 			flag = 2
-			fx.Logf("process[%s] invoke callback", v.Name())
+			fx.Logf("Process[ %s ] invoke callback", v.Name())
 		case flow.WorkFlow:
 			flag = 3
-			fx.Logf("workflow[%s] invoke callback", v.Name())
+			fx.Logf("WorkFlow[ %s ] invoke callback", v.Name())
 		default:
 			panic(fmt.Sprintf("unsupported type: %T", v))
 		}
@@ -276,11 +353,11 @@ func (fx *FlexibleBuilder[T]) Callback() func(T) (bool, error) {
 			if err != nil {
 				switch flag {
 				case 1:
-					fx.Logf("step[%s] failed: %s", arg.Name(), err)
+					fx.Logf("Step[ %s ] failed: %s", arg.Name(), err)
 				case 2:
-					fx.Logf("process[%s] failed: %s", arg.Name(), err)
+					fx.Logf("Process[ %s ] failed: %s", arg.Name(), err)
 				case 3:
-					fx.Logf("workflow[%s] failed: %s", arg.Name(), err)
+					fx.Logf("WorkFlow[ %s ] failed: %s", arg.Name(), err)
 				}
 				return true, err
 			}
@@ -293,11 +370,11 @@ func (fx *FlexibleBuilder[T]) Callback() func(T) (bool, error) {
 		}
 		switch flag {
 		case 1:
-			fx.Logf("step[%s] callback succeed", arg.Name())
+			fx.Logf("Step[ %s ] callback succeed", arg.Name())
 		case 2:
-			fx.Logf("process[%s] callback succeed", arg.Name())
+			fx.Logf("Process[ %s ] callback succeed", arg.Name())
 		case 3:
-			fx.Logf("workflow[%s] callback succeed", arg.Name())
+			fx.Logf("WorkFlow[ %s ] callback succeed", arg.Name())
 		}
 		return true, nil
 	}

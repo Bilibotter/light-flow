@@ -15,7 +15,7 @@ func AfterFlowProcessor(info flow.WorkFlow) (bool, error) {
 		panic("flow id is empty")
 	}
 	atomic.AddInt64(&current, 1)
-	fmt.Printf("..process[%s] AfterFlowProcessor execute \n", info.Name())
+	fmt.Printf("..Process[ %s ] AfterFlowProcessor execute \n", info.Name())
 	return true, nil
 }
 
@@ -27,7 +27,7 @@ func BeforeFlowProcessor(info flow.WorkFlow) (bool, error) {
 		panic("flow id is empty")
 	}
 	atomic.AddInt64(&current, 1)
-	fmt.Printf("..process[%s] BeforeFlowProcessor execute \n", info.Name())
+	fmt.Printf("..Process[ %s ] BeforeFlowProcessor execute \n", info.Name())
 	return true, nil
 }
 

@@ -495,14 +495,14 @@ func (meta *StepMeta) addDepend(depends ...any) {
 	for _, wrap := range depends {
 		dependName := toStepName(wrap)
 		if dependName == meta.name {
-			panic(fmt.Sprintf("Step[%s] can't depend on itself.", meta.name))
+			panic(fmt.Sprintf("Step[ %s ] can't depend on itself.", meta.name))
 		}
 		if meta.existDepend(dependName) {
 			continue
 		}
 		depend, exist := meta.belong.steps[dependName]
 		if !exist {
-			panic(fmt.Sprintf("Step[%s]'s depend[%s] not found.", meta.name, dependName))
+			panic(fmt.Sprintf("Step[ %s ]'s depend[%s] not found.", meta.name, dependName))
 		}
 		meta.depends = append(meta.depends, depend)
 	}

@@ -40,7 +40,7 @@ func emptyStep(ctx Step) (any, error) {
 }
 
 func errorStep(ctx Step) (any, error) {
-	fmt.Printf("step[%s] execute error\n", ctx.Name())
+	fmt.Printf("Step[ %s ] execute error\n", ctx.Name())
 	atomic.AddInt64(&current, 1)
 	return nil, fmt.Errorf("error step")
 }
@@ -51,23 +51,22 @@ func CheckResult(t *testing.T, check int64, statuses ...*StatusEnum) func(WorkFl
 		for i, status := range statuses {
 			ss[i] = status.Message()
 		}
-		t.Logf("start check, expected current=%d, status include %s", check, strings.Join(ss, ","))
-		if current != check {
-			t.Errorf("execute %d step, but current = %d\n", check, current)
+		t.Logf("\n")
+		t.Logf(`// ======= Start Check ======= //`)
+		t.Logf("expect [ current ] = %d, [ status ] include { %s }", check, strings.Join(ss, ","))
+		if atomic.LoadInt64(&current) != check {
+			t.Errorf("execute %d step, but current = %d", check, current)
 		}
 		for _, status := range statuses {
 			if status == Success && !workFlow.Success() {
-				t.Errorf("WorkFlow executed failed\n")
+				t.Errorf("WorkFlow executed failed")
 			}
-			//if status == Timeout {
-			//	time.Sleep(50 * time.Millisecond)
-			//}
 			if !workFlow.HasAny(status) {
-				t.Errorf("workFlow has not %s status\n", status.Message())
+				t.Errorf("workFlow has not %s status", status.Message())
 			}
 		}
-		t.Logf("status expalin=%s", strings.Join(workFlow.ExplainStatus(), ","))
-		t.Logf("finish check")
+		t.Logf("[ status ] expalin = { %s }", strings.Join(workFlow.ExplainStatus(), ","))
+		t.Logf(`// ======= Finish Check ====== //`)
 		println()
 		return true, nil
 	}
@@ -189,13 +188,13 @@ func FlowCurrentChecker(i int64, flag int) func(info WorkFlow) (bool, error) {
 
 func FlowConfigChecker(t *testing.T, config flowConfig) func(info WorkFlow) (bool, error) {
 	return func(info WorkFlow) (bool, error) {
-		t.Logf("start check Flow[%s] config", info.Name())
+		t.Logf("start check WorkFlow[ %s ] config", info.Name())
 		rf := info.(*runFlow)
 		if rf.recoverable != config.recoverable {
-			return false, fmt.Errorf("flow[%s] recoverable is %d not %d", info.Name(), rf.recoverable, config.recoverable)
+			return false, fmt.Errorf("WorkFlow[ %s ] recoverable is %d not %d", info.Name(), rf.recoverable, config.recoverable)
 		}
 		atomic.AddInt64(&current, 1)
-		t.Logf("check Flow[%s] config success", info.Name())
+		t.Logf("check WorkFlow[ %s ] config success", info.Name())
 		println()
 		return true, nil
 	}
@@ -203,19 +202,19 @@ func FlowConfigChecker(t *testing.T, config flowConfig) func(info WorkFlow) (boo
 
 func ProcessConfigChecker(t *testing.T, config processConfig) func(info Process) (bool, error) {
 	return func(info Process) (bool, error) {
-		t.Logf("start check Process[%s] config", info.Name())
+		t.Logf("start check Process[ %s ] config", info.Name())
 		rp := info.(*runProcess)
 		if rp.procTimeout != config.procTimeout {
-			return false, fmt.Errorf("process[%s] timeout is %d not %d", info.Name(), rp.procTimeout, config.procTimeout)
+			return false, fmt.Errorf("Process[ %s ] timeout is %d not %d", info.Name(), rp.procTimeout, config.procTimeout)
 		}
 		if rp.stepTimeout != config.stepTimeout {
-			return false, fmt.Errorf("process[%s] step timeout is %d not %d", info.Name(), rp.stepTimeout, config.stepTimeout)
+			return false, fmt.Errorf("Process[ %s ] step timeout is %d not %d", info.Name(), rp.stepTimeout, config.stepTimeout)
 		}
 		if rp.stepRetry != config.stepRetry {
-			return false, fmt.Errorf("process[%s] step retry is %d not %d", info.Name(), rp.stepRetry, config.stepRetry)
+			return false, fmt.Errorf("Process[ %s ] step retry is %d not %d", info.Name(), rp.stepRetry, config.stepRetry)
 		}
 		atomic.AddInt64(&current, 1)
-		t.Logf("check Process[%s] config success", info.Name())
+		t.Logf("check Process[ %s ] config success", info.Name())
 		println()
 		return true, nil
 	}
@@ -223,16 +222,16 @@ func ProcessConfigChecker(t *testing.T, config processConfig) func(info Process)
 
 func StepConfigChecker(t *testing.T, config stepConfig) func(info Step) (bool, error) {
 	return func(info Step) (bool, error) {
-		t.Logf("start check Step[%s] config", info.Name())
+		t.Logf("start check Step[ %s ] config", info.Name())
 		rs := info.(*runStep)
 		if rs.stepTimeout != config.stepTimeout {
-			return false, fmt.Errorf("step[%s] timeout is %d not %d", info.Name(), rs.stepTimeout, config.stepTimeout)
+			return false, fmt.Errorf("Step[ %s ] timeout is %d not %d", info.Name(), rs.stepTimeout, config.stepTimeout)
 		}
 		if rs.stepRetry != config.stepRetry {
-			return false, fmt.Errorf("step[%s] retry is %d not %d", info.Name(), rs.stepRetry, config.stepRetry)
+			return false, fmt.Errorf("Step[ %s ] retry is %d not %d", info.Name(), rs.stepRetry, config.stepRetry)
 		}
 		atomic.AddInt64(&current, 1)
-		t.Logf("check Step[%s] config success", info.Name())
+		t.Logf("check Step[ %s ] config success", info.Name())
 		println()
 		return true, nil
 	}
@@ -676,7 +675,7 @@ func TestDefaultProcessConfigValid(t *testing.T) {
 	DefaultConfig().StepTimeout(time.Hour)
 	DefaultConfig().ProcessTimeout(time.Minute)
 	wf := RegisterFlow("TestDefaultProcessConfigValid")
-	proc1 := wf.Process("ProcConfigFill_1")
+	proc1 := wf.Process("ProcConfigFill1")
 	proc1.StepRetry(3)
 	proc1.StepTimeout(3 * time.Hour)
 	proc1.ProcessTimeout(3 * time.Minute)
@@ -687,7 +686,7 @@ func TestDefaultProcessConfigValid(t *testing.T) {
 	proc1.AfterStep(true, StepConfigChecker(t, copy1.stepConfig))
 	proc1.NameStep(emptyStep, "Step1")
 
-	proc2 := wf.Process("ProcConfigEmpty_1")
+	proc2 := wf.Process("ProcConfigEmpty1")
 	copy2 := processConfig{procTimeout: 1 * time.Minute}
 	proc2.BeforeProcess(true, ProcessConfigChecker(t, copy2))
 	proc2.AfterProcess(true, ProcessConfigChecker(t, copy2))
@@ -712,7 +711,7 @@ func TestFlowProcessConfigValid(t *testing.T) {
 	wf.StepTimeout(2 * time.Hour)
 	wf.StepRetry(2)
 
-	proc1 := wf.Process("ProcConfigFill_2")
+	proc1 := wf.Process("ProcConfigFill2")
 	proc1.StepRetry(3)
 	proc1.StepTimeout(3 * time.Hour)
 	proc1.ProcessTimeout(3 * time.Minute)
@@ -723,7 +722,7 @@ func TestFlowProcessConfigValid(t *testing.T) {
 	proc1.AfterStep(true, StepConfigChecker(t, copy1.stepConfig))
 	proc1.NameStep(emptyStep, "Step1")
 
-	proc2 := wf.Process("ProcConfigEmpty_2")
+	proc2 := wf.Process("ProcConfigEmpty2")
 	copy2 := processConfig{procTimeout: 2 * time.Minute, stepConfig: stepConfig{stepTimeout: 2 * time.Hour, stepRetry: 2}}
 	proc2.BeforeProcess(true, ProcessConfigChecker(t, copy2))
 	proc2.AfterProcess(true, ProcessConfigChecker(t, copy2))

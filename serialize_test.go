@@ -1,11 +1,37 @@
 package light_flow
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
+	"sync/atomic"
 	"testing"
 	"time"
 )
+
+type pImpl struct {
+	checkpoint []CheckPoint
+	record     RecoverRecord
+}
+
+func (p *pImpl) GetLatestRecord(_ string) (RecoverRecord, error) {
+	return p.record, nil
+}
+
+func (p *pImpl) ListCheckpoints(_ string) ([]CheckPoint, error) {
+	return p.checkpoint, nil
+}
+
+func (p *pImpl) UpdateRecordStatus(record RecoverRecord) error {
+	p.record = record
+	return nil
+}
+
+func (p *pImpl) SaveCheckpointAndRecord(checkpoint []CheckPoint, record RecoverRecord) error {
+	p.checkpoint = checkpoint
+	p.record = record
+	return nil
+}
 
 type InputA struct {
 	Name string
@@ -502,4 +528,64 @@ func TestNodeMap(t *testing.T) {
 	} else if !reflect.DeepEqual(u, &otv1) || m2["*outcomeValue"][1].Path != 7 {
 		t.Errorf("*outcomeValue serialize failed\n")
 	}
+}
+
+func TestResourceKeyDuplicate(t *testing.T) {
+	defer resetCurrent()
+	RegisterResourceManager("TestResourceKeyDuplicate").
+		OnRecover(func(res Resource) error {
+			t.Logf("recover resource %s", res.Name())
+			atomic.AddInt64(&current, 1)
+			return nil
+		}).
+		OnSuspend(func(res Resource) error {
+			t.Logf("suspend resource %s", res.Name())
+			atomic.AddInt64(&current, 1)
+			return nil
+		})
+	SetPersist(&pImpl{})
+	wf := RegisterFlow("TestResourceKeyDuplicate")
+	wf.EnableRecover()
+	proc := wf.Process("TestResourceKeyDuplicate")
+	canPass := false
+	proc.BeforeProcess(false, func(process Process) (keepOn bool, err error) {
+		process.Set(resSerializableKey, "2")
+		atomic.AddInt64(&current, 1)
+		return true, nil
+	})
+	proc.NameStep(func(ctx Step) (any, error) {
+		t.Logf("start step1")
+		if _, err := ctx.Attach("TestResourceKeyDuplicate", "1"); err != nil {
+			return nil, err
+		}
+		ctx.Set(resSerializableKey, "1")
+		atomic.AddInt64(&current, 1)
+		if canPass {
+			t.Logf("finish step1")
+			return nil, nil
+		} else {
+			t.Logf("failed step1")
+			return nil, errors.New("can not pass")
+		}
+	}, "1")
+	proc.NameStep(func(ctx Step) (any, error) {
+		t.Logf("start step2")
+		if match, exist := ctx.Get(resSerializableKey); !exist {
+			panic("resSerializableKey not exist")
+		} else if match != "1" {
+			panic("resSerializableKey not equal to 1")
+		}
+		if _, exist := ctx.Acquire("TestResourceKeyDuplicate"); !exist {
+			panic("TestResourceKeyDuplicate not exist")
+		}
+		atomic.AddInt64(&current, 1)
+		t.Logf("finish step2")
+		return nil, nil
+	}, "2", "1")
+	ret := DoneFlow("TestResourceKeyDuplicate", nil)
+	CheckResult(t, 3, Error)(any(ret).(WorkFlow))
+	resetCurrent()
+	canPass = true
+	ret, _ = ret.Recover()
+	CheckResult(t, 3, Success)(any(ret).(WorkFlow))
 }

@@ -37,7 +37,7 @@ func PreProcessor(info flow.Step) (bool, error) {
 		panic("step start time is zero")
 	}
 	atomic.AddInt64(&current, 1)
-	fmt.Printf("..step[%s] PreProcessor exeucte\n", info.Name())
+	fmt.Printf("..Step[ %s ] PreProcessor exeucte\n", info.Name())
 	return true, nil
 }
 
@@ -61,7 +61,7 @@ func PostProcessor(info flow.Step) (bool, error) {
 		panic("step end time is zero")
 	}
 	atomic.AddInt64(&current, 1)
-	fmt.Printf("..step[%s] PostProcessor execute\n", info.Name())
+	fmt.Printf("..Step[ %s ] PostProcessor execute\n", info.Name())
 	return true, nil
 }
 
@@ -79,7 +79,7 @@ func ProcProcessor(info flow.Process) (bool, error) {
 		panic("process start time is zero")
 	}
 	atomic.AddInt64(&current, 1)
-	fmt.Printf("..process[%s] ProcProcessor execute \n", info.Name())
+	fmt.Printf("..Process[ %s ] ProcProcessor execute \n", info.Name())
 	return true, nil
 }
 

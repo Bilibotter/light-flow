@@ -11,15 +11,16 @@ type runProcess struct {
 	*state
 	*ProcessMeta
 	*dependentContext
-	belong   *runFlow
-	id       string
-	compress state
-	runSteps map[string]*runStep
-	start    time.Time
-	end      time.Time
-	pause    sync.WaitGroup
-	running  sync.WaitGroup
-	finish   sync.WaitGroup
+	belong    *runFlow
+	id        string
+	compress  state
+	runSteps  map[string]*runStep
+	resources map[string]*resource
+	start     time.Time
+	end       time.Time
+	pause     sync.WaitGroup
+	running   sync.WaitGroup
+	finish    sync.WaitGroup
 }
 
 func (process *runProcess) HasAny(enum ...*StatusEnum) bool {
@@ -30,12 +31,12 @@ func (process *runProcess) ID() string {
 	return process.id
 }
 
-func (process *runProcess) StartTime() time.Time {
-	return process.start
+func (process *runProcess) StartTime() *time.Time {
+	return &process.start
 }
 
-func (process *runProcess) EndTime() time.Time {
-	return process.end
+func (process *runProcess) EndTime() *time.Time {
+	return &process.end
 }
 
 func (process *runProcess) CostTime() time.Duration {
@@ -84,6 +85,14 @@ func (process *runProcess) Step(name string) (StepController, bool) {
 	return nil, false
 }
 
+func (process *runProcess) Steps() []FinishedStep {
+	res := make([]FinishedStep, 0, len(process.runSteps))
+	for _, step := range process.runSteps {
+		res = append(res, step)
+	}
+	return res
+}
+
 func (process *runProcess) Exceptions() []FinishedStep {
 	finished := make([]FinishedStep, 0)
 	for _, step := range process.runSteps {
@@ -125,14 +134,16 @@ func (process *runProcess) schedule() (finish *sync.WaitGroup) {
 		return
 	}
 	process.start = time.Now().UTC()
-	process.append(Running)
+	if process.Has(Recovering) {
+		process.manageResources(recoverR)
+	}
+	procPersist.onBegin(process)
 	process.advertise(beforeF)
 	for _, step := range process.runSteps {
 		if step.layer == 1 {
 			go process.startStep(step)
 		}
 	}
-
 	process.finish.Add(1)
 	go process.finalize()
 	return
@@ -177,13 +188,14 @@ func (process *runProcess) startStep(step *runStep) {
 	}
 
 	timer := time.NewTimer(timeout)
+	defer stepPersist.onComplete(step)
 	go process.runStep(step)
 	select {
 	case <-timer.C:
 		step.append(Timeout)
 	case <-step.finish:
-		return
 	}
+	step.end = time.Now().UTC()
 }
 
 func (process *runProcess) evaluate(step *runStep) bool {
@@ -229,9 +241,60 @@ func (process *runProcess) finalize() {
 		process.append(Failed)
 	}
 	process.advertise(afterF)
+	if process.Has(Suspend) {
+		process.belong.append(Suspend)
+		process.manageResources(suspendR)
+	}
+	process.manageResources(releaseR)
 	process.compress.add(process.load())
 	process.end = time.Now().UTC()
+	procPersist.onComplete(process)
 	process.finish.Done()
+}
+
+func (process *runProcess) manageResources(action string) {
+	if process.resources == nil {
+		return
+	}
+	var resName string
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Errorf(resourcePanicFmt, process.Name(), process.id, action, resName, r, stack())
+		}
+	}()
+	var err error
+	for name, res := range process.resources {
+		resName = name
+		switch action {
+		case releaseR:
+			err = resourceManagers[resName].onRelease(res)
+		case recoverR:
+			err = resourceManagers[resName].onRecover(res)
+		case suspendR:
+			err = resourceManagers[resName].onSuspend(res)
+		}
+		if err != nil {
+			logger.Errorf(resourceErrorFmt, process.Name(), process.id, action, resName, err.Error())
+		}
+	}
+	if action == suspendR {
+		process.makeResSerializable()
+	}
+}
+
+func (process *runProcess) makeResSerializable() {
+	if process.resources == nil {
+		return
+	}
+	saver := make(map[string]*resSerializable, len(process.resources))
+	for k, v := range process.resources {
+		saver[k] = &resSerializable{
+			Name:   v.resName,
+			Ctx:    v.ctx,
+			Entity: v.entity,
+		}
+	}
+	process.setInternal(resSerializableKey, saver)
 }
 
 func (process *runProcess) startNextSteps(step *runStep) {
@@ -249,9 +312,7 @@ func (process *runProcess) startNextSteps(step *runStep) {
 		if atomic.LoadInt64(&waiting) != 0 {
 			continue
 		}
-		if step.Success() {
-			next.append(Running)
-		} else if skip {
+		if skip {
 			next.append(skipped)
 		}
 		if bind != nil {
@@ -267,11 +328,11 @@ func (process *runProcess) startNextSteps(step *runStep) {
 
 func (process *runProcess) runStep(step *runStep) {
 	defer func() { step.finish <- true }()
-
 	step.start = time.Now().UTC()
+	stepPersist.onBegin(step)
 	process.stepCallback(step, beforeF)
 	// if beforeStep panic occur, the step will mark as panic
-	if !step.Normal() {
+	if step.Has(CallbackFail) {
 		return
 	}
 
@@ -282,20 +343,32 @@ func (process *runProcess) runStep(step *runStep) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			panicErr := fmt.Errorf("\n[Recovery] %s panic recovered:\n%s\n%s\n", time.Now().Format("2006/01/02 - 15:04:05"), r, stack())
-			logger.Errorf("step[%s] execute panic;\n Panic=%v\n%s\n", step.name, r, stack())
+			logger.Errorf("Step[ %s ] execute panic;\nID=%s;\nPanic=%v\n%s\n", step.name, step.id, r, stack())
 			step.append(Panic)
-			step.exception = panicErr
-			step.end = time.Now().UTC()
+			step.exception = fmt.Errorf("%v", r)
 		}
-		if step.isRecoverable() && !step.Normal() && !step.Has(CallbackFail) {
-			step.setInternal(fmt.Sprintf(stepBreakPoint, step.Name()), &stepPanicBreakPoint)
+		step.end = time.Now().UTC()
+		if !step.isRecoverable() {
+			process.stepCallback(step, afterF)
+			return
+		}
+		if !step.Normal() && !step.Has(CallbackFail) {
+			step.append(Suspend)
+			step.setInternal(fmt.Sprintf(stepBP, step.Name()), &breakPoint{
+				Stage:   1<<0 | 1<<9, // execute default after step callback from 0
+				Index:   0,
+				SkipRun: false,
+			})
 		}
 		process.stepCallback(step, afterF)
+		if step.Has(Suspend) {
+			step.belong.append(Suspend)
+			step.belong.belong.append(Suspend)
+		}
 	}()
 
 	if step.Has(Recovering) {
-		point, exist := step.getInternal(fmt.Sprintf(stepBreakPoint, step.Name()))
+		point, exist := step.getInternal(fmt.Sprintf(stepBP, step.Name()))
 		if exist {
 			if point.(*breakPoint).SkipRun {
 				return
@@ -305,7 +378,6 @@ func (process *runProcess) runStep(step *runStep) {
 
 	for i := 0; i <= retry; i++ {
 		result, err := step.run(step)
-		step.end = time.Now().UTC()
 		step.exception = err
 		if err != nil {
 			step.append(Error)
@@ -345,4 +417,49 @@ func (process *runProcess) advertise(flag uint64) {
 	if !process.procFilter(flag, process) {
 		return
 	}
+}
+
+func (process *runProcess) Attach(resName string, initParam any) (_ Resource, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Errorf(resourcePanicFmt, process.Name(), process.id, initializeR, resName, r, stack())
+			err = fmt.Errorf(resourceErrorFmt, process.Name(), process.id, attachR, resName, fmt.Sprintf("panic=%v", r))
+		}
+	}()
+	if foo, find := process.Acquire(resName); find {
+		return foo, nil
+	}
+	manager, exist := getResourceManager(resName)
+	if !exist {
+		err = fmt.Errorf(resourceErrorFmt, process.Name(), process.id, initializeR, resName, "Resource[ %s ] not registered")
+		return nil, err
+	}
+	res := &resource{boundProc: process, resName: resName}
+	instance, err := manager.onInitialize(res, initParam)
+	if err != nil {
+		err = fmt.Errorf(resourceErrorFmt, process.Name(), process.id, initializeR, resName, err.Error())
+		return nil, err
+	}
+	res.entity = instance
+	// DCL
+	if foo, find := process.Acquire(resName); find {
+		return foo, nil
+	}
+	process.Lock()
+	defer process.Unlock()
+	if process.resources == nil {
+		process.resources = make(map[string]*resource, 1)
+	}
+	process.resources[resName] = res
+	return res, nil
+}
+
+func (process *runProcess) Acquire(resName string) (res Resource, exist bool) {
+	process.RLock()
+	defer process.RUnlock()
+	if process.resources == nil {
+		return
+	}
+	res, exist = process.resources[resName]
+	return
 }

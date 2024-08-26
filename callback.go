@@ -24,9 +24,9 @@ const (
 )
 
 const (
-	flowBreakPoint = "fbp-%s"
-	procBreakPoint = "pbp-%s"
-	stepBreakPoint = "sbp-%s"
+	flowBP = "|||%s"
+	procBP = "||%s"
+	stepBP = "|%s"
 )
 
 const (
@@ -34,21 +34,8 @@ const (
 	nonMustS = "non-must"
 )
 
-const (
-	panicLog = "%s %s-callback trigger panic;\n    Scope=%s, Stage=%s, Iteration=%d;\n    Panic=%v\n%s"
-	errorLog = "%s %s-callback execute error;\n    Scope=%s, Stage=%s, Iteration=%d;\n    Error=%s"
-)
-
 var (
 	defaultCallback = buildFlowCallback(defaultScope)
-)
-
-var (
-	stepPanicBreakPoint = breakPoint{
-		Stage:   1<<0 | 1<<9, // execute default after step callback from 0
-		Index:   0,
-		SkipRun: false,
-	}
 )
 
 type FlowCallback interface {
@@ -236,27 +223,29 @@ func (chain *funcChain[T]) filter(runtime T) (runNext bool) {
 	if len(chain.Chain) == 0 {
 		return
 	}
-	lastTime := chain.loadBreakPoint(runtime)
-	if lastTime != nil && chain.Stage0 < lastTime.Stage {
-		return
-	}
-	if runtime.Has(Recovering) && lastTime == nil {
-		if chain.Before && !strings.HasSuffix(chain.Stage, stepScope) {
+	var index, begin int
+	if runtime.Has(Recovering) {
+		bp := chain.loadBreakPoint(runtime)
+		if bp != nil {
+			if chain.Stage0 < bp.Stage {
+				return
+			}
+			begin = bp.Index
+		}
+		// Don't execute ProcessCallback and WorkFlowCallback again
+		if bp == nil && chain.Before && !strings.HasSuffix(chain.Stage, stepScope) {
 			return
 		}
 	}
-	var index, begin int
 	defer func() {
 		r := recover()
-		if index >= chain.Index {
-			if r != nil {
-				logger.Errorf(panicLog, runtime.Name(), chain.necessity(index), chain.Scope, chain.Stage, index, r, stack())
-			}
-			return
-		}
 		if r != nil {
+			logger.Errorf(callbackPanicLog, chain.Stage, runtime.ID(), runtime.Name(), chain.necessity(index), chain.Scope, index+1, r, stack())
+			// non-must callback panic, ignore it
+			if index >= chain.Index {
+				return
+			}
 			runNext = false
-			logger.Errorf(panicLog, runtime.Name(), chain.necessity(index), chain.Scope, chain.Stage, index, r, stack())
 		}
 		if runNext {
 			return
@@ -268,6 +257,11 @@ func (chain *funcChain[T]) filter(runtime T) (runNext bool) {
 		if !runtime.isRecoverable() {
 			return
 		}
+		runtime.append(Suspend)
+		// If both 'Step' and 'Callback' fail, then use 'Step' as the breakpoint.
+		if bp := chain.loadBreakPoint(runtime); bp != nil && !bp.Used {
+			return
+		}
 		point := &breakPoint{
 			Stage:   chain.Stage0,
 			Index:   index,
@@ -275,16 +269,14 @@ func (chain *funcChain[T]) filter(runtime T) (runNext bool) {
 		}
 		chain.saveBreakPoint(runtime, point)
 	}()
-	if lastTime != nil {
-		begin = lastTime.Index
-	}
+
 	for index = begin; index < len(chain.Chain); index++ {
 		keepOn, err := chain.Chain[index].call(runtime)
 		if keepOn && err == nil {
 			continue
 		}
 		if err != nil {
-			logger.Errorf(errorLog, runtime.Name(), chain.necessity(index), chain.Scope, chain.Stage, index, err.Error())
+			logger.Errorf(callbackErrorLog, chain.Stage, runtime.ID(), runtime.Name(), chain.necessity(index), chain.Scope, index+1, err.Error())
 			runNext = index >= len(chain.Chain)
 		}
 		break
@@ -293,16 +285,13 @@ func (chain *funcChain[T]) filter(runtime T) (runNext bool) {
 }
 
 func (chain *funcChain[T]) loadBreakPoint(runtime T) (point *breakPoint) {
-	if !runtime.Has(Recovering) {
-		return
-	}
 	var wrap any
 	if strings.HasSuffix(chain.Stage, stepScope) {
-		wrap, _ = runtime.getInternal(fmt.Sprintf(stepBreakPoint, runtime.Name()))
+		wrap, _ = runtime.getInternal(fmt.Sprintf(stepBP, runtime.Name()))
 	} else if strings.HasSuffix(chain.Stage, procScope) {
-		wrap, _ = runtime.getInternal(fmt.Sprintf(procBreakPoint, runtime.Name()))
+		wrap, _ = runtime.getInternal(fmt.Sprintf(procBP, runtime.Name()))
 	} else if strings.HasSuffix(chain.Stage, flowScope) {
-		wrap, _ = runtime.getInternal(fmt.Sprintf(flowBreakPoint, runtime.Name()))
+		wrap, _ = runtime.getInternal(fmt.Sprintf(flowBP, runtime.Name()))
 	}
 	if wrap != nil {
 		point = wrap.(*breakPoint)
@@ -317,11 +306,11 @@ func (chain *funcChain[T]) saveBreakPoint(runtime T, point *breakPoint) {
 		point.Stage = defaultStage | afterStage
 	}
 	if strings.HasSuffix(chain.Stage, stepScope) {
-		runtime.setInternal(fmt.Sprintf(stepBreakPoint, runtime.Name()), point)
+		runtime.setInternal(fmt.Sprintf(stepBP, runtime.Name()), point)
 	} else if strings.HasSuffix(chain.Stage, procScope) {
-		runtime.setInternal(fmt.Sprintf(procBreakPoint, runtime.Name()), point)
+		runtime.setInternal(fmt.Sprintf(procBP, runtime.Name()), point)
 	} else if strings.HasSuffix(chain.Stage, flowScope) {
-		runtime.setInternal(fmt.Sprintf(flowBreakPoint, runtime.Name()), point)
+		runtime.setInternal(fmt.Sprintf(flowBP, runtime.Name()), point)
 	}
 }
 

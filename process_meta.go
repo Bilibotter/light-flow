@@ -32,7 +32,7 @@ func (pm *ProcessMeta) Name() string {
 func (pm *ProcessMeta) register() {
 	_, load := allProcess.LoadOrStore(pm.name, pm)
 	if load {
-		panic(fmt.Sprintf("Process[%s] has exist", pm.name))
+		panic(fmt.Sprintf("Process[ %s ] has exist", pm.name))
 	}
 }
 
@@ -65,7 +65,7 @@ func (pm *ProcessMeta) constructVisible() {
 func (pm *ProcessMeta) Merge(name string) {
 	wrap, find := allProcess.Load(name)
 	if !find {
-		panic(fmt.Sprintf("can't merge not exist Process[%s]", name))
+		panic(fmt.Sprintf("can't merge not exist Process[ %s ]", name))
 	}
 	mergedProcess := wrap.(*ProcessMeta)
 	for _, merged := range mergedProcess.sortedSteps() {
@@ -127,7 +127,7 @@ func (pm *ProcessMeta) mergeStep(merge *StepMeta) {
 		}
 		depend := pm.steps[name]
 		if depend.layer > target.layer && target.forwardSearch(name) {
-			panic(fmt.Sprintf("merge failed, a circle is formed between Step[%s] and Step[%s].",
+			panic(fmt.Sprintf("merge failed, a circle is formed between Step[ %s ] and Step[ %s ].",
 				depend.name, target.name))
 		}
 		if depend.layer+1 > target.layer {
@@ -168,6 +168,9 @@ func (pm *ProcessMeta) Tail(run func(ctx Step) (any, error), alias ...string) *S
 }
 
 func (pm *ProcessMeta) NameStep(run func(ctx Step) (any, error), name string, depends ...any) *StepMeta {
+	if !isValidIdentifier(name) {
+		panic(patternHint)
+	}
 	meta := &StepMeta{
 		name: name,
 	}
@@ -175,14 +178,14 @@ func (pm *ProcessMeta) NameStep(run func(ctx Step) (any, error), name string, de
 		dependName := toStepName(wrap)
 		depend, exist := pm.steps[dependName]
 		if !exist {
-			panic(fmt.Sprintf("Step[%s]'s depend[%s] not found.", name, dependName))
+			panic(fmt.Sprintf("Step[ %s ]'s depend[%s] not found.", name, dependName))
 		}
 		meta.depends = append(meta.depends, depend)
 	}
 
 	if old, exist := pm.steps[name]; exist {
 		if !old.position.Has(mergedE) {
-			panic(fmt.Sprintf("Step[%s] already exist, can used %s to avoid name duplicate",
+			panic(fmt.Sprintf("Step[ %s ] already exist, can used %s to avoid name duplicate",
 				name, getFuncName(pm.NameStep)))
 		}
 		pm.mergeStep(meta)
@@ -204,7 +207,7 @@ func (pm *ProcessMeta) NameStep(run func(ctx Step) (any, error), name string, de
 
 func (pm *ProcessMeta) addRouterInfo(step *StepMeta) {
 	if pm.nodeNum == 62 {
-		panic(fmt.Sprintf("Process[%s] exceeds max nodes num, max node num is 62", pm.name))
+		panic(fmt.Sprintf("Process[ %s ] exceeds max nodes num, max node num is 62", pm.name))
 	}
 	step.nodeRouter = nodeRouter{
 		nodePath: 1 << pm.nodeNum,

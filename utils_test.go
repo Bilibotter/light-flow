@@ -52,6 +52,25 @@ func fn4() {
 	fn3()
 }
 
+func TestValidIdentifier(t *testing.T) {
+	prefix := "AB"
+	identifiers := []string{prefix, "Valid123", "1234567890", "abcdefghijklmnopqrstuvwxyz", "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "ab"}
+	for _, id := range identifiers {
+		if !isValidIdentifier(id) {
+			t.Errorf("'%s' is not a valid identifier, but it should be.\n", id)
+		}
+	}
+	matches := strings.Split(`" # $ % & ' ( ) * + , - . / : ; < = > ? @ [ \ ] ^ _ { | } ~ ¢ £ ¤ ¥ ₠ ₡ ₢ ₣ ₤ ₥ ₦ ₧ ₨ ₩ ₪ ₫ € ₭ ₮ ₯ ₹ ₲ ₳ ₴ ₵ ₶ ₷ ₸ § ¶ © ® ™ ℗ ∞ ∆ ∇ ∏ ∑ ∂ ∴ ∵ ∷ ∈ ∉ ∋ ∌ ∅ ∇ ∆ ∏ ∐ ∑ ( ) [ ] { } < > ' "`, " ")
+	for _, match := range matches {
+		if isValidIdentifier(match) {
+			t.Errorf("'%s' is a valid identifier, but it should not be.\n", match)
+		}
+		if isValidIdentifier(prefix + match) {
+			t.Errorf("'%s' is a valid identifier, but it should not be.\n", prefix+match)
+		}
+	}
+}
+
 func TestNamedFuncStackTrace(t *testing.T) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -226,11 +245,6 @@ func TestExplainStatus1(t *testing.T) {
 	} else if !status.Has(Pause) {
 		t.Errorf("pause status not contain after add")
 	}
-	if status := state(0); !status.append(Running) {
-		t.Errorf("running status add error")
-	} else if !status.Has(Running) {
-		t.Errorf("running status not contain after add")
-	}
 	if status := state(0); !status.append(Success) {
 		t.Errorf("success status add error")
 	} else if !status.Has(Success) {
@@ -288,16 +302,12 @@ func TestExplainStatus2(t *testing.T) {
 
 	status1 = state(0)
 	status1.append(Pause)
-	status1.append(Running)
 	status1.append(Pending)
 	if !status1.Normal() {
 		t.Errorf("normal status judge error")
 	}
 	if !status1.Has(Pause) {
 		t.Errorf("pause status explain error")
-	}
-	if !status1.Has(Running) {
-		t.Errorf("running status explain error")
 	}
 	status1.append(Success)
 	if !status1.Has(Success) || !status1.Success() {

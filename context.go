@@ -27,13 +27,16 @@ var (
 
 // these variable are used to indicate the state of the unit
 var (
-	normal       = []*StatusEnum{Pending, Running, Pause, Success}
-	Pending      = &StatusEnum{0, "Pending"}
-	Running      = &StatusEnum{0b1, "Running"}
-	Pause        = &StatusEnum{0b1 << 1, "Pause"}
-	skipped      = &StatusEnum{0b1 << 2, "skip"}
-	executed     = &StatusEnum{0b1 << 3, "executed"}
-	Recovering   = &StatusEnum{0b1 << 4, "recovering"}
+	normal = []*StatusEnum{Pause, Success, Recovering, Suspend, Pending}
+	// Entity was not skipped, but Step may still be cancelled becasue of CallbackFail.
+	Pending  = &StatusEnum{0b1 << 0, "Pending"}
+	Pause    = &StatusEnum{0b1 << 1, "Pause"}
+	skipped  = &StatusEnum{0b1 << 2, "skip"}
+	executed = &StatusEnum{0b1 << 3, "executed"}
+	// Entity recovering from suspension.
+	Recovering = &StatusEnum{0b1 << 4, "Recovering"}
+	// Entity can be recovered at an appropriate time.
+	Suspend      = &StatusEnum{0b1 << 5, "Suspend"}
 	Success      = &StatusEnum{0b1 << 15, "Success"}
 	NormalMask   = &StatusEnum{0b1<<16 - 1, "NormalMask"}
 	abnormal     = []*StatusEnum{Cancel, Timeout, Panic, Error, Stop, CallbackFail, Failed}
@@ -66,6 +69,7 @@ type WorkFlow interface {
 
 type FinishedWorkFlow interface {
 	flowRuntime
+	Processes() []FinishedProcess
 	Recover() (FinishedWorkFlow, error)
 	Exceptions() []FinishedProcess
 }
@@ -84,6 +88,7 @@ type Process interface {
 
 type FinishedProcess interface {
 	procRuntime
+	Steps() []FinishedStep
 	Exceptions() []FinishedStep
 }
 
@@ -97,6 +102,7 @@ type ProcController interface {
 
 type procCtx interface {
 	context
+	resManagerI
 	GetByStepName(stepName, key string) (value any, exist bool)
 }
 
@@ -124,6 +130,7 @@ type StepController interface {
 
 type stepCtx interface {
 	context
+	resManagerI
 	SetCondition(value any, targets ...string) // the targets contain names of the evaluators to be matched
 	EndValues(key string) map[string]any
 	Result(key string) (value any, exist bool)
@@ -144,6 +151,11 @@ type runtimeI interface {
 	periodI
 }
 
+type resManagerI interface {
+	Attach(resName string, initParam any) (Resource, error)
+	Acquire(resName string) (Resource, bool)
+}
+
 type statusI interface {
 	ExplainStatus() []string
 	Has(enum ...*StatusEnum) bool
@@ -161,8 +173,8 @@ type identifierI interface {
 }
 
 type periodI interface {
-	StartTime() time.Time
-	EndTime() time.Time
+	StartTime() *time.Time
+	EndTime() *time.Time
 	CostTime() time.Duration
 }
 
@@ -507,7 +519,7 @@ func (ctx *dependentContext) GetByStepName(stepName, key string) (value any, exi
 	defer ctx.RUnlock()
 	index, ok := ctx.ToIndex(stepName)
 	if !ok {
-		panic(fmt.Sprintf("Step[%s] not found.", stepName))
+		panic(fmt.Sprintf("Step[ %s ] not found.", stepName))
 	}
 	return ctx.matchByIndex(index, key)
 }
