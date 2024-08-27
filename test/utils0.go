@@ -175,7 +175,7 @@ func (fx *FlexibleBuilder[T]) Wait() *FlexibleBuilder[T] {
 	fx.doing = append(fx.doing, func(s T) (any, error) {
 		ch := make(chan bool)
 		go func() {
-			for !letGo {
+			for atomic.LoadInt64(&letGo) == 0 {
 			}
 			ch <- true
 		}()
@@ -194,7 +194,7 @@ func (fx *FlexibleBuilder[T]) Broadcast() *FlexibleBuilder[T] {
 	last := fx.doing[len(fx.doing)-1].(func(s T) (any, error))
 	fx.doing[len(fx.doing)-1] = func(s T) (any, error) {
 		defer func() {
-			letGo = true
+			atomic.StoreInt64(&letGo, 1)
 		}()
 		return last(s)
 	}

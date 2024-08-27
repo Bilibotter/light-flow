@@ -2,6 +2,7 @@ package test
 
 import (
 	flow "github.com/Bilibotter/light-flow"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -372,13 +373,13 @@ func TestMultipleErrorStepPersist(t *testing.T) {
 	CheckFlowPersist(t, ff, 3)
 
 	resetCurrent()
-	letGo = false
+	atomic.StoreInt64(&letGo, 0)
 	workflow = flow.RegisterFlow("TestMultipleErrorStepPersist2")
 	process = workflow.Process("TestMultipleErrorStepPersist2")
 	step := process.NameStep(Fn(t).WaitLetGO(1), "3")
 	step.StepTimeout(time.Nanosecond)
 	ff = flow.DoneFlow("TestMultipleErrorStepPersist2", nil)
-	letGo = true
+	atomic.StoreInt64(&letGo, 1)
 	CheckFlowPersist(t, ff, 3)
 	waitCurrent(2)
 	CheckResult(t, 2, flow.Timeout)(any(ff).(flow.WorkFlow))

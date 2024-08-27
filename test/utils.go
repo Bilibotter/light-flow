@@ -12,7 +12,7 @@ import (
 
 var (
 	current    int64
-	letGo      = false
+	letGo      int64
 	executeSuc = false
 )
 
@@ -364,7 +364,7 @@ func (s *FuncBuilder) WaitLetGO(i ...int64) func(ctx flow.Step) (result any, err
 		start := time.Now()
 		duration := 100 * time.Millisecond
 		for {
-			if letGo {
+			if atomic.LoadInt64(&letGo) == 1 {
 				s.t.Logf("Step[ %s ] finish wait\n", ctx.Name())
 				if len(i) > 0 {
 					atomic.AddInt64(&current, i[0])

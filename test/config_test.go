@@ -270,7 +270,7 @@ func TestWithLongProcessTimeout(t *testing.T) {
 
 func TestWithShortProcessTimeout(t *testing.T) {
 	defer resetCurrent()
-	letGo = false
+	atomic.StoreInt64(&letGo, 0)
 	workflow := flow.RegisterFlow("TestWithShortProcessTimeout")
 	process := workflow.Process("TestWithShortProcessTimeout")
 	process.ProcessTimeout(1 * time.Nanosecond)
@@ -283,7 +283,7 @@ func TestWithShortProcessTimeout(t *testing.T) {
 	c := flow.AsyncFlow("TestWithShortProcessTimeout", nil)
 	waitCurrent(1)
 	c.Done()
-	letGo = true
+	atomic.StoreInt64(&letGo, 1)
 	waitCurrent(2)
 	time.Sleep(10 * time.Millisecond)
 	if atomic.LoadInt64(&current) != 2 {
@@ -321,7 +321,7 @@ func TestWithLongDefaultStepTimeout(t *testing.T) {
 
 func TestWithShortDefaultStepTimeout(t *testing.T) {
 	defer resetCurrent()
-	letGo = false
+	atomic.StoreInt64(&letGo, 0)
 	workflow := flow.RegisterFlow("TestWithShortDefaultStepTimeout")
 	process := workflow.Process("TestWithShortDefaultStepTimeout")
 	process.StepTimeout(1 * time.Nanosecond)
@@ -335,7 +335,7 @@ func TestWithShortDefaultStepTimeout(t *testing.T) {
 	c := flow.AsyncFlow("TestWithShortDefaultStepTimeout", nil)
 	waitCurrent(1)
 	c.Done()
-	letGo = true
+	atomic.StoreInt64(&letGo, 1)
 	waitCurrent(8)
 	time.Sleep(10 * time.Millisecond)
 	if atomic.LoadInt64(&current) != 8 {
@@ -367,7 +367,7 @@ func TestWithLongStepTimeout(t *testing.T) {
 
 func TestWithShortStepTimeout(t *testing.T) {
 	defer resetCurrent()
-	letGo = false
+	atomic.StoreInt64(&letGo, 0)
 	workflow := flow.RegisterFlow("TestWithShortStepTimeout")
 	process := workflow.Process("TestWithShortStepTimeout")
 	fn := Fn(t)
@@ -379,7 +379,7 @@ func TestWithShortStepTimeout(t *testing.T) {
 	c := flow.AsyncFlow("TestWithShortStepTimeout", nil)
 	waitCurrent(1)
 	c.Done()
-	letGo = true
+	atomic.StoreInt64(&letGo, 1)
 	waitCurrent(8)
 	time.Sleep(10 * time.Millisecond)
 	if atomic.LoadInt64(&current) != 8 {

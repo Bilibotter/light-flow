@@ -120,7 +120,7 @@ func TestNoRegisterResourceAttach(t *testing.T) {
 	flow.DoneFlow("TestNoRegisterResourceAttach1", nil)
 
 	resetCurrent()
-	letGo = false
+	atomic.StoreInt64(&letGo, 0)
 	wf = flow.RegisterFlow("TestNoRegisterResourceAttach2")
 	process = wf.Process("TestNoRegisterResourceAttach2")
 	process.NameStep(Fx[flow.Step](t).Attach("NoExistResource", "***", nil).Broadcast().Step(), "1")
@@ -131,7 +131,7 @@ func TestNoRegisterResourceAttach(t *testing.T) {
 
 func TestResourceAttach(t *testing.T) {
 	defer resetCurrent()
-	letGo = false
+	atomic.StoreInt64(&letGo, 0)
 	flow.RegisterResourceManager("TestResourceAttachResource")
 	wf := flow.RegisterFlow("TestResourceAttach")
 	process := wf.Process("TestResourceAttach")
@@ -142,7 +142,7 @@ func TestResourceAttach(t *testing.T) {
 	flow.DoneFlow("TestResourceAttach", nil)
 
 	resetCurrent()
-	letGo = false
+	atomic.StoreInt64(&letGo, 0)
 	flow.RegisterResourceManager("TestResourceAttachResource2")
 	wf = flow.RegisterFlow("TestResourceAttach2")
 	process = wf.Process("TestResourceAttach2")
@@ -159,7 +159,7 @@ func TestResourceAttach(t *testing.T) {
 
 func TestResourceInitialize(t *testing.T) {
 	defer resetCurrent()
-	letGo = false
+	atomic.StoreInt64(&letGo, 0)
 	initParam := "*"
 	resName := "TestResourceInitialize"
 	flow.RegisterResourceManager(resName).
@@ -175,7 +175,7 @@ func TestResourceInitialize(t *testing.T) {
 
 func TestResourceInitializeError(t *testing.T) {
 	defer resetCurrent()
-	letGo = false
+	atomic.StoreInt64(&letGo, 0)
 	initParam := "*"
 	resName := "TestResourceInitializeError"
 	flow.RegisterResourceManager("TestResourceInitializeResourceError").
@@ -199,7 +199,7 @@ func TestResourceInitializeError(t *testing.T) {
 
 func TestResourceInitializePanic(t *testing.T) {
 	defer resetCurrent()
-	letGo = false
+	atomic.StoreInt64(&letGo, 0)
 	initParam := "*"
 	resName := "TestResourceInitializePanic"
 	flow.RegisterResourceManager(resName).
@@ -222,7 +222,7 @@ func TestResourceInitializePanic(t *testing.T) {
 
 func TestResourceUpdate(t *testing.T) {
 	defer resetCurrent()
-	letGo = false
+	atomic.StoreInt64(&letGo, 0)
 	initParam := "*"
 	resName := "TestResourceUpdate0"
 	flow.RegisterResourceManager(resName).
@@ -246,7 +246,7 @@ func TestResourceUpdate(t *testing.T) {
 
 func TestResourceRelease(t *testing.T) {
 	defer resetCurrent()
-	letGo = false
+	atomic.StoreInt64(&letGo, 0)
 	initParam := "*"
 	resName := "TestResourceRelease"
 	flow.RegisterResourceManager(resName).
@@ -263,7 +263,7 @@ func TestResourceRelease(t *testing.T) {
 
 func TestResourceReleaseError(t *testing.T) {
 	defer resetCurrent()
-	letGo = false
+	atomic.StoreInt64(&letGo, 0)
 	initParam := "*"
 	resName := "TestResourceReleaseError"
 	flow.RegisterResourceManager(resName).
@@ -288,7 +288,7 @@ func TestResourceReleaseError(t *testing.T) {
 
 func TestResourceReleasePanic(t *testing.T) {
 	defer resetCurrent()
-	letGo = false
+	atomic.StoreInt64(&letGo, 0)
 	initParam := "*"
 	resName := "TestResourceReleasePanic"
 	flow.RegisterResourceManager(resName).
@@ -313,7 +313,7 @@ func TestResourceReleasePanic(t *testing.T) {
 
 func TestReleaseAttachedFailedResource(t *testing.T) {
 	defer resetCurrent()
-	letGo = false
+	atomic.StoreInt64(&letGo, 0)
 	initParam := "*"
 	resName := "TestReleaseAttachedFailedResource"
 	flow.RegisterResourceManager(resName).
@@ -325,7 +325,7 @@ func TestReleaseAttachedFailedResource(t *testing.T) {
 		t.Logf("Step[ %s ] start", ctx.Name())
 		ctx.Attach(resName, initParam+resName)
 		atomic.AddInt64(&current, 1)
-		letGo = true
+		atomic.StoreInt64(&letGo, 1)
 		t.Logf("Step[ %s ] end", ctx.Name())
 		return ctx.Name(), nil
 	}, "1")
@@ -337,7 +337,7 @@ func TestReleaseAttachedFailedResource(t *testing.T) {
 
 func TestReleaseAttachedPanicResource(t *testing.T) {
 	defer resetCurrent()
-	letGo = false
+	atomic.StoreInt64(&letGo, 0)
 	initParam := "*"
 	resName := "TestReleaseAttachedPanicResource"
 	flow.RegisterResourceManager(resName).
@@ -351,7 +351,7 @@ func TestReleaseAttachedPanicResource(t *testing.T) {
 			panic(fmt.Sprintf("attach resource failed: %s", err.Error()))
 		}
 		atomic.AddInt64(&current, 1)
-		letGo = true
+		atomic.StoreInt64(&letGo, 1)
 		t.Logf("Step[ %s ] end", ctx.Name())
 		return ctx.Name(), nil
 	}, "1")
@@ -363,7 +363,7 @@ func TestReleaseAttachedPanicResource(t *testing.T) {
 	process = wf.Process("TestReleaseAttachedPanicResource0")
 	process.NameStep(func(ctx flow.Step) (any, error) {
 		defer func() {
-			letGo = true
+			atomic.StoreInt64(&letGo, 1)
 		}()
 		t.Logf("Step[ %s ] start", ctx.Name())
 		if _, err := ctx.Attach(resName, initParam+resName); err != nil {
@@ -381,7 +381,7 @@ func TestReleaseAttachedPanicResource(t *testing.T) {
 
 func TestReleaseWhileStepError(t *testing.T) {
 	defer resetCurrent()
-	letGo = false
+	atomic.StoreInt64(&letGo, 0)
 	initParam := "*"
 	resName := "TestReleaseWhileStepError"
 	flow.RegisterResourceManager(resName).
@@ -396,7 +396,7 @@ func TestReleaseWhileStepError(t *testing.T) {
 
 func TestReleaseWhileStepPanic(t *testing.T) {
 	defer resetCurrent()
-	letGo = false
+	atomic.StoreInt64(&letGo, 0)
 	initParam := "*"
 	resName := "TestReleaseWhileStepPanic"
 	flow.RegisterResourceManager(resName).
@@ -412,7 +412,7 @@ func TestReleaseWhileStepPanic(t *testing.T) {
 func TestResourceRecover(t *testing.T) {
 	defer resetCurrent()
 	executeSuc = false
-	letGo = false
+	atomic.StoreInt64(&letGo, 0)
 	initParam := "*"
 	resName := "TestResourceRecover"
 	flow.RegisterResourceManager(resName).
@@ -436,7 +436,7 @@ func TestResourceRecover(t *testing.T) {
 func TestResourceRecover0(t *testing.T) {
 	defer resetCurrent()
 	executeSuc = false
-	letGo = false
+	atomic.StoreInt64(&letGo, 0)
 	initParam := "*"
 	resName := "TestResourceRecover0"
 	flow.RegisterResourceManager(resName).
@@ -460,7 +460,7 @@ func TestResourceRecover0(t *testing.T) {
 func TestResourceSuspend(t *testing.T) {
 	defer resetCurrent()
 	executeSuc = false
-	letGo = false
+	atomic.StoreInt64(&letGo, 0)
 	initParam := "*"
 	resName := "TestResourceSuspend"
 	flow.RegisterResourceManager(resName).
@@ -484,7 +484,7 @@ func TestResourceSuspend(t *testing.T) {
 func TestResourceSuspendAndRecover(t *testing.T) {
 	defer resetCurrent()
 	executeSuc = false
-	letGo = false
+	atomic.StoreInt64(&letGo, 0)
 	initParam := "*"
 	resName := "TestResourceSuspendAndRecover"
 	flow.RegisterResourceManager(resName).

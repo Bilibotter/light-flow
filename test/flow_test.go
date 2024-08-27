@@ -91,7 +91,7 @@ func GeneratePanicStep(i int, args ...any) func(ctx flow.Step) (any, error) {
 
 func TestMultipleExceptionStatus(t *testing.T) {
 	defer resetCurrent()
-	letGo = false
+	atomic.StoreInt64(&letGo, 0)
 	workflow := flow.RegisterFlow("TestMultipleExceptionStatus")
 	process := workflow.Process("TestMultipleExceptionStatus")
 	process.NameStep(Fn(t).Errors(), "1")
@@ -101,7 +101,7 @@ func TestMultipleExceptionStatus(t *testing.T) {
 	workflow.AfterFlow(false, CheckResult(t, 3, flow.Timeout, flow.Error, flow.Panic))
 	flow.DoneFlow("TestMultipleExceptionStatus", nil)
 	// DoneFlow return due to timeout, but process not complete
-	letGo = true
+	atomic.StoreInt64(&letGo, 1)
 	waitCurrent(4)
 }
 
@@ -219,7 +219,7 @@ func TestMultipleNormalSteps(t *testing.T) {
 
 func TestWorkFlowPause(t *testing.T) {
 	defer resetCurrent()
-	letGo = false
+	atomic.StoreInt64(&letGo, 0)
 	workflow := flow.RegisterFlow("TestWorkFlowPause")
 	process := workflow.Process("TestWorkFlowPause")
 	process.NameStep(Fn(t).WaitLetGO(), "1w1")
@@ -240,7 +240,7 @@ func TestWorkFlowPause(t *testing.T) {
 		t.Errorf("process[TestWorkFlowPause] pause fail")
 	}
 	wf.Resume()
-	letGo = true
+	atomic.StoreInt64(&letGo, 1)
 	if rp.Has(flow.Pause) {
 		t.Errorf("process[TestWorkFlowPause] resume fail")
 	}
@@ -250,7 +250,7 @@ func TestWorkFlowPause(t *testing.T) {
 
 func TestProcessPause(t *testing.T) {
 	defer resetCurrent()
-	letGo = false
+	atomic.StoreInt64(&letGo, 0)
 	workflow := flow.RegisterFlow("TestProcessPause")
 	process := workflow.Process("TestProcessPause")
 	fn := Fn(t)
@@ -268,7 +268,7 @@ func TestProcessPause(t *testing.T) {
 		t.Errorf("process[TestProcessPause] not exist")
 	}
 	cc.Pause()
-	letGo = true
+	atomic.StoreInt64(&letGo, 1)
 	time.Sleep(10 * time.Millisecond)
 	if atomic.LoadInt64(&current) != 2 {
 		t.Errorf("Prcess[%s] pause fail", cc.Name())

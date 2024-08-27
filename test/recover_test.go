@@ -1455,7 +1455,7 @@ func TestMultiTimesRecover(t *testing.T) {
 
 func TestTimeoutRecover(t *testing.T) {
 	defer resetCurrent()
-	letGo = false
+	atomic.StoreInt64(&letGo, 0)
 	executeSuc = false
 	wf := flow.RegisterFlow("TestTimeoutRecover")
 	wf.EnableRecover()
@@ -1465,7 +1465,7 @@ func TestTimeoutRecover(t *testing.T) {
 	wf.AfterFlow(false, CheckResult(t, 2, flow.Success)).If(execSuc)
 	res := flow.DoneFlow("TestTimeoutRecover", nil)
 	CheckResult(t, 1, flow.Timeout)(any(res).(flow.WorkFlow))
-	letGo = true
+	atomic.StoreInt64(&letGo, 1)
 	executeSuc = true
 	waitCurrent(2)
 	Recover("TestTimeoutRecover")
