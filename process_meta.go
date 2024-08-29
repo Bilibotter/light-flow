@@ -101,11 +101,11 @@ func (pm *ProcessMeta) Merge(name string) {
 func (pm *ProcessMeta) mergeStep(merge *StepMeta) {
 	target := pm.steps[merge.name]
 
-	for k, v := range merge.priority {
-		if _, exist := target.priority[k]; exist {
+	for k, v := range merge.restrict {
+		if _, exist := target.restrict[k]; exist {
 			continue
 		}
-		target.priority[k] = v
+		target.restrict[k] = v
 	}
 
 	// create a set contains all depended on target name

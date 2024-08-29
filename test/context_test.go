@@ -118,9 +118,9 @@ func TestSearch(t *testing.T) {
 	flow.DoneFlow("TestSearch", nil)
 }
 
-func TestPriorityWithSelf(t *testing.T) {
+func TestRestrictWithSelf(t *testing.T) {
 	defer resetCtx()
-	workflow := flow.RegisterFlow("TestPriorityWithSelf")
+	workflow := flow.RegisterFlow("TestRestrictWithSelf")
 	process := workflow.Process("test1")
 	process.NameStep(ChangeCtxStepFunc(&ctx1), "0")
 	process.NameStep(ChangeCtxStepFunc(&ctx1), "1")
@@ -132,13 +132,13 @@ func TestPriorityWithSelf(t *testing.T) {
 			t.Logf("%v", r)
 		}
 	}()
-	step.Priority(map[string]any{addrKey: "4"})
+	step.Restrict(map[string]any{addrKey: "4"})
 }
 
-func TestPriorityCheck(t *testing.T) {
+func TestRestrictCheck(t *testing.T) {
 	defer resetCtx()
-	workflow := flow.RegisterFlow("TestPriorityCheck")
-	process := workflow.Process("TestPriorityCheck")
+	workflow := flow.RegisterFlow("TestRestrictCheck")
+	process := workflow.Process("TestRestrictCheck")
 	process.NameStep(ChangeCtxStepFunc(&ctx1), "0")
 	process.NameStep(ChangeCtxStepFunc(&ctx1), "1")
 	process.NameStep(GenerateStepIncAddr(1), "2", "1")
@@ -149,21 +149,21 @@ func TestPriorityCheck(t *testing.T) {
 			t.Logf("%v", r)
 		}
 	}()
-	step.Priority(map[string]any{addrKey: "0"})
+	step.Restrict(map[string]any{addrKey: "0"})
 }
 
-func TestPriority(t *testing.T) {
+func TestRestrict(t *testing.T) {
 	defer resetCtx()
-	workflow := flow.RegisterFlow("TestPriority")
-	process := workflow.Process("TestPriority")
+	workflow := flow.RegisterFlow("TestRestrict")
+	process := workflow.Process("TestRestrict")
 	process.AfterStep(true, ErrorResultPrinter)
 	process.NameStep(ChangeCtxStepFunc(&ctx1), "1")
 	process.NameStep(GenerateStepIncAddr(1), "2", "1")
 	process.NameStep(ChangeCtxStepFunc(&ctx2), "3", "1")
 	step := process.NameStep(GenerateStepIncAddr(1), "4", "2", "3")
-	step.Priority(map[string]any{addrKey: "3"})
+	step.Restrict(map[string]any{addrKey: "3"})
 	workflow.AfterFlow(false, CheckCtxResult(t, 2, flow.Success))
-	flow.DoneFlow("TestPriority", nil)
+	flow.DoneFlow("TestRestrict", nil)
 	if atomic.LoadInt64(&ctx2) != 2 {
 		t.Errorf("execute 2 step, but ctx2 = %d", ctx2)
 	}

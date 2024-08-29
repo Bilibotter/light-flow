@@ -29,7 +29,7 @@ type StepMeta struct {
 	position   *state              // used to record the position of the step
 	depends    sliceSet[*StepMeta] // prev
 	waiters    sliceSet[*StepMeta] // next
-	priority   map[string]uint64
+	restrict   map[string]uint64
 	run        func(ctx Step) (any, error)
 	evaluators evaluators
 }
@@ -75,18 +75,18 @@ func (meta *StepMeta) Same(run func(ctx Step) (any, error), alias ...string) *St
 	return meta.belong.Step(run, depends)
 }
 
-func (meta *StepMeta) Priority(priority map[string]any) {
-	if meta.priority == nil {
-		meta.priority = make(map[string]uint64, len(priority))
+func (meta *StepMeta) Restrict(restrict map[string]any) {
+	if meta.restrict == nil {
+		meta.restrict = make(map[string]uint64, len(restrict))
 	}
-	for key, stepName := range priority {
+	for key, stepName := range restrict {
 		step, exist := meta.belong.steps[toStepName(stepName)]
 		if !exist {
 			panic(fmt.Sprintf("Step[ %s ] can't matchByHighest ", stepName))
 		}
-		meta.priority[key] = step.index
+		meta.restrict[key] = step.index
 	}
-	meta.checkPriority()
+	meta.checkRestrict()
 }
 
 func (meta *StepMeta) wireDepends() {
@@ -116,10 +116,10 @@ func (meta *StepMeta) wireDepends() {
 	meta.position.append(endE)
 }
 
-// checkPriority checks if the priority key corresponds to an existing step.
+// checkRestrict checks if the restrict key corresponds to an existing step.
 // If not it will panic.
-func (meta *StepMeta) checkPriority() {
-	for _, index := range meta.priority {
+func (meta *StepMeta) checkRestrict() {
+	for _, index := range meta.restrict {
 		stepName := meta.toName[index]
 		if meta.backSearch(stepName) {
 			continue

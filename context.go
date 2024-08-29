@@ -185,7 +185,7 @@ type context interface {
 
 type routing interface {
 	nodeInfo
-	Prefer(key string) (index uint64, exist bool)
+	Specify(key string) (index uint64, exist bool)
 	Visible() uint64
 	Access() uint64
 }
@@ -234,7 +234,7 @@ type outcome struct {
 type nodeRouter struct {
 	toName   map[uint64]string // index to name
 	toIndex  map[string]uint64 // name to toIndex
-	priority map[string]uint64 // specify the  key to index
+	restrict map[string]uint64 // specify the  key to index
 	index    uint64
 	nodePath uint64
 }
@@ -383,7 +383,7 @@ func (sc *simpleContext) getInternal(key string) (value any, exist bool) {
 }
 
 func (ctx *dependentContext) Get(key string) (value any, exist bool) {
-	if index, match := ctx.Prefer(key); match {
+	if index, match := ctx.Specify(key); match {
 		return ctx.matchByIndex(index, key)
 	}
 	if value, exist = ctx.get(ctx.Access(), key); exist {
@@ -525,7 +525,7 @@ func (ctx *dependentContext) GetByStepName(stepName, key string) (value any, exi
 }
 
 // Get method retrieves the value associated with the given key from the context path.
-// The method first checks the priority context, then own context, finally parents context.
+// The method first checks the restrict context, then own context, finally parents context.
 // Returns the value associated with the key (if found) and a boolean indicating its presence.
 func (t *linkedTable) get(path uint64, key string) (any, bool) {
 	t.RLock()
@@ -587,8 +587,8 @@ func (n *node) search(path uint64) (any, bool) {
 	return n.Next.search(path)
 }
 
-func (router *nodeRouter) Prefer(key string) (index uint64, exist bool) {
-	index, exist = router.priority[key]
+func (router *nodeRouter) Specify(key string) (index uint64, exist bool) {
+	index, exist = router.restrict[key]
 	return
 }
 
