@@ -157,6 +157,31 @@ func TestResourceAttach(t *testing.T) {
 	flow.DoneFlow("TestResourceAttach2", nil)
 }
 
+func TestResourceAttachInBeforeProcess(t *testing.T) {
+	defer resetCurrent()
+	atomic.StoreInt64(&letGo, 0)
+	flow.RegisterResourceManager("TestResourceAttachInBeforeProcess0")
+	wf := flow.RegisterFlow("TestResourceAttachInBeforeProcess0")
+	process := wf.Process("TestResourceAttachInBeforeProcess0")
+	process.BeforeProcess(true, Fx[flow.Process](t).Attach("TestResourceAttachInBeforeProcess0", "***", map[string]any{"int": 1, "str": "hello", "bool": true, "float": 3.14}).Callback())
+	process.NameStep(Fx[flow.Step](t).Acquire("TestResourceAttachInBeforeProcess0", nil, map[string]any{"int": 1, "str": "hello", "bool": true, "float": 3.14}).Step(), "1")
+	wf.AfterFlow(false, CheckResult(t, 2, flow.Success))
+	flow.DoneFlow("TestResourceAttachInBeforeProcess0", nil)
+
+	// Test if the resource will be released while before-process callback failed
+	resetCurrent()
+	atomic.StoreInt64(&letGo, 0)
+	flow.RegisterResourceManager("TestResourceAttachInBeforeProcess1").
+		OnRelease(resourceRelease(t)).
+		OnInitialize(resourceInit)
+	wf = flow.RegisterFlow("TestResourceAttachInBeforeProcess1")
+	process = wf.Process("TestResourceAttachInBeforeProcess1")
+	process.BeforeProcess(true, Fx[flow.Process](t).Attach("TestResourceAttachInBeforeProcess1", "***", map[string]any{"int": 1, "str": "hello", "bool": true, "float": 3.14}).Callback())
+	process.BeforeProcess(true, Fx[flow.Process](t).Error().Callback())
+	ff := flow.DoneFlow("TestResourceAttachInBeforeProcess1", nil)
+	CheckResult(t, 3, flow.CallbackFail)(any(ff).(flow.WorkFlow))
+}
+
 func TestResourceInitialize(t *testing.T) {
 	defer resetCurrent()
 	atomic.StoreInt64(&letGo, 0)

@@ -131,6 +131,7 @@ func (fx *FlexibleBuilder[T]) Inc() *FlexibleBuilder[T] {
 
 func (fx *FlexibleBuilder[T]) Attach(resName string, initParam any, kv map[string]any) *FlexibleBuilder[T] {
 	fx.doing = append(fx.doing, func(s T) (any, error) {
+		fx.Logf("attach resource %s", resName)
 		res := any(s).(ResourceI)
 		resource, err := res.Attach(resName, initParam)
 		if err != nil {
