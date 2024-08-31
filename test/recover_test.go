@@ -1401,7 +1401,7 @@ func TestMultiTimesRecover(t *testing.T) {
 	wf.AfterProcess(true, fx6.Inc().Callback())
 	wf.AfterFlow(true, fx7.Inc().Callback())
 	wf.AfterFlow(false, CheckResult(t, 1, flow.CallbackFail)).If(Times(0))
-	wf.AfterFlow(false, CheckResult(t, 3, flow.CallbackFail)).If(Times(1))
+	wf.AfterFlow(false, CheckResult(t, 2, flow.CallbackFail)).If(Times(1))
 	wf.AfterFlow(false, CheckResult(t, 3, flow.CallbackFail)).If(Times(2))
 	wf.AfterFlow(false, CheckResult(t, 4, flow.Error)).If(Times(3))
 	wf.AfterFlow(false, CheckResult(t, 3, flow.CallbackFail)).If(Times(4))

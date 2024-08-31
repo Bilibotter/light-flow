@@ -20,7 +20,6 @@ type runProcess struct {
 	end       time.Time
 	pause     sync.WaitGroup
 	running   sync.WaitGroup
-	finish    sync.WaitGroup
 }
 
 func (process *runProcess) HasAny(enum ...*StatusEnum) bool {
@@ -126,11 +125,10 @@ func (process *runProcess) Stop() ProcController {
 	return process
 }
 
-func (process *runProcess) schedule() (finish *sync.WaitGroup) {
+func (process *runProcess) schedule() {
+	defer process.finalize()
 	process.initialize()
-	finish = &process.finish
-	// pre-flow callback due to cancel
-	if process.Has(Cancel) || process.Has(executed) {
+	if process.Has(executed) {
 		return
 	}
 	process.start = time.Now().UTC()
@@ -139,13 +137,18 @@ func (process *runProcess) schedule() (finish *sync.WaitGroup) {
 	}
 	procPersist.onBegin(process)
 	process.advertise(beforeF)
+	if process.Has(CallbackFail) {
+		process.end = time.Now().UTC()
+		return
+	}
 	for _, step := range process.runSteps {
 		if step.layer == 1 {
 			go process.startStep(step)
 		}
 	}
-	process.finish.Add(1)
-	go process.finalize()
+	process.waitFinish()
+	process.end = time.Now().UTC()
+	process.advertise(afterF)
 	return
 }
 
@@ -188,7 +191,7 @@ func (process *runProcess) startStep(step *runStep) {
 	}
 
 	timer := time.NewTimer(timeout)
-	defer stepPersist.onComplete(step)
+	defer stepPersist.onUpdate(step)
 	go process.runStep(step)
 	select {
 	case <-timer.C:
@@ -212,7 +215,7 @@ func (process *runProcess) evaluate(step *runStep) bool {
 	return true
 }
 
-func (process *runProcess) finalize() {
+func (process *runProcess) waitFinish() {
 	timeout := process.procTimeout
 	if timeout == 0 {
 		timeout = 3 * time.Hour
@@ -241,16 +244,19 @@ func (process *runProcess) finalize() {
 	} else {
 		process.append(Failed)
 	}
-	process.advertise(afterF)
+}
+
+func (process *runProcess) finalize() {
+	// any step suspend will cause the process suspend
 	if process.Has(Suspend) {
 		process.belong.append(Suspend)
 		process.manageResources(suspendR)
 	}
 	process.manageResources(releaseR)
 	process.compress.add(process.load())
-	process.end = time.Now().UTC()
-	procPersist.onComplete(process)
-	process.finish.Done()
+	procPersist.onUpdate(process)
+	process.belong.compress.add(process.compress.load())
+	process.belong.running.Done()
 }
 
 func (process *runProcess) manageResources(action string) {

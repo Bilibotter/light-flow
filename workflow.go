@@ -34,7 +34,7 @@ type runFlow struct {
 	start        time.Time
 	end          time.Time
 	lock         sync.Mutex
-	finish       sync.WaitGroup
+	running      sync.WaitGroup
 }
 
 func init() {
@@ -113,7 +113,6 @@ func (fm *FlowMeta) buildRunFlow(input map[string]any) *runFlow {
 		id:            generateId(),
 		lock:          sync.Mutex{},
 		runProcesses:  make(map[string]*runProcess, len(fm.processes)),
-		finish:        sync.WaitGroup{},
 	}
 
 	for k, v := range input {
@@ -223,7 +222,6 @@ func (rf *runFlow) buildRunProcess(meta *ProcessMeta) *runProcess {
 		runSteps:    make(map[string]*runStep),
 		pause:       sync.WaitGroup{},
 		running:     sync.WaitGroup{},
-		finish:      sync.WaitGroup{},
 	}
 
 	for _, stepMeta := range meta.sortedSteps() {
@@ -251,23 +249,21 @@ func (rf *runFlow) Done() FinishedWorkFlow {
 	rf.initialize()
 	rf.start = time.Now().UTC()
 	flowPersist.onBegin(rf)
-	// execute before flow callback
+	defer rf.finalize()
 	rf.advertise(beforeF)
-	cancel := rf.Has(CallbackFail)
-	wg := make([]*sync.WaitGroup, 0, len(rf.runProcesses))
+	if rf.Has(CallbackFail) {
+		rf.end = time.Now().UTC()
+		return rf
+	}
+	rf.running = sync.WaitGroup{}
+	rf.running.Add(len(rf.runProcesses))
 	for _, process := range rf.runProcesses {
-		if cancel {
-			process.append(Cancel)
-		}
-		wg = append(wg, process.schedule())
+		go process.schedule()
 	}
-	rf.finish.Add(1)
-	for _, w := range wg {
-		w.Wait()
-	}
-	// execute callback and recover after all processes are done
-	rf.finalize()
-	flowPersist.onComplete(rf)
+	rf.running.Wait()
+	rf.syncState()
+	rf.end = time.Now().UTC()
+	rf.advertise(afterF)
 	return rf
 }
 
@@ -287,10 +283,7 @@ func (rf *runFlow) advertise(flag uint64) {
 	rf.flowFilter(flag, rf)
 }
 
-func (rf *runFlow) finalize() {
-	for _, process := range rf.runProcesses {
-		rf.compress.add(process.compress.load())
-	}
+func (rf *runFlow) syncState() {
 	rf.compress.add(rf.load())
 	if rf.compress.Normal() {
 		rf.compress.append(Success)
@@ -299,13 +292,14 @@ func (rf *runFlow) finalize() {
 		rf.compress.append(Failed)
 		rf.append(Failed)
 	}
-	rf.end = time.Now().UTC()
-	rf.advertise(afterF)
-	rf.compress.add(rf.load())
+}
+
+func (rf *runFlow) finalize() {
+	rf.syncState()
 	if !rf.Normal() && rf.isRecoverable() {
 		rf.saveCheckpoints()
 	}
-	rf.finish.Done()
+	flowPersist.onUpdate(rf)
 }
 
 func (rf *runFlow) ListProcess() []string {

@@ -7,47 +7,47 @@ const (
 
 var (
 	stepPersist = &stepPersistor{
-		onBegin:    emptyStepFunc,
-		onComplete: emptyStepFunc,
+		onBegin:  emptyStepFunc,
+		onUpdate: emptyStepFunc,
 	}
 	procPersist = &procPersistor{
-		onBegin:    emptyProcFunc,
-		onComplete: emptyProcFunc,
+		onBegin:  emptyProcFunc,
+		onUpdate: emptyProcFunc,
 	}
 	flowPersist = &flowPersistor{
-		onBegin:    emptyFlowFunc,
-		onComplete: emptyFlowFunc,
+		onBegin:  emptyFlowFunc,
+		onUpdate: emptyFlowFunc,
 	}
 )
 
 type StepPersistor interface {
 	OnBegin(func(Step) error) StepPersistor
-	OnComplete(func(Step) error) StepPersistor
+	OnUpdate(func(Step) error) StepPersistor
 }
 
 type ProcPersistor interface {
 	OnBegin(func(Process) error) ProcPersistor
-	OnComplete(func(Process) error) ProcPersistor
+	OnUpdate(func(Process) error) ProcPersistor
 }
 
 type FlowPersistor interface {
 	OnBegin(func(WorkFlow) error) FlowPersistor
-	OnComplete(func(WorkFlow) error) FlowPersistor
+	OnUpdate(func(WorkFlow) error) FlowPersistor
 }
 
 type stepPersistor struct {
-	onBegin    func(Step)
-	onComplete func(Step)
+	onBegin  func(Step)
+	onUpdate func(Step)
 }
 
 type procPersistor struct {
-	onBegin    func(Process)
-	onComplete func(Process)
+	onBegin  func(Process)
+	onUpdate func(Process)
 }
 
 type flowPersistor struct {
-	onBegin    func(WorkFlow)
-	onComplete func(WorkFlow)
+	onBegin  func(WorkFlow)
+	onUpdate func(WorkFlow)
 }
 
 func (sp *stepPersistor) OnBegin(f func(Step) error) StepPersistor {
@@ -55,8 +55,8 @@ func (sp *stepPersistor) OnBegin(f func(Step) error) StepPersistor {
 	return sp
 }
 
-func (sp *stepPersistor) OnComplete(f func(Step) error) StepPersistor {
-	sp.onComplete = wrapPersist[Step](completedAction, f)
+func (sp *stepPersistor) OnUpdate(f func(Step) error) StepPersistor {
+	sp.onUpdate = wrapPersist[Step](completedAction, f)
 	return sp
 }
 
@@ -65,8 +65,8 @@ func (pp *procPersistor) OnBegin(f func(Process) error) ProcPersistor {
 	return pp
 }
 
-func (pp *procPersistor) OnComplete(f func(Process) error) ProcPersistor {
-	pp.onComplete = wrapPersist[Process](completedAction, f)
+func (pp *procPersistor) OnUpdate(f func(Process) error) ProcPersistor {
+	pp.onUpdate = wrapPersist[Process](completedAction, f)
 	return pp
 }
 
@@ -75,8 +75,8 @@ func (fp *flowPersistor) OnBegin(f func(WorkFlow) error) FlowPersistor {
 	return fp
 }
 
-func (fp *flowPersistor) OnComplete(f func(WorkFlow) error) FlowPersistor {
-	fp.onComplete = wrapPersist[WorkFlow](completedAction, f)
+func (fp *flowPersistor) OnUpdate(f func(WorkFlow) error) FlowPersistor {
+	fp.onUpdate = wrapPersist[WorkFlow](completedAction, f)
 	return fp
 }
 

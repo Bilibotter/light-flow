@@ -168,9 +168,11 @@ func onFlowComplete(flow flow.WorkFlow) error {
 		pool <- db
 	}()
 	entity := Flows{
-		Id:         flow.ID(),
-		UpdatedAt:  flow.EndTime(),
-		FinishedAt: flow.EndTime(),
+		Id:        flow.ID(),
+		UpdatedAt: flow.EndTime(),
+	}
+	if !flow.EndTime().IsZero() {
+		entity.FinishedAt = flow.EndTime()
 	}
 	if flow.Success() {
 		entity.Status = Success
@@ -204,15 +206,15 @@ func emptyProcFunc(_ flow.Process) error { return nil }
 func emptyFlowFunc(_ flow.WorkFlow) error { return nil }
 
 func resetPersist() {
-	flow.ConfigureStepPersist().OnBegin(emptyStepFunc).OnComplete(emptyStepFunc)
-	flow.ConfigureProcPersist().OnBegin(emptyProcFunc).OnComplete(emptyProcFunc)
-	flow.ConfigureFlowPersist().OnBegin(emptyFlowFunc).OnComplete(emptyFlowFunc)
+	flow.ConfigureStepPersist().OnBegin(emptyStepFunc).OnUpdate(emptyStepFunc)
+	flow.ConfigureProcPersist().OnBegin(emptyProcFunc).OnUpdate(emptyProcFunc)
+	flow.ConfigureFlowPersist().OnBegin(emptyFlowFunc).OnUpdate(emptyFlowFunc)
 }
 
 func setPersist() {
-	flow.ConfigureStepPersist().OnBegin(onStepBegin).OnComplete(onStepComplete)
-	flow.ConfigureProcPersist().OnBegin(onProcessBegin).OnComplete(onProcessComplete)
-	flow.ConfigureFlowPersist().OnBegin(onFlowBegin).OnComplete(onFlowComplete)
+	flow.ConfigureStepPersist().OnBegin(onStepBegin).OnUpdate(onStepComplete)
+	flow.ConfigureProcPersist().OnBegin(onProcessBegin).OnUpdate(onProcessComplete)
+	flow.ConfigureFlowPersist().OnBegin(onFlowBegin).OnUpdate(onFlowComplete)
 }
 
 func stringStatus(status int8) string {
