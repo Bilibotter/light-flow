@@ -246,6 +246,9 @@ func (chain *funcChain[T]) filter(runtime T) (runNext bool) {
 				return
 			}
 			runNext = false
+			if handler, ok := any(runtime).(errorHandler); ok {
+				handler.composeError(callbackStage, fmt.Errorf("panic: %v", r))
+			}
 		}
 		if runNext {
 			return
@@ -272,12 +275,18 @@ func (chain *funcChain[T]) filter(runtime T) (runNext bool) {
 
 	for index = begin; index < len(chain.Chain); index++ {
 		keepOn, err := chain.Chain[index].call(runtime)
+		// keepOn will be ignored if err is not nil
 		if keepOn && err == nil {
 			continue
 		}
 		if err != nil {
 			logger.Errorf(callbackErrorLog, chain.Stage, runtime.ID(), runtime.Name(), chain.necessity(index), chain.Scope, index+1, err.Error())
-			runNext = index >= len(chain.Chain)
+			if index <= chain.Index {
+				runNext = false
+				if handler, ok := any(runtime).(errorHandler); ok {
+					handler.composeError(callbackStage, err)
+				}
+			}
 		}
 		break
 	}

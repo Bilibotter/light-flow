@@ -98,11 +98,21 @@ func TestMultipleExceptionStatus(t *testing.T) {
 	process.NameStep(Fn(t).Panic(), "2")
 	step := process.NameStep(Fn(t).WaitLetGO(1), "3")
 	step.StepTimeout(time.Nanosecond)
-	workflow.AfterFlow(false, CheckResult(t, 3, flow.Timeout, flow.Error, flow.Panic))
+	workflow.AfterStep(false, func(step flow.Step) (keepOn bool, err error) {
+		e := step.Err()
+		if e == nil {
+			t.Errorf("step %s should have error", step.Name())
+		} else {
+			t.Logf("step %s error: %v", step.Name(), e)
+		}
+		atomic.AddInt64(&current, 1)
+		return true, nil
+	})
+	workflow.AfterFlow(false, CheckResult(t, 5, flow.Timeout, flow.Error, flow.Panic))
 	flow.DoneFlow("TestMultipleExceptionStatus", nil)
 	// DoneFlow return due to timeout, but process not complete
 	atomic.StoreInt64(&letGo, 1)
-	waitCurrent(4)
+	waitCurrent(7)
 }
 
 func TestSinglePanicStep(t *testing.T) {

@@ -193,6 +193,7 @@ func (process *runProcess) startStep(step *runStep) {
 	select {
 	case <-timer.C:
 		step.append(Timeout)
+		step.composeError(execStage, fmt.Errorf("execute timeout"))
 	case <-step.finish:
 	}
 	step.end = time.Now().UTC()
@@ -345,7 +346,7 @@ func (process *runProcess) runStep(step *runStep) {
 		if r := recover(); r != nil {
 			logger.Errorf("Step[ %s ] execute panic;\nID=%s;\nPanic=%v\n%s\n", step.name, step.id, r, stack())
 			step.append(Panic)
-			step.exception = fmt.Errorf("%v", r)
+			step.composeError(execStage, fmt.Errorf("execute panic: %v", r))
 		}
 		step.end = time.Now().UTC()
 		if !step.isRecoverable() {
@@ -369,26 +370,27 @@ func (process *runProcess) runStep(step *runStep) {
 
 	if step.Has(Recovering) {
 		point, exist := step.getInternal(fmt.Sprintf(stepBP, step.Name()))
-		if exist {
-			if point.(*breakPoint).SkipRun {
-				return
-			}
+		if exist && point.(*breakPoint).SkipRun {
+			return
 		}
 	}
 
+	var exception error
 	for i := 0; i <= retry; i++ {
 		result, err := step.run(step)
-		step.exception = err
 		if err != nil {
-			step.append(Error)
+			exception = err
 			continue
 		}
 		if result != nil {
 			step.setResult(step.name, result)
 		}
 		step.append(Success)
-		break
+		return
 	}
+
+	step.append(Error)
+	step.composeError(execStage, exception)
 }
 
 func (process *runProcess) stepCallback(step *runStep, flag uint64) {

@@ -216,3 +216,11 @@ func (step *runStep) isRecoverable() bool {
 func (step *runStep) needRecover() bool {
 	return step.Has(CallbackFail) || (!step.Normal() && !step.Has(Cancel))
 }
+
+func (step *runStep) composeError(stage string, err error) {
+	if step.exception == nil {
+		step.exception = fmt.Errorf("Step[ Name: %s, ID: %s ] %s exception: %s", step.name, step.id, stage, err.Error())
+		return
+	}
+	step.exception = fmt.Errorf("%s; %s error: %s", step.exception.Error(), stage, err.Error())
+}

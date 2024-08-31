@@ -18,6 +18,11 @@ const (
 )
 
 const (
+	execStage     = "execute"
+	callbackStage = "callback"
+)
+
+const (
 	notSupport = "method not support"
 )
 

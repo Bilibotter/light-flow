@@ -196,6 +196,10 @@ type nodeInfo interface {
 	nodeName() string
 }
 
+type errorHandler interface {
+	composeError(stage string, err error)
+}
+
 type StatusEnum struct {
 	flag state
 	msg  string
