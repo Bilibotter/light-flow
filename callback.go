@@ -281,7 +281,7 @@ func (chain *funcChain[T]) filter(runtime T) (runNext bool) {
 		}
 		if err != nil {
 			logger.Errorf(callbackErrorLog, chain.Stage, runtime.ID(), runtime.Name(), chain.necessity(index), chain.Scope, index+1, err.Error())
-			if index <= chain.Index {
+			if index < chain.Index {
 				runNext = false
 				if handler, ok := any(runtime).(errorHandler); ok {
 					handler.composeError(callbackStage, err)
