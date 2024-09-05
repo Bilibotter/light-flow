@@ -18,6 +18,61 @@ var (
 	times int64
 )
 
+type EqualityImpl struct {
+	age  int
+	name string
+}
+
+type PanicComparableImpl struct {
+	Content string
+}
+
+func (p *PanicComparableImpl) Equal(_ any) bool {
+	println("here0")
+	if atomic.LoadInt64(&letGo) == 0 {
+		return true
+	}
+	atomic.AddInt64(&current, 10)
+	panic("implement me")
+}
+
+func (p *PanicComparableImpl) Less(_ any) bool {
+	println("here1")
+	if atomic.LoadInt64(&letGo) == 0 {
+		return true
+	}
+	atomic.AddInt64(&current, 10)
+	panic("implement me")
+}
+
+type ComparableImpl struct {
+	age int
+}
+
+func (ei *EqualityImpl) Equal(other any) bool {
+	e, ok := other.(*EqualityImpl)
+	if !ok {
+		return false
+	}
+	return ei.age == e.age && ei.name == e.name
+}
+
+func (ci *ComparableImpl) Equal(other any) bool {
+	c, ok := other.(*ComparableImpl)
+	if !ok {
+		return false
+	}
+	return ci.age == c.age
+}
+
+func (ci *ComparableImpl) Less(other any) bool {
+	c, ok := other.(*ComparableImpl)
+	if !ok {
+		return false
+	}
+	return ci.age < c.age
+}
+
 func resetTimes() {
 	atomic.StoreInt64(&times, 0)
 }
@@ -223,26 +278,42 @@ func (fx *FlexibleBuilder[T]) Add(f ...interface{}) *FlexibleBuilder[T] {
 	return fx
 }
 
-func (fx *FlexibleBuilder[T]) SetCond() *FlexibleBuilder[T] {
+func (fx *FlexibleBuilder[T]) Cond(suffixes ...string) *FlexibleBuilder[T] {
+	suffix := ""
+	if len(suffixes) != 0 {
+		suffix = suffixes[0]
+	}
 	fx.doing = append(fx.doing, func(s flow.Step) (any, error) {
 		fx.Logf("Step[ %s ] set condition", s.Name())
+		s.Set(suffix+"int", int(1))
+		s.Set(suffix+"int8", int8(2))
+		s.Set(suffix+"int16", int16(3))
+		s.Set(suffix+"int32", int32(4))
+		s.Set(suffix+"int64", int64(5))
+		s.Set(suffix+"uint", uint(6))
+		s.Set(suffix+"uint8", uint8(7))
+		s.Set(suffix+"uint16", uint16(8))
+		s.Set(suffix+"uint32", uint32(9))
+		s.Set(suffix+"uint64", uint64(10))
+		s.Set(suffix+"float32", float32(11.1))
+		s.Set(suffix+"float64", float64(12.2))
+		s.Set(suffix+"bool", true)
+		s.Set(suffix+"string", "hello")
+		t, err := time.Parse(time.RFC3339, "2024-09-04T15:04:05Z")
+		if err != nil {
+			panic(err.Error())
+		}
+		s.Set(suffix+"time", t)
+		s.Set(suffix+"*time", &t)
+		s.Set(suffix+"Equality", EqualityImpl{age: 13, name: "Alice"})
+		s.Set(suffix+"*Equality", &EqualityImpl{age: 14, name: "Bob"})
+		s.Set(suffix+"*Comparable", &ComparableImpl{age: 16})
+		s.Set(suffix+"PanicComparable", &PanicComparableImpl{Content: "panic"})
 		atomic.AddInt64(&current, 1)
-		s.SetCondition(true)
-		s.SetCondition(1)
-		s.SetCondition(uint(2))
-		s.SetCondition(float32(3))
-		s.SetCondition("condition")
-		return true, nil
+		fx.Logf("Step[ %s ] set condition succeed", s.Name())
+		return s.Name(), nil
 	})
 	return fx
-}
-
-func MatchCond(e *flow.StepMeta, depend string) {
-	e.EQ(depend, 1, uint(2), float32(3), "condition")
-}
-
-func NotMatchCond(e *flow.StepMeta, depend string) {
-	e.NEQ(depend, 1, uint(2), float32(3), "condition")
 }
 
 func (fx *FlexibleBuilder[T]) Condition(i int, ret int64) *FlexibleBuilder[T] {

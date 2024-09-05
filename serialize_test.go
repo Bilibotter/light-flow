@@ -129,18 +129,6 @@ func TestAllType(t *testing.T) {
 	named := &Person{Name: "Alice", Age: 30}
 	ot1 := outcome{
 		Result: "Anne",
-		Named: []evalValue{
-			{
-				Value:   "named",
-				Matches: newRoutineUnsafeSet("named"),
-			},
-		},
-		Unnamed: []evalValue{
-			{
-				Value:   "unamed",
-				Matches: newRoutineUnsafeSet("unamed"),
-			},
-		},
 	}
 	otv1 := outcomeValue{
 		O:     ot1,
@@ -289,31 +277,9 @@ func TestAllType(t *testing.T) {
 	if ot2.Result.(string) != ot1.Result.(string) {
 		t.Errorf("outcome serialize failed,Result not equal")
 	}
-	if ot2.Named[0].Value.(string) != ot1.Named[0].Value.(string) {
-		t.Errorf("outcome serialize failed,Named not equal")
-	}
-	if ot2.Unnamed[0].Value.(string) != ot1.Unnamed[0].Value.(string) {
-		t.Errorf("outcome serialize failed,Unnamed not equal")
-	}
-	for k := range ot1.Named[0].Matches.Data {
-		if ot2.Named[0].Matches.Data[k] != ot1.Named[0].Matches.Data[k] {
-			t.Errorf("outcome serialize failed,*set not equal")
-		}
-	}
 	ot3 := m2["*outcome"].(*outcome)
 	if ot3.Result.(string) != ot1.Result.(string) {
 		t.Errorf("*outcome serialize failed,Result not equal")
-	}
-	if ot3.Named[0].Value.(string) != ot1.Named[0].Value.(string) {
-		t.Errorf("*outcome serialize failed,Named not equal")
-	}
-	if ot3.Unnamed[0].Value.(string) != ot1.Unnamed[0].Value.(string) {
-		t.Errorf("*outcome serialize failed,Unnamed not equal")
-	}
-	for k := range ot1.Named[0].Matches.Data {
-		if ot3.Named[0].Matches.Data[k] != ot1.Named[0].Matches.Data[k] {
-			t.Errorf("*outcome serialize failed,*set not equal")
-		}
 	}
 	otv2 := m2["outcomeValue"].(outcomeValue)
 	if otv2.Value.(string) != otv1.Value.(string) {
@@ -322,34 +288,12 @@ func TestAllType(t *testing.T) {
 	if otv2.O.Result.(string) != otv1.O.Result.(string) {
 		t.Errorf("outcome serialize failed,Result not equal")
 	}
-	if otv2.O.Named[0].Value.(string) != otv1.O.Named[0].Value.(string) {
-		t.Errorf("outcome serialize failed,Named not equal")
-	}
-	if otv2.O.Unnamed[0].Value.(string) != otv1.O.Unnamed[0].Value.(string) {
-		t.Errorf("outcome serialize failed,Unnamed not equal")
-	}
-	for k := range ot1.Named[0].Matches.Data {
-		if otv2.O.Named[0].Matches.Data[k] != otv1.O.Named[0].Matches.Data[k] {
-			t.Errorf("outcome serialize failed,*set not equal")
-		}
-	}
 	otv3 := m2["*outcomeValue"].(*outcomeValue)
 	if otv3.Value.(string) != otv1.Value.(string) {
 		t.Errorf("*outcomeValue serialize failed")
 	}
 	if otv3.O.Result.(string) != otv1.O.Result.(string) {
 		t.Errorf("*outcome serialize failed,Result not equal")
-	}
-	if otv3.O.Named[0].Value.(string) != otv1.O.Named[0].Value.(string) {
-		t.Errorf("*outcome serialize failed,Named not equal")
-	}
-	if otv3.O.Unnamed[0].Value.(string) != otv1.O.Unnamed[0].Value.(string) {
-		t.Errorf("*outcome serialize failed,Unnamed not equal")
-	}
-	for k := range ot1.Named[0].Matches.Data {
-		if otv3.O.Named[0].Matches.Data[k] != otv1.O.Named[0].Matches.Data[k] {
-			t.Errorf("*outcome serialize failed,*set not equal")
-		}
 	}
 }
 
@@ -361,18 +305,6 @@ func TestNodeMap(t *testing.T) {
 	namedI = named
 	ot1 := outcome{
 		Result: "Anne",
-		Named: []evalValue{
-			{
-				Value:   "named",
-				Matches: newRoutineUnsafeSet("named"),
-			},
-		},
-		Unnamed: []evalValue{
-			{
-				Value:   "unamed",
-				Matches: newRoutineUnsafeSet("unamed"),
-			},
-		},
 	}
 	otv1 := outcomeValue{
 		O:     ot1,

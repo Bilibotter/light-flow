@@ -170,17 +170,18 @@ func (process *runProcess) startStep(step *runStep) {
 		return
 	}
 
+	if step.Has(skipped) {
+		if _, exclude := step.getInternal(fmt.Sprintf(stepCD, step.Name())); !exclude {
+			return
+		}
+	}
+
+	if !step.meetCondition(step) {
+		return
+	}
+
 	for process.Has(Pause) {
 		process.pause.Wait()
-	}
-
-	if step.Has(skipped) {
-		return
-	}
-
-	if len(step.depends) > 0 && !process.evaluate(step) {
-		step.append(skipped)
-		return
 	}
 
 	timeout := step.stepTimeout
@@ -200,19 +201,6 @@ func (process *runProcess) startStep(step *runStep) {
 	case <-step.finish:
 	}
 	step.end = time.Now().UTC()
-}
-
-func (process *runProcess) evaluate(step *runStep) bool {
-	for _, group := range step.evaluators {
-		named, unnamed, exist := process.getCondition(group.depend)
-		if !exist {
-			return false
-		}
-		if !group.evaluate(named, unnamed) {
-			return false
-		}
-	}
-	return true
 }
 
 func (process *runProcess) waitFinish() {
@@ -316,11 +304,11 @@ func (process *runProcess) startNextSteps(step *runStep) {
 		if cancel {
 			next.append(Cancel)
 		}
-		if atomic.LoadInt64(&waiting) != 0 {
-			continue
-		}
 		if skip {
 			next.append(skipped)
+		}
+		if atomic.LoadInt64(&waiting) != 0 {
+			continue
 		}
 		if bind != nil {
 			go process.startStep(bind)

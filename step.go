@@ -17,21 +17,20 @@ const (
 
 type segment int64
 
-type evaluators []*evaluator
+type sliceSet[T comparable] []T
 
 type StepMeta struct {
 	stepConfig
-	stepCallback
+	condition
 	nodeRouter
-	belong     *ProcessMeta
-	name       string
-	layer      int
-	position   *state              // used to record the position of the step
-	depends    sliceSet[*StepMeta] // prev
-	waiters    sliceSet[*StepMeta] // next
-	restrict   map[string]uint64
-	run        func(ctx Step) (any, error)
-	evaluators evaluators
+	belong   *ProcessMeta
+	name     string
+	layer    int
+	position *state              // used to record the position of the step
+	depends  sliceSet[*StepMeta] // prev
+	waiters  sliceSet[*StepMeta] // next
+	restrict map[string]uint64   // used to limit the Context to get certain keys only in the specified step
+	run      func(ctx Step) (any, error)
 }
 
 type runStep struct {
@@ -45,6 +44,19 @@ type runStep struct {
 	start     time.Time
 	end       time.Time
 	exception error
+}
+
+func (ss sliceSet[T]) Find(element any) bool {
+	convert, ok := element.(T)
+	if !ok {
+		return false
+	}
+	for _, t := range ss {
+		if t == convert {
+			return true
+		}
+	}
+	return false
 }
 
 func (seg *segment) addWaiting(i int64) int64 {

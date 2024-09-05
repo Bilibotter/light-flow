@@ -37,6 +37,7 @@ var (
 	Recovering = &StatusEnum{0b1 << 4, "Recovering"}
 	// Entity can be recovered at an appropriate time.
 	Suspend      = &StatusEnum{0b1 << 5, "Suspend"}
+	Skip         = &StatusEnum{0b1 << 6, "Skip"} // Step was skipped due to condition not met.
 	Success      = &StatusEnum{0b1 << 15, "Success"}
 	NormalMask   = &StatusEnum{0b1<<16 - 1, "NormalMask"}
 	abnormal     = []*StatusEnum{Cancel, Timeout, Panic, Error, Stop, CallbackFail, Failed}
@@ -131,7 +132,6 @@ type StepController interface {
 type stepCtx interface {
 	context
 	resManagerI
-	SetCondition(value any, targets ...string) // the targets contain names of the evaluators to be matched
 	EndValues(key string) map[string]any
 	Result(key string) (value any, exist bool)
 }
@@ -185,14 +185,14 @@ type context interface {
 
 type routing interface {
 	nodeInfo
-	Specify(key string) (index uint64, exist bool)
-	Visible() uint64
-	Access() uint64
+	specify(key string) (index uint64, exist bool)
+	visible() uint64
+	access() uint64
 }
 
 type nodeInfo interface {
-	ToIndex(name string) (uint64, bool)
-	ToName(index uint64) string
+	getIndex(name string) (uint64, bool)
+	getName(index uint64) string
 	nodeName() string
 }
 
@@ -230,9 +230,7 @@ type node struct {
 }
 
 type outcome struct {
-	Result  interface{}
-	Named   []evalValue
-	Unnamed []evalValue
+	Result interface{}
 }
 
 type nodeRouter struct {
@@ -241,11 +239,6 @@ type nodeRouter struct {
 	restrict map[string]uint64 // specify the  key to index
 	index    uint64
 	nodePath uint64
-}
-
-type evalValue struct {
-	Matches *set[string]
-	Value   interface{}
 }
 
 func emptyStatus() *state {
@@ -387,10 +380,10 @@ func (sc *simpleContext) getInternal(key string) (value any, exist bool) {
 }
 
 func (ctx *dependentContext) Get(key string) (value any, exist bool) {
-	if index, match := ctx.Specify(key); match {
+	if index, match := ctx.specify(key); match {
 		return ctx.matchByIndex(index, key)
 	}
-	if value, exist = ctx.get(ctx.Access(), key); exist {
+	if value, exist = ctx.get(ctx.access(), key); exist {
 		return
 	}
 	if ctx.prev != nil {
@@ -400,7 +393,7 @@ func (ctx *dependentContext) Get(key string) (value any, exist bool) {
 }
 
 func (ctx *dependentContext) Set(key string, value any) {
-	ctx.set(ctx.Visible(), key, value)
+	ctx.set(ctx.visible(), key, value)
 }
 
 func (ctx *dependentContext) getInternal(key string) (value any, exist bool) {
@@ -421,12 +414,12 @@ func (ctx *dependentContext) EndValues(key string) map[string]any {
 	m := make(map[string]any)
 	exist := uint64(0)
 	for current.Next != nil {
-		if ctx.Visible()&current.Path != current.Path || exist|current.Path == exist {
+		if ctx.visible()&current.Path != current.Path || exist|current.Path == exist {
 			current = current.Next
 			continue
 		}
 		length := bits.Len64(current.Path)
-		name := ctx.ToName(uint64(length) - 1)
+		name := ctx.getName(uint64(length) - 1)
 		m[name] = current.Value
 		exist |= current.Path
 		current = current.Next
@@ -435,12 +428,12 @@ func (ctx *dependentContext) EndValues(key string) map[string]any {
 }
 
 func (ctx *dependentContext) Result(key string) (value any, exist bool) {
-	index, valid := ctx.ToIndex(key)
+	index, valid := ctx.getIndex(key)
 	if !valid {
 		return nil, false
 	}
 	access := uint64(1 << index)
-	if ctx.Access()&access != access {
+	if ctx.access()&access != access {
 		return nil, false
 	}
 	ptr, find := ctx.getOutCome(key)
@@ -455,33 +448,6 @@ func (ctx *dependentContext) setResult(key string, value any) {
 	ptr := ctx.setOutcomeIfAbsent(key)
 	defer ctx.Unlock()
 	ptr.Result = value
-}
-
-func (ctx *dependentContext) getCondition(key string) (named, unnamed []evalValue, exist bool) {
-	ptr, find := ctx.getOutCome(key)
-	defer ctx.RUnlock()
-	if !find {
-		return nil, nil, false
-	}
-	return ptr.Named, ptr.Unnamed, true
-}
-
-func (ctx *dependentContext) SetCondition(value any, targets ...string) {
-	ptr := ctx.setOutcomeIfAbsent(ctx.nodeName())
-	defer ctx.Unlock()
-	switch value.(type) {
-	case int8, int16, int32, int64, int:
-		value = toInt64(value)
-	case uint8, uint16, uint32, uint64, uint:
-		value = toUint64(value)
-	case float32, float64:
-		value = toFloat64(value)
-	}
-	insert := evalValue{Value: value}
-	if len(targets) != 0 {
-		insert.Matches = createSetBySliceFunc(targets, func(value string) string { return value })
-	}
-	ptr.Unnamed = append(ptr.Unnamed, insert)
 }
 
 func (ctx *dependentContext) getOutCome(name string) (*outcome, bool) {
@@ -521,7 +487,7 @@ func (ctx *dependentContext) setOutcomeIfAbsent(key string) *outcome {
 func (ctx *dependentContext) GetByStepName(stepName, key string) (value any, exist bool) {
 	ctx.RLock()
 	defer ctx.RUnlock()
-	index, ok := ctx.ToIndex(stepName)
+	index, ok := ctx.getIndex(stepName)
 	if !ok {
 		panic(fmt.Sprintf("Step[ %s ] not found.", stepName))
 	}
@@ -591,31 +557,31 @@ func (n *node) search(path uint64) (any, bool) {
 	return n.Next.search(path)
 }
 
-func (router *nodeRouter) Specify(key string) (index uint64, exist bool) {
+func (router *nodeRouter) specify(key string) (index uint64, exist bool) {
 	index, exist = router.restrict[key]
 	return
 }
 
-func (router *nodeRouter) Visible() uint64 {
+func (router *nodeRouter) visible() uint64 {
 	if router.nodePath == fullAccess {
 		return publicIndex
 	}
 	return router.nodePath
 }
 
-func (router *nodeRouter) Access() uint64 {
+func (router *nodeRouter) access() uint64 {
 	return router.nodePath
 }
 
-func (router *nodeRouter) ToIndex(name string) (index uint64, exist bool) {
+func (router *nodeRouter) getIndex(name string) (index uint64, exist bool) {
 	index, exist = router.toIndex[name]
 	return
 }
 
-func (router *nodeRouter) ToName(index uint64) string {
+func (router *nodeRouter) getName(index uint64) string {
 	return router.toName[index]
 }
 
 func (router *nodeRouter) nodeName() string {
-	return router.ToName(router.index)
+	return router.getName(router.index)
 }

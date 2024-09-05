@@ -74,7 +74,6 @@ func (pm *ProcessMeta) Merge(name string) {
 			if merged.stepCfgInit {
 				target.extern = append(target.extern, &merged.stepConfig)
 			}
-			target.evaluators = append(target.evaluators, merged.evaluators...)
 			continue
 		}
 		depends := make([]any, 0, len(merged.depends))
@@ -86,7 +85,6 @@ func (pm *ProcessMeta) Merge(name string) {
 		if merged.stepCfgInit {
 			step.extern = append(step.extern, &merged.stepConfig)
 		}
-		step.evaluators = append(step.evaluators, merged.evaluators...)
 	}
 
 	// ensure step index bigger than all depends index
