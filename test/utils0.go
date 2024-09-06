@@ -19,8 +19,8 @@ var (
 )
 
 type EqualityImpl struct {
-	age  int
-	name string
+	Age  int
+	Name string
 }
 
 type PanicComparableImpl struct {
@@ -28,7 +28,6 @@ type PanicComparableImpl struct {
 }
 
 func (p *PanicComparableImpl) Equal(_ any) bool {
-	println("here0")
 	if atomic.LoadInt64(&letGo) == 0 {
 		return true
 	}
@@ -37,7 +36,6 @@ func (p *PanicComparableImpl) Equal(_ any) bool {
 }
 
 func (p *PanicComparableImpl) Less(_ any) bool {
-	println("here1")
 	if atomic.LoadInt64(&letGo) == 0 {
 		return true
 	}
@@ -46,7 +44,7 @@ func (p *PanicComparableImpl) Less(_ any) bool {
 }
 
 type ComparableImpl struct {
-	age int
+	Age int
 }
 
 func (ei *EqualityImpl) Equal(other any) bool {
@@ -54,7 +52,7 @@ func (ei *EqualityImpl) Equal(other any) bool {
 	if !ok {
 		return false
 	}
-	return ei.age == e.age && ei.name == e.name
+	return ei.Age == e.Age && ei.Name == e.Name
 }
 
 func (ci *ComparableImpl) Equal(other any) bool {
@@ -62,7 +60,7 @@ func (ci *ComparableImpl) Equal(other any) bool {
 	if !ok {
 		return false
 	}
-	return ci.age == c.age
+	return ci.Age == c.Age
 }
 
 func (ci *ComparableImpl) Less(other any) bool {
@@ -70,7 +68,7 @@ func (ci *ComparableImpl) Less(other any) bool {
 	if !ok {
 		return false
 	}
-	return ci.age < c.age
+	return ci.Age < c.Age
 }
 
 func resetTimes() {
@@ -176,9 +174,13 @@ func (fx *FlexibleBuilder[T]) CheckCtx0(preview, prefix string) *FlexibleBuilder
 	return fx
 }
 
-func (fx *FlexibleBuilder[T]) Inc() *FlexibleBuilder[T] {
+func (fx *FlexibleBuilder[T]) Inc(i ...int64) *FlexibleBuilder[T] {
 	fx.doing = append(fx.doing, func(s T) (any, error) {
-		atomic.AddInt64(&current, 1)
+		if len(i) > 0 {
+			atomic.AddInt64(&current, i[0])
+		} else {
+			atomic.AddInt64(&current, 1)
+		}
 		return nil, nil
 	})
 	return fx
@@ -305,9 +307,9 @@ func (fx *FlexibleBuilder[T]) Cond(suffixes ...string) *FlexibleBuilder[T] {
 		}
 		s.Set(suffix+"time", t)
 		s.Set(suffix+"*time", &t)
-		s.Set(suffix+"Equality", EqualityImpl{age: 13, name: "Alice"})
-		s.Set(suffix+"*Equality", &EqualityImpl{age: 14, name: "Bob"})
-		s.Set(suffix+"*Comparable", &ComparableImpl{age: 16})
+		s.Set(suffix+"Equality", EqualityImpl{Age: 13, Name: "Alice"})
+		s.Set(suffix+"*Equality", &EqualityImpl{Age: 14, Name: "Bob"})
+		s.Set(suffix+"*Comparable", &ComparableImpl{Age: 16})
 		s.Set(suffix+"PanicComparable", &PanicComparableImpl{Content: "panic"})
 		atomic.AddInt64(&current, 1)
 		fx.Logf("Step[ %s ] set condition succeed", s.Name())
@@ -319,6 +321,19 @@ func (fx *FlexibleBuilder[T]) Cond(suffixes ...string) *FlexibleBuilder[T] {
 func (fx *FlexibleBuilder[T]) Condition(i int, ret int64) *FlexibleBuilder[T] {
 	atomic.StoreInt64(fx.fxRet, ret)
 	fx.index = i
+	return fx
+}
+
+func (fx *FlexibleBuilder[T]) Recover() *FlexibleBuilder[T] {
+	fx.doing = append(fx.doing, func(s T) (any, error) {
+		if s.Has(flow.Recovering) {
+			atomic.AddInt64(&current, 1)
+			fx.Logf("Step[ %s ] recovering", s.Name())
+			return s.Name(), nil
+		}
+		atomic.AddInt64(&current, 1)
+		return nil, fmt.Errorf("error")
+	})
 	return fx
 }
 

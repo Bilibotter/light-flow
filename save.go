@@ -7,51 +7,51 @@ const (
 
 var (
 	stepPersist = &stepPersistor{
-		onBegin:  emptyStepFunc,
+		onInsert: emptyStepFunc,
 		onUpdate: emptyStepFunc,
 	}
 	procPersist = &procPersistor{
-		onBegin:  emptyProcFunc,
+		onInsert: emptyProcFunc,
 		onUpdate: emptyProcFunc,
 	}
 	flowPersist = &flowPersistor{
-		onBegin:  emptyFlowFunc,
+		onInsert: emptyFlowFunc,
 		onUpdate: emptyFlowFunc,
 	}
 )
 
 type StepPersistor interface {
-	OnBegin(func(Step) error) StepPersistor
+	OnInsert(func(Step) error) StepPersistor
 	OnUpdate(func(Step) error) StepPersistor
 }
 
 type ProcPersistor interface {
-	OnBegin(func(Process) error) ProcPersistor
+	OnInsert(func(Process) error) ProcPersistor
 	OnUpdate(func(Process) error) ProcPersistor
 }
 
 type FlowPersistor interface {
-	OnBegin(func(WorkFlow) error) FlowPersistor
+	OnInsert(func(WorkFlow) error) FlowPersistor
 	OnUpdate(func(WorkFlow) error) FlowPersistor
 }
 
 type stepPersistor struct {
-	onBegin  func(Step)
+	onInsert func(Step)
 	onUpdate func(Step)
 }
 
 type procPersistor struct {
-	onBegin  func(Process)
+	onInsert func(Process)
 	onUpdate func(Process)
 }
 
 type flowPersistor struct {
-	onBegin  func(WorkFlow)
+	onInsert func(WorkFlow)
 	onUpdate func(WorkFlow)
 }
 
-func (sp *stepPersistor) OnBegin(f func(Step) error) StepPersistor {
-	sp.onBegin = wrapPersist[Step](beginAction, f)
+func (sp *stepPersistor) OnInsert(f func(Step) error) StepPersistor {
+	sp.onInsert = wrapPersist[Step](beginAction, f)
 	return sp
 }
 
@@ -60,8 +60,8 @@ func (sp *stepPersistor) OnUpdate(f func(Step) error) StepPersistor {
 	return sp
 }
 
-func (pp *procPersistor) OnBegin(f func(Process) error) ProcPersistor {
-	pp.onBegin = wrapPersist[Process](beginAction, f)
+func (pp *procPersistor) OnInsert(f func(Process) error) ProcPersistor {
+	pp.onInsert = wrapPersist[Process](beginAction, f)
 	return pp
 }
 
@@ -70,8 +70,8 @@ func (pp *procPersistor) OnUpdate(f func(Process) error) ProcPersistor {
 	return pp
 }
 
-func (fp *flowPersistor) OnBegin(f func(WorkFlow) error) FlowPersistor {
-	fp.onBegin = wrapPersist[WorkFlow](beginAction, f)
+func (fp *flowPersistor) OnInsert(f func(WorkFlow) error) FlowPersistor {
+	fp.onInsert = wrapPersist[WorkFlow](beginAction, f)
 	return fp
 }
 

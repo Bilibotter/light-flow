@@ -632,6 +632,9 @@ func (point *procCheckpoint) buildSnapshot() (err error) {
 		}
 	}
 	point.snapshot, err = serialize(snapshot)
+	if err != nil {
+		logger.Errorf(snapshotErrorLog, "Process", point.GetName(), point.GetUid(), "serialize", err.Error())
+	}
 	return
 }
 

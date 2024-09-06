@@ -36,6 +36,7 @@ type ExecCondition interface {
 }
 
 type condition struct {
+	conditions         []*condition // condition from merged
 	groups             [][]func(step Step) bool
 	skipWithDependents bool
 	exclude            []string
@@ -154,21 +155,22 @@ func lt(expect any) func(raw any) bool {
 }
 
 func (c *condition) meetCondition(step Step) (meet bool) {
-	if len(c.groups) == 0 {
-		return true
+	meet = c.evaluate(step)
+	if meet && len(c.conditions) == 0 {
+		return
 	}
-	for _, group := range c.groups {
-		meet = true
-		for _, cond := range group {
-			if !cond(step) {
-				meet = false
-				break
-			}
+
+	for _, cond := range c.conditions {
+		if !meet {
+			break
 		}
-		if meet {
-			return
-		}
+		meet = cond.evaluate(step)
 	}
+
+	if meet {
+		return
+	}
+
 	step.append(Skip)
 	if !c.skipWithDependents {
 		return
@@ -176,6 +178,25 @@ func (c *condition) meetCondition(step Step) (meet bool) {
 	step.append(skipped)
 	for _, exclude := range c.exclude {
 		step.setInternal(fmt.Sprintf(stepCD, exclude), nil)
+	}
+	return
+}
+
+func (c *condition) evaluate(step Step) (pass bool) {
+	if len(c.groups) == 0 {
+		return true
+	}
+	for _, group := range c.groups {
+		pass = true
+		for _, cond := range group {
+			if !cond(step) {
+				pass = false
+				break
+			}
+		}
+		if pass {
+			return
+		}
 	}
 	return
 }
@@ -295,4 +316,10 @@ func (c *condition) addEvaluate(match string, expect any, operator string) ExecC
 		panic(fmt.Sprintf("condition failed: Operator[%s] not supported", operator))
 	}
 	return c
+}
+
+func (c *condition) mergeCond(other *condition) {
+	c.conditions = append(c.conditions, other)
+	c.skipWithDependents = c.skipWithDependents || other.skipWithDependents
+	c.exclude = append(c.exclude, other.exclude...)
 }

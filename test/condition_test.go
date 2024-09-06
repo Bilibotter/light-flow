@@ -1,1871 +1,1141 @@
 package test
 
-//
-//import (
-//	"fmt"
-//	flow "github.com/Bilibotter/light-flow"
-//	"reflect"
-//	"sync/atomic"
-//	"testing"
-//	"time"
-//)
-//
-//func GenerateGetResult(step string, check any) func(ctx flow.Step) (any, error) {
-//	return func(ctx flow.Step) (any, error) {
-//		wrap, ok := ctx.Result(step)
-//		if !ok {
-//			panic(fmt.Sprintf("result[%s] not found", step))
-//		}
-//		if !reflect.DeepEqual(wrap, check) {
-//			panic(fmt.Sprintf("result[%s] = %v, want %v", step, wrap, check))
-//		}
-//		atomic.AddInt64(&current, 1)
-//		return check, nil
-//	}
-//}
-//
-//func GenerateConditionStep(value ...any) func(ctx flow.Step) (any, error) {
-//	return func(ctx flow.Step) (any, error) {
-//		for _, v := range value {
-//			ctx.SetCondition(v)
-//		}
-//		atomic.AddInt64(&current, 1)
-//		return "disruptions", nil
-//	}
-//}
-//
-//func GenerateConditionStepByMap(m map[string]any) func(ctx flow.Step) (any, error) {
-//	return func(ctx flow.Step) (any, error) {
-//		for k, v := range m {
-//			ctx.SetCondition(v, k)
-//		}
-//		atomic.AddInt64(&current, 1)
-//		return "disruptions", nil
-//	}
-//}
-//
-//func GenerateExactConditionStep(value ...any) func(ctx flow.Step) (any, error) {
-//	return func(ctx flow.Step) (any, error) {
-//		for _, v := range value {
-//			ctx.SetCondition(v, "group")
-//		}
-//		atomic.AddInt64(&current, 1)
-//		return "disruptions", nil
-//	}
-//}
-//
-//func TestContinuousExactCondition(t *testing.T) {
-//	defer resetCurrent()
-//
-//	var v1, v2 interface{}
-//	v1 = 1
-//	v2 = 1.0
-//	// true true
-//	workflow := flow.RegisterFlow("TestContinuousExactCondition1")
-//	process := workflow.Process("TestContinuousExactCondition1")
-//	process.NameStep(GenerateExactConditionStep(v1, v2), "1")
-//	step2 := process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", v1).NEQ(2.0).Identify("group")
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestContinuousExactCondition1", map[string]any{"1": -1, "2": -1})
-//	resetCurrent()
-//
-//	v1 = 1
-//	v2 = 1.0
-//	// true false
-//	workflow = flow.RegisterFlow("TestContinuousExactCondition2")
-//	process = workflow.Process("TestContinuousExactCondition2")
-//	process.NameStep(GenerateExactConditionStep(v1, v2), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", v1).NEQ(1.0).Identify("group")
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestContinuousExactCondition2", map[string]any{"1": -1, "2": -1})
-//	resetCurrent()
-//
-//	v1 = 1
-//	v2 = 1.0
-//	// true false
-//	workflow = flow.RegisterFlow("TestContinuousExactCondition3")
-//	process = workflow.Process("TestContinuousExactCondition3")
-//	process.NameStep(GenerateExactConditionStep(v1, v2), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", 2).NEQ(2.0).Identify("group")
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestContinuousExactCondition3", map[string]any{"1": -1, "2": -1})
-//	resetCurrent()
-//
-//	v1 = 1
-//	v2 = 1.0
-//	// false false
-//	workflow = flow.RegisterFlow("TestContinuousExactCondition4")
-//	process = workflow.Process("TestContinuousExactCondition4")
-//	process.NameStep(GenerateExactConditionStep(v1, v2), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", 2).NEQ(1.0).Identify("group")
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestContinuousExactCondition4", map[string]any{"1": -1, "2": -1})
-//	resetCurrent()
-//}
-//
-//func TestReachExactCondition(t *testing.T) {
-//	defer resetCurrent()
-//	var check interface{}
-//
-//	check = "reach"
-//	workflow := flow.RegisterFlow("TestReachExactCondition1")
-//	process := workflow.Process("TestReachExactCondition1")
-//	process.NameStep(GenerateConditionStepByMap(map[string]any{"exact": check}), "1")
-//	step2 := process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", check).Identify("exact")
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachExactCondition1", map[string]any{"1": "disruptions", "2": "disruptions"})
-//	resetCurrent()
-//
-//	check = 1
-//	workflow = flow.RegisterFlow("TestReachExactCondition2")
-//	process = workflow.Process("TestReachExactCondition2")
-//	process.NameStep(GenerateConditionStepByMap(map[string]any{"exact": check}), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", check).Identify("exact")
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachExactCondition2", map[string]any{"1": -1, "2": -1})
-//	resetCurrent()
-//
-//	check = true
-//	workflow = flow.RegisterFlow("TestReachExactCondition3")
-//	process = workflow.Process("TestReachExactCondition3")
-//	process.NameStep(GenerateConditionStepByMap(map[string]any{"exact": check}), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", check).Identify("exact")
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachExactCondition3", map[string]any{"1": false, "2": false})
-//	resetCurrent()
-//
-//	check = float32(0.001)
-//	workflow = flow.RegisterFlow("TestReachExactCondition4")
-//	process = workflow.Process("TestReachExactCondition4")
-//	process.NameStep(GenerateConditionStepByMap(map[string]any{"exact": check}), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", check).Identify("exact")
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachExactCondition4", map[string]any{"1": -0.002, "2": -0.002})
-//	resetCurrent()
-//
-//	timeLayout := "2006-01-02 15:04:05"
-//	timeStr1 := "2022-01-15 15:04:05"
-//	timeStr2 := "2022-01-15 15:04:07"
-//	check, err := time.Parse(timeLayout, timeStr1)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr1)
-//	}
-//	disruptions, err := time.Parse(timeLayout, timeStr2)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr2)
-//	}
-//	workflow = flow.RegisterFlow("TestReachExactCondition5")
-//	process = workflow.Process("TestReachExactCondition5")
-//	process.NameStep(GenerateConditionStepByMap(map[string]any{"exact": check}), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", check).Identify("exact")
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachExactCondition5", map[string]any{"1": disruptions, "2": disruptions})
-//	resetCurrent()
-//
-//	check = uint(1)
-//	workflow = flow.RegisterFlow("TestReachExactCondition6")
-//	process = workflow.Process("TestReachExactCondition6")
-//	process.NameStep(GenerateConditionStepByMap(map[string]any{"exact": check}), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", check).Identify("exact")
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachExactCondition6", map[string]any{"1": uint(0), "2": uint(0)})
-//	resetCurrent()
-//
-//	check = EqualityImpl{age: 18, name: "xxx"}
-//	notEqual := EqualityImpl{age: 19, name: "xxxx"}
-//	workflow = flow.RegisterFlow("TestReachExactCondition7")
-//	process = workflow.Process("TestReachExactCondition7")
-//	process.NameStep(GenerateConditionStepByMap(map[string]any{"exact": check}), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", check).Identify("exact")
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachExactCondition7", map[string]any{"1": notEqual, "2": notEqual})
-//}
-//
-//func TestNotReachExactCondition(t *testing.T) {
-//	defer resetCurrent()
-//	var check, nomatch interface{}
-//	check = "reach"
-//	nomatch = "noreach"
-//	workflow := flow.RegisterFlow("TestNotReachExactCondition1")
-//	process := workflow.Process("TestNotReachExactCondition1")
-//	process.NameStep(GenerateConditionStepByMap(map[string]any{"exact": nomatch}), "1")
-//	step2 := process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", check).Identify("exact")
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachExactCondition1", map[string]any{"1": "disruptions", "2": "disruptions"})
-//	resetCurrent()
-//
-//	check = int(1)
-//	nomatch = int(0)
-//	workflow = flow.RegisterFlow("TestNotReachExactCondition2")
-//	process = workflow.Process("TestNotReachExactCondition2")
-//	process.NameStep(GenerateConditionStepByMap(map[string]any{"exact": nomatch}), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", check).Identify("exact")
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachExactCondition2", map[string]any{"1": int(0), "2": int(0)})
-//	resetCurrent()
-//
-//	check = true
-//	nomatch = false
-//	workflow = flow.RegisterFlow("TestNotReachExactCondition3")
-//	process = workflow.Process("TestNotReachExactCondition3")
-//	process.NameStep(GenerateConditionStepByMap(map[string]any{"exact": nomatch}), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", check).Identify("exact")
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachExactCondition3", map[string]any{"1": nomatch, "2": nomatch})
-//	resetCurrent()
-//
-//	check = float32(0.001)
-//	nomatch = float32(0.002)
-//	workflow = flow.RegisterFlow("TestNotReachExactCondition4")
-//	process = workflow.Process("TestNotReachExactCondition4")
-//	process.NameStep(GenerateConditionStepByMap(map[string]any{"exact": nomatch}), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", check).Identify("exact")
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachExactCondition4", map[string]any{"1": -0.002, "2": -0.002})
-//	resetCurrent()
-//
-//	timeLayout := "2006-01-02 15:04:05"
-//	timeStr1 := "2022-01-15 15:04:05"
-//	timeStr2 := "2022-01-15 15:04:07"
-//	check, err := time.Parse(timeLayout, timeStr1)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr1)
-//	}
-//	disruptions, err := time.Parse(timeLayout, timeStr2)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr2)
-//	}
-//	workflow = flow.RegisterFlow("TestNotReachExactCondition5")
-//	process = workflow.Process("TestNotReachExactCondition5")
-//	process.NameStep(GenerateConditionStepByMap(map[string]any{"exact": disruptions}), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", check).Identify("exact")
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachExactCondition5", map[string]any{"1": disruptions, "2": disruptions})
-//	resetCurrent()
-//
-//	check = uint(1)
-//	nomatch = uint(0)
-//	workflow = flow.RegisterFlow("TestNotReachExactCondition6")
-//	process = workflow.Process("TestNotReachExactCondition6")
-//	process.NameStep(GenerateConditionStepByMap(map[string]any{"exact": nomatch}), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", check).Identify("exact")
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachExactCondition6", map[string]any{"1": uint(0), "2": uint(0)})
-//	resetCurrent()
-//
-//	check = EqualityImpl{age: 18, name: "xxx"}
-//	nomatch = EqualityImpl{age: 19, name: "xxxx"}
-//	workflow = flow.RegisterFlow("TestNotReachExactCondition7")
-//	process = workflow.Process("TestNotReachExactCondition7")
-//	process.NameStep(GenerateConditionStepByMap(map[string]any{"exact": nomatch}), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", check).Identify("exact")
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachExactCondition7", map[string]any{"1": EqualityImpl{age: 19, name: "xxxx"}, "2": EqualityImpl{age: 19, name: "xxxx"}})
-//}
-//
-//func TestMultipleExactConditionGroup(t *testing.T) {
-//	defer resetCurrent()
-//
-//	var v1, v2 interface{}
-//	v1 = 1
-//	v2 = 1.0
-//	// true true
-//	workflow := flow.RegisterFlow("TestMultipleExactConditionGroup1")
-//	process := workflow.Process("TestMultipleExactConditionGroup1")
-//	process.NameStep(GenerateConditionStepByMap(map[string]any{"group1": v1, "group2": v2}), "1")
-//	step2 := process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", v1).Identify("group1")
-//	step2.NEQ("1", 2.0).Identify("group2")
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestMultipleExactConditionGroup1", map[string]any{"1": -1, "2": -1})
-//	resetCurrent()
-//
-//	v1 = 1
-//	v2 = 1.0
-//	// true false
-//	workflow = flow.RegisterFlow("TestMultipleExactConditionGroup2")
-//	process = workflow.Process("TestMultipleExactConditionGroup2")
-//	process.NameStep(GenerateConditionStepByMap(map[string]any{"group1": v1, "group2": v2}), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", v1).Identify("group1")
-//	step2.NEQ("1", 1.0).Identify("group2")
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestMultipleExactConditionGroup2", map[string]any{"1": -1, "2": -1})
-//	resetCurrent()
-//
-//	v1 = 1
-//	v2 = 1.0
-//	// true false
-//	workflow = flow.RegisterFlow("TestMultipleExactConditionGroup3")
-//	process = workflow.Process("TestMultipleExactConditionGroup3")
-//	process.NameStep(GenerateConditionStepByMap(map[string]any{"group1": v1, "group2": v2}), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", 2).Identify("group1")
-//	step2.NEQ("1", 2.0).Identify("group2")
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestMultipleExactConditionGroup3", map[string]any{"1": -1, "2": -1})
-//	resetCurrent()
-//
-//	v1 = 1
-//	v2 = 1.0
-//	// false false
-//	workflow = flow.RegisterFlow("TestMultipleExactConditionGroup4")
-//	process = workflow.Process("TestMultipleExactConditionGroup4")
-//	process.NameStep(GenerateConditionStepByMap(map[string]any{"group1": v1, "group2": v2}), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", 2).Identify("group1")
-//	step2.NEQ("1", 1.0).Identify("group2")
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestMultipleExactConditionGroup4", map[string]any{"1": -1, "2": -1})
-//	resetCurrent()
-//}
-//
-//func TestMultipleConditionGroup(t *testing.T) {
-//	defer resetCurrent()
-//
-//	var v1, v2 interface{}
-//	v1 = 1
-//	v2 = 1.0
-//	// true true
-//	workflow := flow.RegisterFlow("TestMultipleConditionGroup1")
-//	process := workflow.Process("TestMultipleConditionGroup1")
-//	process.NameStep(GenerateConditionStep(v1, v2), "1")
-//	step2 := process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", v1)
-//	step2.NEQ("1", 2.0)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestMultipleConditionGroup1", map[string]any{"1": -1, "2": -1})
-//	resetCurrent()
-//
-//	v1 = 1
-//	v2 = 1.0
-//	// true false
-//	workflow = flow.RegisterFlow("TestMultipleConditionGroup2")
-//	process = workflow.Process("TestMultipleConditionGroup2")
-//	process.NameStep(GenerateConditionStep(v1, v2), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", v1)
-//	step2.NEQ("1", 1.0)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestMultipleConditionGroup2", map[string]any{"1": -1, "2": -1})
-//	resetCurrent()
-//
-//	v1 = 1
-//	v2 = 1.0
-//	// true false
-//	workflow = flow.RegisterFlow("TestMultipleConditionGroup3")
-//	process = workflow.Process("TestMultipleConditionGroup3")
-//	process.NameStep(GenerateConditionStep(v1, v2), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", 2)
-//	step2.NEQ("1", 2.0)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestMultipleConditionGroup3", map[string]any{"1": -1, "2": -1})
-//	resetCurrent()
-//
-//	v1 = 1
-//	v2 = 1.0
-//	// false false
-//	workflow = flow.RegisterFlow("TestMultipleConditionGroup4")
-//	process = workflow.Process("TestMultipleConditionGroup4")
-//	process.NameStep(GenerateConditionStep(v1, v2), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", 2)
-//	step2.NEQ("1", 1.0)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestMultipleConditionGroup4", map[string]any{"1": -1, "2": -1})
-//	resetCurrent()
-//}
-//
-//func TestContinuousCondition(t *testing.T) {
-//	defer resetCurrent()
-//
-//	var v1, v2 interface{}
-//	v1 = 1
-//	v2 = 1.0
-//	// true true
-//	workflow := flow.RegisterFlow("TestContinuousCondition1")
-//	process := workflow.Process("TestContinuousCondition1")
-//	process.NameStep(GenerateConditionStep(v1, v2), "1")
-//	step2 := process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", v1).NEQ(2.0)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestContinuousCondition1", map[string]any{"1": -1, "2": -1})
-//	resetCurrent()
-//
-//	v1 = 1
-//	v2 = 1.0
-//	// true false
-//	workflow = flow.RegisterFlow("TestContinuousCondition2")
-//	process = workflow.Process("TestContinuousCondition2")
-//	process.NameStep(GenerateConditionStep(v1, v2), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", v1).NEQ(1.0)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestContinuousCondition2", map[string]any{"1": -1, "2": -1})
-//	resetCurrent()
-//
-//	v1 = 1
-//	v2 = 1.0
-//	// true false
-//	workflow = flow.RegisterFlow("TestContinuousCondition3")
-//	process = workflow.Process("TestContinuousCondition3")
-//	process.NameStep(GenerateConditionStep(v1, v2), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", 2).NEQ(2.0)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestContinuousCondition3", map[string]any{"1": -1, "2": -1})
-//	resetCurrent()
-//
-//	v1 = 1
-//	v2 = 1.0
-//	// false false
-//	workflow = flow.RegisterFlow("TestContinuousCondition4")
-//	process = workflow.Process("TestContinuousCondition4")
-//	process.NameStep(GenerateConditionStep(v1, v2), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", 2).NEQ(1.0)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestContinuousCondition4", map[string]any{"1": -1, "2": -1})
-//	resetCurrent()
-//}
-//
-//func TestDependItself(t *testing.T) {
-//	defer resetCurrent()
-//	workflow := flow.RegisterFlow("TestDependItself")
-//	process := workflow.Process("TestDependItself")
-//	step := process.NameStep(GenerateGetResult("1", "disruptions"), "1")
-//	defer func() {
-//		if r := recover(); r != nil {
-//			t.Logf("success")
-//		} else {
-//			t.Errorf("step depend itself without panic")
-//		}
-//	}()
-//	step.EQ("1", "dependitself")
-//}
-//
-//func TestGetResultAfterSetCondition(t *testing.T) {
-//	defer resetCurrent()
-//	workflow := flow.RegisterFlow("TestGetResultAfterSetCondition")
-//	process := workflow.Process("TestGetResultAfterSetCondition")
-//	process.NameStep(GenerateConditionStep("1", 1), "1")
-//	process.NameStep(GenerateGetResult("1", "disruptions"), "2", "1")
-//	workflow.AfterFlow(false, CheckResult(t, 2, flow.Success))
-//	flow.DoneFlow("TestGetResultAfterSetCondition", map[string]any{"1": "inputdisruptions"})
-//}
-//
-//func TestIfCondition(t *testing.T) {
-//	defer resetCurrent()
-//	executeSuc = false
-//	workflow := flow.RegisterFlow("TestIfCondition")
-//	process := workflow.Process("TestIfCondition")
-//	process.BeforeStep(false, Fx[flow.Step](t).Inc().Callback()).
-//		If(func() bool { return executeSuc })
-//	process.NameStep(Fn(t).Normal(), "1")
-//	res := flow.DoneFlow("TestIfCondition", nil)
-//	fn1 := CheckResult(t, 1, flow.Success)
-//	fn1(res.(flow.WorkFlow))
-//	resetCurrent()
-//
-//	executeSuc = true
-//	fn1 = CheckResult(t, 2, flow.Success)
-//	res = flow.DoneFlow("TestIfCondition", nil)
-//	fn1(res.(flow.WorkFlow))
-//	resetCurrent()
-//
-//	executeSuc = true
-//	workflow = flow.RegisterFlow("TestIfCondition1")
-//	process = workflow.Process("TestIfCondition1")
-//	process.BeforeStep(false, Fx[flow.Step](t).Inc().Callback()).
-//		If(func() bool { return executeSuc })
-//	process.NameStep(Fn(t).Normal(), "1")
-//	res = flow.DoneFlow("TestIfCondition1", nil)
-//	fn1 = CheckResult(t, 2, flow.Success)
-//	fn1(res.(flow.WorkFlow))
-//	resetCurrent()
-//}
-//
-//func TestReachCondition(t *testing.T) {
-//	defer resetCurrent()
-//	var check interface{}
-//
-//	check = "reach"
-//	workflow := flow.RegisterFlow("TestReachCondition1")
-//	process := workflow.Process("TestReachCondition1")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 := process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", check)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachCondition1", map[string]any{"1": "disruptions", "2": "disruptions"})
-//	resetCurrent()
-//
-//	check = 1
-//	workflow = flow.RegisterFlow("TestReachCondition2")
-//	process = workflow.Process("TestReachCondition2")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", check)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachCondition2", map[string]any{"1": -1, "2": -1})
-//	resetCurrent()
-//
-//	check = true
-//	workflow = flow.RegisterFlow("TestReachCondition3")
-//	process = workflow.Process("TestReachCondition3")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", check)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachCondition3", map[string]any{"1": false, "2": false})
-//	resetCurrent()
-//
-//	check = float32(0.001)
-//	workflow = flow.RegisterFlow("TestReachCondition4")
-//	process = workflow.Process("TestReachCondition4")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", check)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachCondition4", map[string]any{"1": -0.002, "2": -0.002})
-//	resetCurrent()
-//
-//	timeLayout := "2006-01-02 15:04:05"
-//	timeStr1 := "2022-01-15 15:04:05"
-//	timeStr2 := "2022-01-15 15:04:07"
-//	check, err := time.Parse(timeLayout, timeStr1)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr1)
-//	}
-//	disruptions, err := time.Parse(timeLayout, timeStr2)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr2)
-//	}
-//	workflow = flow.RegisterFlow("TestReachCondition5")
-//	process = workflow.Process("TestReachCondition5")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", check)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachCondition5", map[string]any{"1": disruptions, "2": disruptions})
-//	resetCurrent()
-//
-//	check = uint(1)
-//	workflow = flow.RegisterFlow("TestReachCondition6")
-//	process = workflow.Process("TestReachCondition6")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", check)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachCondition6", map[string]any{"1": uint(0), "2": uint(0)})
-//	resetCurrent()
-//
-//	check = EqualityImpl{age: 18, name: "xxx"}
-//	notEqual := EqualityImpl{age: 19, name: "xxxx"}
-//	workflow = flow.RegisterFlow("TestReachCondition7")
-//	process = workflow.Process("TestReachCondition7")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", check)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachCondition7", map[string]any{"1": notEqual, "2": notEqual})
-//}
-//
-//func TestNotReachCondition(t *testing.T) {
-//	defer resetCurrent()
-//	var check, nomatch interface{}
-//	check = "reach"
-//	nomatch = "noreach"
-//	workflow := flow.RegisterFlow("TestNotReachCondition1")
-//	process := workflow.Process("TestNotReachCondition1")
-//	process.NameStep(GenerateConditionStep(nomatch), "1")
-//	step2 := process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", check)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachCondition1", map[string]any{"1": "disruptions", "2": "disruptions"})
-//	resetCurrent()
-//
-//	check = int(1)
-//	nomatch = int(0)
-//	workflow = flow.RegisterFlow("TestNotReachCondition2")
-//	process = workflow.Process("TestNotReachCondition2")
-//	process.NameStep(GenerateConditionStep(nomatch), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", check)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachCondition2", map[string]any{"1": int(0), "2": int(0)})
-//	resetCurrent()
-//
-//	check = true
-//	nomatch = false
-//	workflow = flow.RegisterFlow("TestNotReachCondition3")
-//	process = workflow.Process("TestNotReachCondition3")
-//	process.NameStep(GenerateConditionStep(nomatch), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", check)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachCondition3", map[string]any{"1": nomatch, "2": nomatch})
-//	resetCurrent()
-//
-//	check = float32(0.001)
-//	nomatch = float32(0.002)
-//	workflow = flow.RegisterFlow("TestNotReachCondition4")
-//	process = workflow.Process("TestNotReachCondition4")
-//	process.NameStep(GenerateConditionStep(nomatch), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", check)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachCondition4", map[string]any{"1": -0.002, "2": -0.002})
-//	resetCurrent()
-//
-//	timeLayout := "2006-01-02 15:04:05"
-//	timeStr1 := "2022-01-15 15:04:05"
-//	timeStr2 := "2022-01-15 15:04:07"
-//	check, err := time.Parse(timeLayout, timeStr1)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr1)
-//	}
-//	disruptions, err := time.Parse(timeLayout, timeStr2)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr2)
-//	}
-//	workflow = flow.RegisterFlow("TestNotReachCondition5")
-//	process = workflow.Process("TestNotReachCondition5")
-//	process.NameStep(GenerateConditionStep(disruptions), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", check)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachCondition5", map[string]any{"1": disruptions, "2": disruptions})
-//	resetCurrent()
-//
-//	check = uint(1)
-//	nomatch = uint(0)
-//	workflow = flow.RegisterFlow("TestNotReachCondition6")
-//	process = workflow.Process("TestNotReachCondition6")
-//	process.NameStep(GenerateConditionStep(nomatch), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", check)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachCondition6", map[string]any{"1": uint(0), "2": uint(0)})
-//	resetCurrent()
-//
-//	check = EqualityImpl{age: 18, name: "xxx"}
-//	nomatch = EqualityImpl{age: 19, name: "xxxx"}
-//	workflow = flow.RegisterFlow("TestNotReachCondition7")
-//	process = workflow.Process("TestNotReachCondition7")
-//	process.NameStep(GenerateConditionStep(nomatch), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", check)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachCondition7", map[string]any{"1": EqualityImpl{age: 19, name: "xxxx"}, "2": EqualityImpl{age: 19, name: "xxxx"}})
-//}
-//
-//func TestMissingCondition(t *testing.T) {
-//	defer resetCurrent()
-//	workflow := flow.RegisterFlow("TestMissingCondition1")
-//	process := workflow.Process("TestMissingCondition1")
-//	process.NameStep(GenerateNoDelayStep(1), "1")
-//	step2 := process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", "reach")
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestMissingCondition1", map[string]any{"1": "disruptions", "2": "disruptions"})
-//	resetCurrent()
-//
-//	workflow = flow.RegisterFlow("TestMissingCondition2")
-//	process = workflow.Process("TestMissingCondition2")
-//	process.NameStep(GenerateNoDelayStep(1), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", int(1))
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestMissingCondition2", map[string]any{"1": 1, "2": 1})
-//	resetCurrent()
-//
-//	workflow = flow.RegisterFlow("TestMissingCondition3")
-//	process = workflow.Process("TestMissingCondition3")
-//	process.NameStep(GenerateNoDelayStep(1), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", true)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestMissingCondition3", map[string]any{"1": true, "2": true})
-//	resetCurrent()
-//
-//	workflow = flow.RegisterFlow("TestMissingCondition4")
-//	process = workflow.Process("TestMissingCondition4")
-//	process.NameStep(GenerateNoDelayStep(1), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", uint(1))
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestMissingCondition4", map[string]any{"1": uint(1), "2": uint(1)})
-//	resetCurrent()
-//
-//	workflow = flow.RegisterFlow("TestMissingCondition5")
-//	process = workflow.Process("TestMissingCondition5")
-//	process.NameStep(GenerateNoDelayStep(1), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", EqualityImpl{age: 18, name: "xxx"})
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestMissingCondition5", map[string]any{"1": EqualityImpl{age: 18, name: "xxx"}, "2": EqualityImpl{age: 18, name: "xxx"}})
-//	resetCurrent()
-//
-//	workflow = flow.RegisterFlow("TestMissingCondition6")
-//	process = workflow.Process("TestMissingCondition6")
-//	process.NameStep(GenerateNoDelayStep(1), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", float32(18.0))
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestMissingCondition6", map[string]any{"1": float32(18.0), "2": float32(18.0)})
-//	resetCurrent()
-//
-//	timeLayout := "2006-01-02 15:04:05"
-//	timeStr := "2022-01-15 15:04:05"
-//	times, err := time.Parse(timeLayout, timeStr)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr)
-//	}
-//	workflow = flow.RegisterFlow("TestMissingCondition7")
-//	process = workflow.Process("TestMissingCondition7")
-//	process.NameStep(GenerateNoDelayStep(1), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", times)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestMissingCondition7", map[string]any{"1": times, "2": times})
-//	resetCurrent()
-//}
-//
-//func TestMissingNeqCondition(t *testing.T) {
-//	defer resetCurrent()
-//	workflow := flow.RegisterFlow("TestMissingNeqCondition1")
-//	process := workflow.Process("TestMissingNeqCondition1")
-//	process.NameStep(GenerateNoDelayStep(1), "1")
-//	step2 := process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.NEQ("1", "reach")
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestMissingNeqCondition1", map[string]any{"1": "disruptions", "2": "disruptions"})
-//	resetCurrent()
-//
-//	workflow = flow.RegisterFlow("TestMissingNeqCondition2")
-//	process = workflow.Process("TestMissingNeqCondition2")
-//	process.NameStep(GenerateNoDelayStep(1), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.NEQ("1", int(1))
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestMissingNeqCondition2", map[string]any{"1": 1, "2": 1})
-//	resetCurrent()
-//
-//	workflow = flow.RegisterFlow("TestMissingNeqCondition3")
-//	process = workflow.Process("TestMissingNeqCondition3")
-//	process.NameStep(GenerateNoDelayStep(1), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.NEQ("1", true)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestMissingNeqCondition3", map[string]any{"1": true, "2": true})
-//	resetCurrent()
-//
-//	workflow = flow.RegisterFlow("TestMissingNeqCondition4")
-//	process = workflow.Process("TestMissingNeqCondition4")
-//	process.NameStep(GenerateNoDelayStep(1), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.NEQ("1", uint(1))
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestMissingNeqCondition4", map[string]any{"1": uint(1), "2": uint(1)})
-//	resetCurrent()
-//
-//	workflow = flow.RegisterFlow("TestMissingNeqCondition5")
-//	process = workflow.Process("TestMissingNeqCondition5")
-//	process.NameStep(GenerateNoDelayStep(1), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.NEQ("1", EqualityImpl{age: 18, name: "xxx"})
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestMissingNeqCondition5", map[string]any{"1": EqualityImpl{age: 18, name: "xxx"}, "2": EqualityImpl{age: 18, name: "xxx"}})
-//	resetCurrent()
-//
-//	workflow = flow.RegisterFlow("TestMissingNeqCondition6")
-//	process = workflow.Process("TestMissingNeqCondition6")
-//	process.NameStep(GenerateNoDelayStep(1), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.NEQ("1", float32(18.0))
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestMissingNeqCondition6", map[string]any{"1": float32(18.0), "2": float32(18.0)})
-//	resetCurrent()
-//
-//	timeLayout := "2006-01-02 15:04:05"
-//	timeStr := "2022-01-15 15:04:05"
-//	times, err := time.Parse(timeLayout, timeStr)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr)
-//	}
-//	workflow = flow.RegisterFlow("TestMissingNeqCondition7")
-//	process = workflow.Process("TestMissingNeqCondition7")
-//	process.NameStep(GenerateNoDelayStep(1), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.NEQ("1", times)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestMissingNeqCondition7", map[string]any{"1": times, "2": times})
-//	resetCurrent()
-//}
-//
-//func TestReachConditionAllType(t *testing.T) {
-//	defer resetCurrent()
-//	timeLayout := "2006-01-02 15:04:05"
-//	timeStr := "2022-01-15 15:04:05"
-//
-//	v1 := "reach"
-//	v2 := EqualityImpl{age: 18, name: "xxx"}
-//	v3 := float32(18.0)
-//	v4 := true
-//	v5 := uint(1)
-//	v6 := int(1)
-//	v7, err := time.Parse(timeLayout, timeStr)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr)
-//	}
-//	workflow := flow.RegisterFlow("TestReachConditionAllType")
-//	process := workflow.Process("TestReachConditionAllType")
-//	process.NameStep(GenerateConditionStep(v1, v3, v5, v7, v2, v4, v6), "1")
-//	step2 := process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", v1, v2, v3, v4, v5, v6, v7)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachConditionAllType", nil)
-//}
-//
-//func TestNotReachConditionAllType(t *testing.T) {
-//	defer resetCurrent()
-//	timeLayout := "2006-01-02 15:04:05"
-//	timeStr := "2022-01-15 15:04:05"
-//	v1 := "reach"
-//	v2 := EqualityImpl{age: 18, name: "xxx"}
-//	v3 := float32(18.0)
-//	v4 := true
-//	v5 := uint(1)
-//	v6 := int(1)
-//	v7, err := time.Parse(timeLayout, timeStr)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr)
-//	}
-//	vv1 := "notreach"
-//	vv2 := EqualityImpl{age: 18, name: "xxxx"}
-//	vv3 := float32(-18.0)
-//	vv4 := false
-//	vv5 := uint(2)
-//	vv6 := int(-1)
-//	timeStr = "2023-01-15 15:04:05"
-//	vv7, err := time.Parse(timeLayout, timeStr)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr)
-//	}
-//	workflow := flow.RegisterFlow("TestNotReachConditionAllType")
-//	process := workflow.Process("TestNotReachConditionAllType")
-//	process.NameStep(GenerateConditionStep(vv1, vv3, vv5, vv7, vv2, vv4, vv6), "1")
-//	step2 := process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.EQ("1", v1, v2, v3, v4, v5, v6, v7)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachConditionAllType", nil)
-//}
-//
-//func TestReachNeqCondition(t *testing.T) {
-//	defer resetCurrent()
-//	var check interface{}
-//
-//	check = "reach"
-//	workflow := flow.RegisterFlow("TestReachNeqCondition1")
-//	process := workflow.Process("TestReachNeqCondition1")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 := process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.NEQ("1", "notreach")
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachNeqCondition1", map[string]any{"1": "disruptions", "2": "disruptions"})
-//	resetCurrent()
-//
-//	check = 1
-//	workflow = flow.RegisterFlow("TestReachNeqCondition2")
-//	process = workflow.Process("TestReachNeqCondition2")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.NEQ("1", -1)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachNeqCondition2", map[string]any{"1": -1, "2": -1})
-//	resetCurrent()
-//
-//	check = true
-//	workflow = flow.RegisterFlow("TestReachNeqCondition3")
-//	process = workflow.Process("TestReachNeqCondition3")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.NEQ("1", false)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachNeqCondition3", map[string]any{"1": false, "2": false})
-//	resetCurrent()
-//
-//	check = float32(0.001)
-//	workflow = flow.RegisterFlow("TestReachNeqCondition4")
-//	process = workflow.Process("TestReachNeqCondition4")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.NEQ("1", -0.001)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachNeqCondition4", map[string]any{"1": -0.002, "2": -0.002})
-//	resetCurrent()
-//
-//	timeLayout := "2006-01-02 15:04:05"
-//	timeStr1 := "2022-01-15 15:04:05"
-//	timeStr2 := "2022-01-15 15:04:07"
-//	check, err := time.Parse(timeLayout, timeStr1)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr1)
-//	}
-//	disruptions, err := time.Parse(timeLayout, timeStr2)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr2)
-//	}
-//	workflow = flow.RegisterFlow("TestReachNeqCondition5")
-//	process = workflow.Process("TestReachNeqCondition5")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.NEQ("1", disruptions)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachNeqCondition5", map[string]any{"1": disruptions, "2": disruptions})
-//	resetCurrent()
-//
-//	check = uint(1)
-//	workflow = flow.RegisterFlow("TestReachNeqCondition6")
-//	process = workflow.Process("TestReachNeqCondition6")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.NEQ("1", uint(2))
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachNeqCondition6", map[string]any{"1": uint(0), "2": uint(0)})
-//	resetCurrent()
-//
-//	check = EqualityImpl{age: 18, name: "xxx"}
-//	notEqual := EqualityImpl{age: 19, name: "xxxx"}
-//	workflow = flow.RegisterFlow("TestReachNeqCondition7")
-//	process = workflow.Process("TestReachNeqCondition7")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.NEQ("1", notEqual)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachNeqCondition7", map[string]any{"1": notEqual, "2": notEqual})
-//}
-//
-//func TestNotReachNeqCondition(t *testing.T) {
-//	defer resetCurrent()
-//	var check interface{}
-//
-//	check = "reach"
-//	workflow := flow.RegisterFlow("TestNotReachNeqCondition1")
-//	process := workflow.Process("TestNotReachNeqCondition1")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 := process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.NEQ("1", check)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachNeqCondition1", map[string]any{"1": "disruptions", "2": "disruptions"})
-//	resetCurrent()
-//
-//	check = 1
-//	workflow = flow.RegisterFlow("TestNotReachNeqCondition2")
-//	process = workflow.Process("TestNotReachNeqCondition2")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.NEQ("1", check)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachNeqCondition2", map[string]any{"1": -1, "2": -1})
-//	resetCurrent()
-//
-//	check = true
-//	workflow = flow.RegisterFlow("TestNotReachNeqCondition3")
-//	process = workflow.Process("TestNotReachNeqCondition3")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.NEQ("1", check)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachNeqCondition3", map[string]any{"1": false, "2": false})
-//	resetCurrent()
-//
-//	check = float32(0.001)
-//	workflow = flow.RegisterFlow("TestNotReachNeqCondition4")
-//	process = workflow.Process("TestNotReachNeqCondition4")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.NEQ("1", check)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachNeqCondition4", map[string]any{"1": -0.002, "2": -0.002})
-//	resetCurrent()
-//
-//	timeLayout := "2006-01-02 15:04:05"
-//	timeStr1 := "2022-01-15 15:04:05"
-//	timeStr2 := "2022-01-15 15:04:07"
-//	check, err := time.Parse(timeLayout, timeStr1)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr1)
-//	}
-//	disruptions, err := time.Parse(timeLayout, timeStr2)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr2)
-//	}
-//	workflow = flow.RegisterFlow("TestNotReachNeqCondition5")
-//	process = workflow.Process("TestNotReachNeqCondition5")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.NEQ("1", check)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachNeqCondition5", map[string]any{"1": disruptions, "2": disruptions})
-//	resetCurrent()
-//
-//	check = uint(1)
-//	workflow = flow.RegisterFlow("TestNotReachNeqCondition6")
-//	process = workflow.Process("TestNotReachNeqCondition6")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.NEQ("1", check)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachNeqCondition6", map[string]any{"1": uint(0), "2": uint(0)})
-//	resetCurrent()
-//
-//	check = EqualityImpl{age: 18, name: "xxx"}
-//	notEqual := EqualityImpl{age: 19, name: "xxxx"}
-//	workflow = flow.RegisterFlow("TestNotReachNeqCondition7")
-//	process = workflow.Process("TestNotReachNeqCondition7")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.NEQ("1", check)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachNeqCondition7", map[string]any{"1": notEqual, "2": notEqual})
-//}
-//
-//func TestReachGTCondition(t *testing.T) {
-//	defer resetCurrent()
-//	var check interface{}
-//
-//	check = 3
-//	workflow := flow.RegisterFlow("TestReachGTCondition2")
-//	process := workflow.Process("TestReachGTCondition2")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 := process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.GT("1", 2)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachGTCondition2", map[string]any{"1": -1, "2": -1})
-//	resetCurrent()
-//
-//	check = float32(0.00111)
-//	workflow = flow.RegisterFlow("TestReachGTCondition4")
-//	process = workflow.Process("TestReachGTCondition4")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.GT("1", 0.0011)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachGTCondition4", map[string]any{"1": -0.002, "2": -0.002})
-//	resetCurrent()
-//
-//	timeLayout := "2006-01-02 15:04:05"
-//	timeStr1 := "2022-01-15 15:04:09"
-//	timeStr2 := "2022-01-15 15:04:07"
-//	check, err := time.Parse(timeLayout, timeStr1)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr1)
-//	}
-//	disruptions, err := time.Parse(timeLayout, timeStr2)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr2)
-//	}
-//	workflow = flow.RegisterFlow("TestReachGTCondition5")
-//	process = workflow.Process("TestReachGTCondition5")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.GT("1", disruptions)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachGTCondition5", map[string]any{"1": disruptions, "2": disruptions})
-//	resetCurrent()
-//
-//	check = uint(3)
-//	workflow = flow.RegisterFlow("TestReachGTCondition6")
-//	process = workflow.Process("TestReachGTCondition6")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.GT("1", uint(2))
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachGTCondition6", map[string]any{"1": uint(0), "2": uint(0)})
-//	resetCurrent()
-//
-//	check = &ComparableImpl{age: 21}
-//	notEqual := &ComparableImpl{age: 20}
-//	workflow = flow.RegisterFlow("TestReachGTCondition7")
-//	process = workflow.Process("TestReachGTCondition7")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.GT("1", notEqual)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachGTCondition7", map[string]any{"1": notEqual, "2": notEqual})
-//}
-//
-//func TestNotReachGTCondition(t *testing.T) {
-//	defer resetCurrent()
-//	var check interface{}
-//
-//	check = 1
-//	workflow := flow.RegisterFlow("TestNotReachGTCondition2")
-//	process := workflow.Process("TestNotReachGTCondition2")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 := process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.GT("1", 2)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachGTCondition2", map[string]any{"1": -1, "2": -1})
-//	resetCurrent()
-//
-//	check = float32(0.001)
-//	workflow = flow.RegisterFlow("TestNotReachGTCondition4")
-//	process = workflow.Process("TestNotReachGTCondition4")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.GT("1", 0.0011)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachGTCondition4", map[string]any{"1": -0.002, "2": -0.002})
-//	resetCurrent()
-//
-//	timeLayout := "2006-01-02 15:04:05"
-//	timeStr1 := "2022-01-15 15:04:09"
-//	timeStr2 := "2022-01-15 15:04:11"
-//	check, err := time.Parse(timeLayout, timeStr1)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr1)
-//	}
-//	disruptions, err := time.Parse(timeLayout, timeStr2)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr2)
-//	}
-//	workflow = flow.RegisterFlow("TestNotReachGTCondition5")
-//	process = workflow.Process("TestNotReachGTCondition5")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.GT("1", disruptions)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachGTCondition5", map[string]any{"1": disruptions, "2": disruptions})
-//	resetCurrent()
-//
-//	check = uint(1)
-//	workflow = flow.RegisterFlow("TestNotReachGTCondition6")
-//	process = workflow.Process("TestNotReachGTCondition6")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.GT("1", uint(2))
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachGTCondition6", map[string]any{"1": uint(0), "2": uint(0)})
-//	resetCurrent()
-//
-//	check = &ComparableImpl{age: 20}
-//	notEqual := &ComparableImpl{age: 21}
-//	workflow = flow.RegisterFlow("TestNotReachGTCondition7")
-//	process = workflow.Process("TestNotReachGTCondition7")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.GT("1", notEqual)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachGTCondition7", map[string]any{"1": notEqual, "2": notEqual})
-//}
-//
-//func TestGTConditionWithEqualValue(t *testing.T) {
-//	defer resetCurrent()
-//	var check interface{}
-//
-//	check = 1
-//	workflow := flow.RegisterFlow("TestGTConditionWithEqualValue2")
-//	process := workflow.Process("TestGTConditionWithEqualValue2")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 := process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.GT("1", check)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestGTConditionWithEqualValue2", map[string]any{"1": -1, "2": -1})
-//	resetCurrent()
-//
-//	check = float32(0.001)
-//	workflow = flow.RegisterFlow("TestGTConditionWithEqualValue4")
-//	process = workflow.Process("TestGTConditionWithEqualValue4")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.GT("1", check)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestGTConditionWithEqualValue4", map[string]any{"1": -0.002, "2": -0.002})
-//	resetCurrent()
-//
-//	timeLayout := "2006-01-02 15:04:05"
-//	timeStr1 := "2022-01-15 15:04:05"
-//	timeStr2 := "2022-01-15 15:04:07"
-//	check, err := time.Parse(timeLayout, timeStr1)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr1)
-//	}
-//	disruptions, err := time.Parse(timeLayout, timeStr2)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr2)
-//	}
-//	workflow = flow.RegisterFlow("TestGTConditionWithEqualValue5")
-//	process = workflow.Process("TestGTConditionWithEqualValue5")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.GT("1", check)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestGTConditionWithEqualValue5", map[string]any{"1": disruptions, "2": disruptions})
-//	resetCurrent()
-//
-//	check = uint(1)
-//	workflow = flow.RegisterFlow("TestGTConditionWithEqualValue6")
-//	process = workflow.Process("TestGTConditionWithEqualValue6")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.GT("1", check)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestGTConditionWithEqualValue6", map[string]any{"1": uint(0), "2": uint(0)})
-//	resetCurrent()
-//
-//	check = &ComparableImpl{age: 18}
-//	notEqual := &ComparableImpl{age: 19}
-//	workflow = flow.RegisterFlow("TestGTConditionWithEqualValue7")
-//	process = workflow.Process("TestGTConditionWithEqualValue7")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.GT("1", check)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestGTConditionWithEqualValue7", map[string]any{"1": notEqual, "2": notEqual})
-//}
-//
-//func TestReachGTECondition(t *testing.T) {
-//	defer resetCurrent()
-//	var check interface{}
-//
-//	check = 3
-//	workflow := flow.RegisterFlow("TestReachGTECondition2")
-//	process := workflow.Process("TestReachGTECondition2")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 := process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.GTE("1", 2)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachGTECondition2", map[string]any{"1": -1, "2": -1})
-//	resetCurrent()
-//
-//	check = float32(0.00111)
-//	workflow = flow.RegisterFlow("TestReachGTECondition4")
-//	process = workflow.Process("TestReachGTECondition4")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.GTE("1", 0.0011)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachGTECondition4", map[string]any{"1": -0.002, "2": -0.002})
-//	resetCurrent()
-//
-//	timeLayout := "2006-01-02 15:04:05"
-//	timeStr1 := "2022-01-15 15:04:09"
-//	timeStr2 := "2022-01-15 15:04:07"
-//	check, err := time.Parse(timeLayout, timeStr1)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr1)
-//	}
-//	disruptions, err := time.Parse(timeLayout, timeStr2)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr2)
-//	}
-//	workflow = flow.RegisterFlow("TestReachGTECondition5")
-//	process = workflow.Process("TestReachGTECondition5")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.GTE("1", disruptions)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachGTECondition5", map[string]any{"1": disruptions, "2": disruptions})
-//	resetCurrent()
-//
-//	check = uint(3)
-//	workflow = flow.RegisterFlow("TestReachGTECondition6")
-//	process = workflow.Process("TestReachGTECondition6")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.GTE("1", uint(2))
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachGTECondition6", map[string]any{"1": uint(0), "2": uint(0)})
-//	resetCurrent()
-//
-//	check = &ComparableImpl{age: 21}
-//	notEqual := &ComparableImpl{age: 20}
-//	workflow = flow.RegisterFlow("TestReachGTECondition7")
-//	process = workflow.Process("TestReachGTECondition7")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.GTE("1", notEqual)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachGTECondition7", map[string]any{"1": notEqual, "2": notEqual})
-//}
-//
-//func TestNotReachGTECondition(t *testing.T) {
-//	defer resetCurrent()
-//	var check interface{}
-//
-//	check = 1
-//	workflow := flow.RegisterFlow("TestNotReachGTECondition2")
-//	process := workflow.Process("TestNotReachGTECondition2")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 := process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.GTE("1", 2)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachGTECondition2", map[string]any{"1": -1, "2": -1})
-//	resetCurrent()
-//
-//	check = float32(0.001)
-//	workflow = flow.RegisterFlow("TestNotReachGTECondition4")
-//	process = workflow.Process("TestNotReachGTECondition4")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.GTE("1", 0.0011)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachGTECondition4", map[string]any{"1": -0.002, "2": -0.002})
-//	resetCurrent()
-//
-//	timeLayout := "2006-01-02 15:04:05"
-//	timeStr1 := "2022-01-15 15:04:09"
-//	timeStr2 := "2022-01-15 15:04:11"
-//	check, err := time.Parse(timeLayout, timeStr1)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr1)
-//	}
-//	disruptions, err := time.Parse(timeLayout, timeStr2)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr2)
-//	}
-//	workflow = flow.RegisterFlow("TestNotReachGTECondition5")
-//	process = workflow.Process("TestNotReachGTECondition5")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.GTE("1", disruptions)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachGTECondition5", map[string]any{"1": disruptions, "2": disruptions})
-//	resetCurrent()
-//
-//	check = uint(1)
-//	workflow = flow.RegisterFlow("TestNotReachGTECondition6")
-//	process = workflow.Process("TestNotReachGTECondition6")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.GTE("1", uint(2))
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachGTECondition6", map[string]any{"1": uint(0), "2": uint(0)})
-//	resetCurrent()
-//
-//	check = &ComparableImpl{age: 20}
-//	notEqual := &ComparableImpl{age: 21}
-//	workflow = flow.RegisterFlow("TestNotReachGTECondition7")
-//	process = workflow.Process("TestNotReachGTECondition7")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.GTE("1", notEqual)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachGTECondition7", map[string]any{"1": notEqual, "2": notEqual})
-//}
-//
-//func TestReachLTCondition(t *testing.T) {
-//	defer resetCurrent()
-//	var check interface{}
-//
-//	check = 1
-//	workflow := flow.RegisterFlow("TestReachLTCondition2")
-//	process := workflow.Process("TestReachLTCondition2")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 := process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.LT("1", 2)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachLTCondition2", map[string]any{"1": -1, "2": -1})
-//	resetCurrent()
-//
-//	check = float32(0.001)
-//	workflow = flow.RegisterFlow("TestReachLTCondition4")
-//	process = workflow.Process("TestReachLTCondition4")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.LT("1", 0.0011)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachLTCondition4", map[string]any{"1": -0.002, "2": -0.002})
-//	resetCurrent()
-//
-//	timeLayout := "2006-01-02 15:04:05"
-//	timeStr1 := "2022-01-15 15:04:09"
-//	timeStr2 := "2022-01-15 15:04:11"
-//	check, err := time.Parse(timeLayout, timeStr1)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr1)
-//	}
-//	disruptions, err := time.Parse(timeLayout, timeStr2)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr2)
-//	}
-//	workflow = flow.RegisterFlow("TestReachLTCondition5")
-//	process = workflow.Process("TestReachLTCondition5")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.LT("1", disruptions)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachLTCondition5", map[string]any{"1": disruptions, "2": disruptions})
-//	resetCurrent()
-//
-//	check = uint(1)
-//	workflow = flow.RegisterFlow("TestReachLTCondition6")
-//	process = workflow.Process("TestReachLTCondition6")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.LT("1", uint(2))
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachLTCondition6", map[string]any{"1": uint(0), "2": uint(0)})
-//	resetCurrent()
-//
-//	check = &ComparableImpl{age: 20}
-//	notEqual := &ComparableImpl{age: 21}
-//	workflow = flow.RegisterFlow("TestReachLTCondition7")
-//	process = workflow.Process("TestReachLTCondition7")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.LT("1", notEqual)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachLTCondition7", map[string]any{"1": notEqual, "2": notEqual})
-//}
-//
-//func TestNotReachLTCondition(t *testing.T) {
-//	defer resetCurrent()
-//	var check interface{}
-//
-//	check = 3
-//	workflow := flow.RegisterFlow("TestNotReachLTCondition2")
-//	process := workflow.Process("TestNotReachLTCondition2")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 := process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.LT("1", 2)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachLTCondition2", map[string]any{"1": -1, "2": -1})
-//	resetCurrent()
-//
-//	check = float32(0.00111)
-//	workflow = flow.RegisterFlow("TestNotReachLTCondition4")
-//	process = workflow.Process("TestNotReachLTCondition4")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.LT("1", 0.0011)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachLTCondition4", map[string]any{"1": -0.002, "2": -0.002})
-//	resetCurrent()
-//
-//	timeLayout := "2006-01-02 15:04:05"
-//	timeStr1 := "2022-01-15 15:04:09"
-//	timeStr2 := "2022-01-15 15:04:07"
-//	check, err := time.Parse(timeLayout, timeStr1)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr1)
-//	}
-//	disruptions, err := time.Parse(timeLayout, timeStr2)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr2)
-//	}
-//	workflow = flow.RegisterFlow("TestNotReachLTCondition5")
-//	process = workflow.Process("TestNotReachLTCondition5")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.LT("1", disruptions)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachLTCondition5", map[string]any{"1": disruptions, "2": disruptions})
-//	resetCurrent()
-//
-//	check = uint(3)
-//	workflow = flow.RegisterFlow("TestNotReachLTCondition6")
-//	process = workflow.Process("TestNotReachLTCondition6")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.LT("1", uint(2))
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachLTCondition6", map[string]any{"1": uint(0), "2": uint(0)})
-//	resetCurrent()
-//
-//	check = &ComparableImpl{age: 21}
-//	notEqual := &ComparableImpl{age: 20}
-//	workflow = flow.RegisterFlow("TestNotReachLTCondition7")
-//	process = workflow.Process("TestNotReachLTCondition7")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.LT("1", notEqual)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachLTCondition7", map[string]any{"1": notEqual, "2": notEqual})
-//}
-//
-//func TestReachLTECondition(t *testing.T) {
-//	defer resetCurrent()
-//	var check interface{}
-//
-//	check = 1
-//	workflow := flow.RegisterFlow("TestReachLTECondition2")
-//	process := workflow.Process("TestReachLTECondition2")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 := process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.LTE("1", 2)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachLTECondition2", map[string]any{"1": -1, "2": -1})
-//	resetCurrent()
-//
-//	check = float32(0.001)
-//	workflow = flow.RegisterFlow("TestReachLTECondition4")
-//	process = workflow.Process("TestReachLTECondition4")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.LTE("1", 0.0011)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachLTECondition4", map[string]any{"1": -0.002, "2": -0.002})
-//	resetCurrent()
-//
-//	timeLayout := "2006-01-02 15:04:05"
-//	timeStr1 := "2022-01-15 15:04:09"
-//	timeStr2 := "2022-01-15 15:04:11"
-//	check, err := time.Parse(timeLayout, timeStr1)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr1)
-//	}
-//	disruptions, err := time.Parse(timeLayout, timeStr2)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr2)
-//	}
-//	workflow = flow.RegisterFlow("TestReachLTECondition5")
-//	process = workflow.Process("TestReachLTECondition5")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.LTE("1", disruptions)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachLTECondition5", map[string]any{"1": disruptions, "2": disruptions})
-//	resetCurrent()
-//
-//	check = uint(1)
-//	workflow = flow.RegisterFlow("TestReachLTECondition6")
-//	process = workflow.Process("TestReachLTECondition6")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.LTE("1", uint(2))
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachLTECondition6", map[string]any{"1": uint(0), "2": uint(0)})
-//	resetCurrent()
-//
-//	check = &ComparableImpl{age: 20}
-//	notEqual := &ComparableImpl{age: 21}
-//	workflow = flow.RegisterFlow("TestReachLTECondition7")
-//	process = workflow.Process("TestReachLTECondition7")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.LTE("1", notEqual)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestReachLTECondition7", map[string]any{"1": notEqual, "2": notEqual})
-//}
-//
-//func TestNotReachLTECondition(t *testing.T) {
-//	defer resetCurrent()
-//	var check interface{}
-//
-//	check = 3
-//	workflow := flow.RegisterFlow("TestNotReachLTECondition2")
-//	process := workflow.Process("TestNotReachLTECondition2")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 := process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.LTE("1", 2)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachLTECondition2", map[string]any{"1": -1, "2": -1})
-//	resetCurrent()
-//
-//	check = float32(0.00111)
-//	workflow = flow.RegisterFlow("TestNotReachLTECondition4")
-//	process = workflow.Process("TestNotReachLTECondition4")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.LTE("1", 0.0011)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachLTECondition4", map[string]any{"1": -0.002, "2": -0.002})
-//	resetCurrent()
-//
-//	timeLayout := "2006-01-02 15:04:05"
-//	timeStr1 := "2022-01-15 15:04:09"
-//	timeStr2 := "2022-01-15 15:04:07"
-//	check, err := time.Parse(timeLayout, timeStr1)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr1)
-//	}
-//	disruptions, err := time.Parse(timeLayout, timeStr2)
-//	if err != nil {
-//		t.Errorf("parse time %s fail", timeStr2)
-//	}
-//	workflow = flow.RegisterFlow("TestNotReachLTECondition5")
-//	process = workflow.Process("TestNotReachLTECondition5")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.LTE("1", disruptions)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachLTECondition5", map[string]any{"1": disruptions, "2": disruptions})
-//	resetCurrent()
-//
-//	check = uint(3)
-//	workflow = flow.RegisterFlow("TestNotReachLTECondition6")
-//	process = workflow.Process("TestNotReachLTECondition6")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.LTE("1", uint(2))
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachLTECondition6", map[string]any{"1": uint(0), "2": uint(0)})
-//	resetCurrent()
-//
-//	check = &ComparableImpl{age: 21}
-//	notEqual := &ComparableImpl{age: 20}
-//	workflow = flow.RegisterFlow("TestNotReachLTECondition7")
-//	process = workflow.Process("TestNotReachLTECondition7")
-//	process.NameStep(GenerateConditionStep(check), "1")
-//	step2 = process.NameStep(GenerateNoDelayStep(2), "2")
-//	step2.LTE("1", notEqual)
-//	process.NameStep(GenerateNoDelayStep(3), "3", "2")
-//	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//	flow.DoneFlow("TestNotReachLTECondition7", map[string]any{"1": notEqual, "2": notEqual})
-//}
-//
-//func TestNoCondMergedToCond(t *testing.T) {
-//	defer resetCurrent()
-//	wf1 := flow.RegisterFlow("TestNoCondMergedToCond1")
-//	proc1 := wf1.Process("TestNoCondMergedToCond1")
-//	proc1.NameStep(Fx[flow.Step](t).Inc().Step(), "step1")
-//	wf1.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//
-//	wf2 := flow.RegisterFlow("TestNoCondMergedToCond2")
-//	proc2 := wf2.Process("TestNoCondMergedToCond2")
-//	proc2.NameStep(Fx[flow.Step](t).SetCond().Step(), "step1")
-//	MatchCond(proc2.NameStep(Fx[flow.Step](t).Inc().Step(), "step2"), "step1")
-//	proc2.Merge("TestNoCondMergedToCond1")
-//	wf2.AfterFlow(false, CheckResult(t, 2, flow.Success))
-//
-//	flow.DoneFlow("TestNoCondMergedToCond2", nil)
-//	resetCurrent()
-//	flow.DoneFlow("TestNoCondMergedToCond1", nil)
-//}
-//
-//func TestNoMatchMergedToNoCond(t *testing.T) {
-//	defer resetCurrent()
-//	wf1 := flow.RegisterFlow("TestNoMatchMergedToNoCond1")
-//	proc1 := wf1.Process("TestNoMatchMergedToNoCond1")
-//	proc1.NameStep(Fx[flow.Step](t).SetCond().Step(), "step1")
-//	NotMatchCond(proc1.NameStep(Fx[flow.Step](t).Inc().Step(), "step2"), "step1")
-//	wf1.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//
-//	wf2 := flow.RegisterFlow("TestNoMatchMergedToNoCond2")
-//	proc2 := wf2.Process("TestNoMatchMergedToNoCond2")
-//	proc2.Merge("TestNoMatchMergedToNoCond1")
-//	proc2.NameStep(Fx[flow.Step](t).Inc().Step(), "step2")
-//	wf2.AfterFlow(false, CheckResult(t, 1, flow.Success))
-//
-//	flow.DoneFlow("TestNoMatchMergedToNoCond2", nil)
-//	resetCurrent()
-//	flow.DoneFlow("TestNoMatchMergedToNoCond1", nil)
-//}
-//
-//func TestNoMatchMergedToMatch(t *testing.T) {
-//	defer resetCurrent()
-//	wf1 := flow.RegisterFlow("TestNoMatchMergedToMatch1")
-//	proc1 := wf1.Process("TestNoMatchMergedToMatch1")
-//	proc1.NameStep(Fx[flow.Step](t).Inc().Step(), "step1")
-//	proc1.NameStep(Fx[flow.Step](t).SetCond().Step(), "step2", "step1")
-//	NotMatchCond(proc1.NameStep(Fx[flow.Step](t).Inc().Step(), "step3"), "step2")
-//	wf1.AfterFlow(false, CheckResult(t, 2, flow.Success))
-//
-//	wf2 := flow.RegisterFlow("TestNoMatchMergedToMatch2")
-//	proc2 := wf2.Process("TestNoMatchMergedToMatch2")
-//	proc2.Merge("TestNoMatchMergedToMatch1")
-//	MatchCond(proc2.NameStep(Fx[flow.Step](t).Inc().Step(), "step3"), "step2")
-//	wf2.AfterFlow(false, CheckResult(t, 2, flow.Success))
-//	flow.DoneFlow("TestNoMatchMergedToMatch2", nil)
-//	resetCurrent()
-//	flow.DoneFlow("TestNoMatchMergedToMatch1", nil)
-//}
-//
-//func TestMatchMergedToMatch(t *testing.T) {
-//	defer resetCurrent()
-//	wf1 := flow.RegisterFlow("TestMatchMergedToMatch1")
-//	proc1 := wf1.Process("TestMatchMergedToMatch1")
-//	proc1.NameStep(Fx[flow.Step](t).Inc().Step(), "step1")
-//	proc1.NameStep(Fx[flow.Step](t).SetCond().Step(), "step2", "step1")
-//	MatchCond(proc1.NameStep(Fx[flow.Step](t).Inc().Step(), "step3"), "step2")
-//	wf1.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//
-//	wf2 := flow.RegisterFlow("TestMatchMergedToMatch2")
-//	proc2 := wf2.Process("TestMatchMergedToMatch2")
-//	proc2.Merge("TestMatchMergedToMatch1")
-//	MatchCond(proc2.NameStep(Fx[flow.Step](t).Inc().Step(), "step3"), "step2")
-//	wf2.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//	flow.DoneFlow("TestMatchMergedToMatch2", nil)
-//	resetCurrent()
-//	flow.DoneFlow("TestMatchMergedToMatch1", nil)
-//}
-//
-//func TestDiffCondMerged(t *testing.T) {
-//	defer resetCurrent()
-//	wf1 := flow.RegisterFlow("TestDiffCondMerged1")
-//	proc1 := wf1.Process("TestDiffCondMerged1")
-//	proc1.NameStep(Fx[flow.Step](t).SetCond().Step(), "step1")
-//	proc1.NameStep(Fx[flow.Step](t).SetCond().Step(), "step2", "step1")
-//	MatchCond(proc1.NameStep(Fx[flow.Step](t).Inc().Step(), "step3"), "step1")
-//	wf1.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//
-//	wf2 := flow.RegisterFlow("TestDiffCondMerged2")
-//	proc2 := wf2.Process("TestDiffCondMerged2")
-//	proc2.Merge("TestDiffCondMerged1")
-//	MatchCond(proc2.NameStep(Fx[flow.Step](t).Inc().Step(), "step3"), "step2")
-//	wf2.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//
-//	flow.DoneFlow("TestDiffCondMerged2", nil)
-//	resetCurrent()
-//	flow.DoneFlow("TestDiffCondMerged1", nil)
-//}
-//
-//func TestDiffCondMerged0(t *testing.T) {
-//	defer resetCurrent()
-//	wf1 := flow.RegisterFlow("TestDiffCondMerged01")
-//	proc1 := wf1.Process("TestDiffCondMerged01")
-//	proc1.NameStep(Fx[flow.Step](t).SetCond().Step(), "step1")
-//	proc1.NameStep(Fx[flow.Step](t).SetCond().Step(), "step2", "step1")
-//	MatchCond(proc1.NameStep(Fx[flow.Step](t).Inc().Step(), "step3"), "step1")
-//	wf1.AfterFlow(false, CheckResult(t, 3, flow.Success))
-//
-//	wf2 := flow.RegisterFlow("TestDiffCondMerged02")
-//	proc2 := wf2.Process("TestDiffCondMerged02")
-//	proc2.Merge("TestDiffCondMerged01")
-//	NotMatchCond(proc2.NameStep(Fx[flow.Step](t).Inc().Step(), "step3"), "step2")
-//	wf2.AfterFlow(false, CheckResult(t, 2, flow.Success))
-//
-//	flow.DoneFlow("TestDiffCondMerged02", nil)
-//	resetCurrent()
-//	flow.DoneFlow("TestDiffCondMerged01", nil)
-//}
+import (
+	flow "github.com/Bilibotter/light-flow"
+	"runtime"
+	"strings"
+	"sync/atomic"
+	"testing"
+	"time"
+)
+
+func LTECondition(meta *flow.StepMeta, suffixes ...string) *flow.StepMeta {
+	suffix := ""
+	if len(suffixes) > 0 {
+		suffix = suffixes[0]
+	}
+	t, err := time.Parse(time.RFC3339, "2024-09-05T15:04:05Z")
+	if err != nil {
+		panic(err.Error())
+	}
+	t1, err1 := time.Parse(time.RFC3339, "2024-09-04T15:04:05Z")
+	if err1 != nil {
+		panic(err1.Error())
+	}
+	meta.LTE(suffix+"int", 2).
+		LTE(suffix+"int8", int8(3)).
+		LTE(suffix+"int16", int16(4)).
+		LTE(suffix+"int32", int32(5)).
+		LTE(suffix+"int64", int64(6)).
+		LTE(suffix+"uint", uint(7)).
+		LTE(suffix+"uint8", uint8(8)).
+		LTE(suffix+"uint16", uint16(9)).
+		LTE(suffix+"uint32", uint32(10)).
+		LTE(suffix+"uint64", uint64(11)).
+		LTE(suffix+"float32", float32(12.1)).
+		LTE(suffix+"float64", float64(13.2)).
+		LTE(suffix+"*Comparable", &ComparableImpl{Age: 17}).
+		LTE(suffix+"int", 1).
+		LTE(suffix+"int8", int8(2)).
+		LTE(suffix+"int16", int16(3)).
+		LTE(suffix+"int32", int32(4)).
+		LTE(suffix+"int64", int64(5)).
+		LTE(suffix+"uint", uint(6)).
+		LTE(suffix+"uint8", uint8(7)).
+		LTE(suffix+"uint16", uint16(8)).
+		LTE(suffix+"uint32", uint32(9)).
+		LTE(suffix+"uint64", uint64(10)).
+		LTE(suffix+"float32", float32(11.1)).
+		LTE(suffix+"float64", float64(12.2)).
+		LTE(suffix+"string", "hello").
+		LTE(suffix+"bool", true).
+		LTE(suffix+"time", t).
+		LTE(suffix+"*time", &t).
+		LTE(suffix+"time", t1).
+		LTE(suffix+"*time", &t1).
+		LTE(suffix+"Equality", EqualityImpl{Age: 13, Name: "Alice"}).
+		LTE(suffix+"*Equality", &EqualityImpl{Age: 14, Name: "Bob"})
+	return meta
+}
+
+func GTECondition(meta *flow.StepMeta, suffixes ...string) *flow.StepMeta {
+	suffix := ""
+	if len(suffixes) > 0 {
+		suffix = suffixes[0]
+	}
+	t1, err1 := time.Parse(time.RFC3339, "2024-09-03T15:04:05Z")
+	if err1 != nil {
+		panic(err1.Error())
+	}
+	t2, err2 := time.Parse(time.RFC3339, "2024-09-04T15:04:05Z")
+	if err2 != nil {
+		panic(err2.Error())
+	}
+	meta.GTE(suffix+"int", 0).
+		GTE(suffix+"int8", int8(1)).
+		GTE(suffix+"int16", int16(2)).
+		GTE(suffix+"int32", int32(3)).
+		GTE(suffix+"int64", int64(4)).
+		GTE(suffix+"uint", uint(5)).
+		GTE(suffix+"uint8", uint8(6)).
+		GTE(suffix+"uint16", uint16(7)).
+		GTE(suffix+"uint32", uint32(8)).
+		GTE(suffix+"uint64", uint64(9)).
+		GTE(suffix+"float32", float32(10.1)).
+		GTE(suffix+"float64", float64(11.2)).
+		GTE(suffix+"time", t1).
+		GTE(suffix+"*time", &t1).
+		GTE(suffix+"*Comparable", &ComparableImpl{Age: 15}).
+		GTE(suffix+"int", 1).
+		GTE(suffix+"int8", int8(2)).
+		GTE(suffix+"int16", int16(3)).
+		GTE(suffix+"int32", int32(4)).
+		GTE(suffix+"int64", int64(5)).
+		GTE(suffix+"uint", uint(6)).
+		GTE(suffix+"uint8", uint8(7)).
+		GTE(suffix+"uint16", uint16(8)).
+		GTE(suffix+"uint32", uint32(9)).
+		GTE(suffix+"uint64", uint64(10)).
+		GTE(suffix+"float32", float32(11.1)).
+		GTE(suffix+"float64", float64(12.2)).
+		GTE(suffix+"string", "hello").
+		GTE(suffix+"bool", true).
+		GTE(suffix+"time", t2).
+		GTE(suffix+"*time", &t2).
+		GTE(suffix+"Equality", EqualityImpl{Age: 13, Name: "Alice"}).
+		GTE(suffix+"*Equality", &EqualityImpl{Age: 14, Name: "Bob"})
+	return meta
+}
+
+func LTCondition(meta *flow.StepMeta, suffixes ...string) *flow.StepMeta {
+	suffix := ""
+	if len(suffixes) > 0 {
+		suffix = suffixes[0]
+	}
+	t, err := time.Parse(time.RFC3339, "2024-09-05T15:04:05Z")
+	if err != nil {
+		panic(err.Error())
+	}
+	meta.LT(suffix+"int", 2).
+		LT(suffix+"int8", int8(3)).
+		LT(suffix+"int16", int16(4)).
+		LT(suffix+"int32", int32(5)).
+		LT(suffix+"int64", int64(6)).
+		LT(suffix+"uint", uint(7)).
+		LT(suffix+"uint8", uint8(8)).
+		LT(suffix+"uint16", uint16(9)).
+		LT(suffix+"uint32", uint32(10)).
+		LT(suffix+"uint64", uint64(11)).
+		LT(suffix+"float32", float32(12.1)).
+		LT(suffix+"float64", float64(13.2)).
+		LT(suffix+"time", t).
+		LT(suffix+"*time", &t).
+		LT(suffix+"*Comparable", &ComparableImpl{Age: 17})
+	return meta
+}
+
+func GTCondition(meta *flow.StepMeta, suffixes ...string) *flow.StepMeta {
+	suffix := ""
+	if len(suffixes) > 0 {
+		suffix = suffixes[0]
+	}
+	t, err := time.Parse(time.RFC3339, "2024-09-03T15:04:05Z")
+	if err != nil {
+		panic(err.Error())
+	}
+	meta.GT(suffix+"int", 0).
+		GT(suffix+"int8", int8(1)).
+		GT(suffix+"int16", int16(2)).
+		GT(suffix+"int32", int32(3)).
+		GT(suffix+"int64", int64(4)).
+		GT(suffix+"uint", uint(5)).
+		GT(suffix+"uint8", uint8(6)).
+		GT(suffix+"uint16", uint16(7)).
+		GT(suffix+"uint32", uint32(8)).
+		GT(suffix+"uint64", uint64(9)).
+		GT(suffix+"float32", float32(10.1)).
+		GT(suffix+"float64", float64(11.2)).
+		GT(suffix+"time", t).
+		GT(suffix+"*time", &t).
+		GT(suffix+"*Comparable", &ComparableImpl{Age: 15})
+	return meta
+}
+
+func EQCondition(meta *flow.StepMeta, suffixes ...string) *flow.StepMeta {
+	suffix := ""
+	if len(suffixes) > 0 {
+		suffix = suffixes[0]
+	}
+	t, err := time.Parse(time.RFC3339, "2024-09-04T15:04:05Z")
+	if err != nil {
+		panic(err.Error())
+	}
+	meta.EQ(suffix+"int", 1).
+		EQ(suffix+"int8", int8(2)).
+		EQ(suffix+"int16", int16(3)).
+		EQ(suffix+"int32", int32(4)).
+		EQ(suffix+"int64", int64(5)).
+		EQ(suffix+"uint", uint(6)).
+		EQ(suffix+"uint8", uint8(7)).
+		EQ(suffix+"uint16", uint16(8)).
+		EQ(suffix+"uint32", uint32(9)).
+		EQ(suffix+"uint64", uint64(10)).
+		EQ(suffix+"float32", float32(11.1)).
+		EQ(suffix+"float64", float64(12.2)).
+		EQ(suffix+"string", "hello").
+		EQ(suffix+"bool", true).
+		EQ(suffix+"time", t).
+		EQ(suffix+"*time", &t).
+		EQ(suffix+"Equality", EqualityImpl{Age: 13, Name: "Alice"}).
+		EQ(suffix+"*Equality", &EqualityImpl{Age: 14, Name: "Bob"})
+	return meta
+}
+
+func NEQCondition(meta *flow.StepMeta, suffixes ...string) *flow.StepMeta {
+	suffix := ""
+	if len(suffixes) > 0 {
+		suffix = suffixes[0]
+	}
+	t, err := time.Parse(time.RFC3339, "2024-09-04T15:04:05Z")
+	if err != nil {
+		panic(err.Error())
+	}
+	t = t.Add(time.Minute)
+	meta.NEQ(suffix+"int", 1+1).
+		NEQ(suffix+"int8", int8(2+1)).
+		NEQ(suffix+"int16", int16(3+1)).
+		NEQ(suffix+"int32", int32(4+1)).
+		NEQ(suffix+"int64", int64(5+1)).
+		NEQ(suffix+"uint", uint(6+1)).
+		NEQ(suffix+"uint8", uint8(7+1)).
+		NEQ(suffix+"uint16", uint16(8+1)).
+		NEQ(suffix+"uint32", uint32(9+1)).
+		NEQ(suffix+"uint64", uint64(10+1)).
+		NEQ(suffix+"float32", float32(11.1+1)).
+		NEQ(suffix+"float64", float64(12.2+1)).
+		NEQ(suffix+"string", "hello+1").
+		NEQ(suffix+"bool", false).
+		NEQ(suffix+"time", t).
+		NEQ(suffix+"*time", &t).
+		NEQ(suffix+"Equality", EqualityImpl{Age: 14, Name: "Alice"}).
+		NEQ(suffix+"*Equality", &EqualityImpl{Age: 15, Name: "Bob"})
+	return meta
+}
+
+func TestUnComparablePanic(t *testing.T) {
+	wf := flow.RegisterFlow("TestUnComparablePanic")
+	proc := wf.Process("TestUnComparablePanic")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step := proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("Expected a panic")
+		} else if _, ok := r.(runtime.Error); !ok {
+			t.Error("Expected a runtime error")
+		} else {
+			t.Logf("%v", r)
+		}
+	}()
+	step.EQ("notExist", []byte("123"))
+}
+
+func TestEQ(t *testing.T) {
+	defer resetCurrent()
+	wf := flow.RegisterFlow("TestEQ0")
+	proc := wf.Process("TestEQ0")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step := proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	EQCondition(step)
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 4, flow.Success))
+	flow.DoneFlow("TestEQ0", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestEQ1")
+	proc = wf.Process("TestEQ1")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.EQ("notExistKey", "foo")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestEQ1", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestEQ2")
+	proc = wf.Process("TestEQ2")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.EQ("notExistKey", "foo").SkipWithDependents()
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 2, flow.Success))
+	flow.DoneFlow("TestEQ2", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestEQ3")
+	proc = wf.Process("TestEQ3")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	EQCondition(step).SkipWithDependents()
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 4, flow.Success))
+	flow.DoneFlow("TestEQ3", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestEQ4")
+	proc = wf.Process("TestEQ4")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.EQ("int", 2)
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestEQ4", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestEQ5")
+	proc = wf.Process("TestEQ5")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.EQ("notExistKey", "foo").SkipWithDependents("4")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestEQ5", nil)
+}
+
+func TestNEQ0(t *testing.T) {
+	defer resetCurrent()
+	wf := flow.RegisterFlow("TestNEQ0")
+	proc := wf.Process("TestNEQ0")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step := proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	NEQCondition(step)
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 4, flow.Success))
+	flow.DoneFlow("TestNEQ0", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestNEQ1")
+	proc = wf.Process("TestNEQ1")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.NEQ("notExistKey", "foo")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 4, flow.Success))
+	flow.DoneFlow("TestNEQ1", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestNEQ2")
+	proc = wf.Process("TestNEQ2")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.NEQ("int", 1).SkipWithDependents()
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 2, flow.Success))
+	flow.DoneFlow("TestNEQ2", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestNEQ3")
+	proc = wf.Process("TestNEQ3")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	NEQCondition(step).SkipWithDependents()
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 4, flow.Success))
+	flow.DoneFlow("TestNEQ3", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestNEQ4")
+	proc = wf.Process("TestNEQ4")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.NEQ("int", 1)
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestNEQ4", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestNEQ5")
+	proc = wf.Process("TestNEQ5")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.NEQ("int", 1).SkipWithDependents("4")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestNEQ5", nil)
+}
+
+func TestLT(t *testing.T) {
+	defer resetCurrent()
+	wf := flow.RegisterFlow("TestLT0")
+	proc := wf.Process("TestLT0")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step := proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	LTCondition(step)
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 4, flow.Success))
+	flow.DoneFlow("TestLT0", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestLT1")
+	proc = wf.Process("TestLT1")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.LT("notExistKey", "foo")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestLT1", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestLT2")
+	proc = wf.Process("TestLT2")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.LT("int", 0).SkipWithDependents()
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 2, flow.Success))
+	flow.DoneFlow("TestLT2", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestLT3")
+	proc = wf.Process("TestLT3")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	LTCondition(step).SkipWithDependents()
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 4, flow.Success))
+	flow.DoneFlow("TestLT3", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestLT4")
+	proc = wf.Process("TestLT4")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.LT("int", 1)
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestLT4", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestLT5")
+	proc = wf.Process("TestLT5")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.LT("int", 1).SkipWithDependents("4")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestLT5", nil)
+}
+
+func TestLTE(t *testing.T) {
+	defer resetCurrent()
+	wf := flow.RegisterFlow("TestLTE0")
+	proc := wf.Process("TestLTE0")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step := proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	LTECondition(step)
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 4, flow.Success))
+	flow.DoneFlow("TestLTE0", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestLTE1")
+	proc = wf.Process("TestLTE1")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.LTE("notExistKey", "foo")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestLTE1", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestLTE2")
+	proc = wf.Process("TestLTE2")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.LTE("int", 0).SkipWithDependents()
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 2, flow.Success))
+	flow.DoneFlow("TestLTE2", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestLTE3")
+	proc = wf.Process("TestLTE3")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	LTECondition(step).SkipWithDependents()
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 4, flow.Success))
+	flow.DoneFlow("TestLTE3", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestLTE4")
+	proc = wf.Process("TestLTE4")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.LTE("int", -1)
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestLTE4", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestLTE5")
+	proc = wf.Process("TestLTE5")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.LTE("int", -1).SkipWithDependents("4")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestLTE5", nil)
+}
+
+func TestGT(t *testing.T) {
+	defer resetCurrent()
+	wf := flow.RegisterFlow("TestGT0")
+	proc := wf.Process("TestGT0")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step := proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	GTCondition(step)
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 4, flow.Success))
+	flow.DoneFlow("TestGT0", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestGT1")
+	proc = wf.Process("TestGT1")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.GT("notExistKey", "foo")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestGT1", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestGT2")
+	proc = wf.Process("TestGT2")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.GT("int", 3).SkipWithDependents()
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 2, flow.Success))
+	flow.DoneFlow("TestGT2", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestGT3")
+	proc = wf.Process("TestGT3")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	GTCondition(step).SkipWithDependents()
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 4, flow.Success))
+	flow.DoneFlow("TestGT3", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestGT4")
+	proc = wf.Process("TestGT4")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.GT("int", 3)
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestGT4", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestGT5")
+	proc = wf.Process("TestGT5")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.GT("int", 3).SkipWithDependents("4")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestGT5", nil)
+}
+
+func TestGTE(t *testing.T) {
+	defer resetCurrent()
+	wf := flow.RegisterFlow("TestGTE0")
+	proc := wf.Process("TestGTE0")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step := proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	GTECondition(step)
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 4, flow.Success))
+	flow.DoneFlow("TestGTE0", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestGTE1")
+	proc = wf.Process("TestGTE1")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.GTE("notExistKey", "foo")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestGTE1", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestGTE2")
+	proc = wf.Process("TestGTE2")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.GTE("int", 3).SkipWithDependents()
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 2, flow.Success))
+	flow.DoneFlow("TestGTE2", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestGTE3")
+	proc = wf.Process("TestGTE3")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	GTECondition(step).SkipWithDependents()
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 4, flow.Success))
+	flow.DoneFlow("TestGTE3", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestGTE4")
+	proc = wf.Process("TestGTE4")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.GTE("int", 3)
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestGTE4", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestGTE5")
+	proc = wf.Process("TestGTE5")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.GTE("int", 3).SkipWithDependents("4")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestGTE5", nil)
+}
+
+func TestCondition(t *testing.T) {
+	meet := func(step flow.Step) bool {
+		return step.Name() == "2"
+	}
+	panicNotMeet := func(step flow.Step) bool {
+		panic("not meet")
+	}
+	notMeet := func(step flow.Step) bool {
+		return step.Name() != "2"
+	}
+	defer resetCurrent()
+	wf := flow.RegisterFlow("TestCondition0")
+	proc := wf.Process("TestCondition0")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step := proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.Condition(meet)
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 4, flow.Success))
+	flow.DoneFlow("TestCondition0", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestCondition1")
+	proc = wf.Process("TestCondition1")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.Condition(panicNotMeet)
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestCondition1", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestCondition2")
+	proc = wf.Process("TestCondition2")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.Condition(notMeet).SkipWithDependents()
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 2, flow.Success))
+	flow.DoneFlow("TestCondition2", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestCondition3")
+	proc = wf.Process("TestCondition3")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.Condition(meet).SkipWithDependents()
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 4, flow.Success))
+	flow.DoneFlow("TestCondition3", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestCondition4")
+	proc = wf.Process("TestCondition4")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.Condition(notMeet)
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestCondition4", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestCondition5")
+	proc = wf.Process("TestCondition5")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.Condition(notMeet).SkipWithDependents("4")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestCondition5", nil)
+}
+
+func TestOR(t *testing.T) {
+	meet := func(step flow.Step) bool {
+		return step.Name() == "2"
+	}
+	notMeet := func(step flow.Step) bool {
+		return step.Name() != "2"
+	}
+	defer resetCurrent()
+	wf := flow.RegisterFlow("TestOR0")
+	proc := wf.Process("TestOR0")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step := proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.Condition(meet).OR().Condition(meet)
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 4, flow.Success))
+	flow.DoneFlow("TestOR0", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestOR1")
+	proc = wf.Process("TestOR1")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.Condition(notMeet).OR().Condition(notMeet)
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestOR1", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestOR2")
+	proc = wf.Process("TestOR2")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.Condition(meet).OR().Condition(notMeet)
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 4, flow.Success))
+	flow.DoneFlow("TestOR2", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestOR3")
+	proc = wf.Process("TestOR3")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.Condition(notMeet).OR().Condition(meet)
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 4, flow.Success))
+	flow.DoneFlow("TestOR3", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestOR5")
+	proc = wf.Process("TestOR5")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.Condition(notMeet).OR().Condition(meet).SkipWithDependents()
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 4, flow.Success))
+	flow.DoneFlow("TestOR5", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestOR6")
+	proc = wf.Process("TestOR6")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.Condition(notMeet).OR().Condition(notMeet).SkipWithDependents()
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 2, flow.Success))
+	flow.DoneFlow("TestOR6", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestOR7")
+	proc = wf.Process("TestOR7")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.Condition(notMeet).OR().Condition(notMeet).SkipWithDependents("4")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestOR7", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestOR8")
+	proc = wf.Process("TestOR8")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.Condition(notMeet).OR().Condition(notMeet).OR().Condition(notMeet).OR().Condition(notMeet).OR().Condition(meet)
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 4, flow.Success))
+	flow.DoneFlow("TestOR8", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestOR9")
+	proc = wf.Process("TestOR9")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.Condition(meet).OR()
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 4, flow.Success))
+	flow.DoneFlow("TestOR9", nil)
+}
+
+func TestIllegalOR(t *testing.T) {
+	f1 := func() {
+		t.Logf("TestIllegalOR0")
+		defer func() {
+			if r := recover(); r != nil {
+				if !strings.Contains(r.(string), "condition failed") {
+					t.Errorf("illegal OR should panic with condition failed, but got %v", r)
+				}
+			} else {
+				t.Errorf("illegal OR should panic with condition failed, but success")
+			}
+		}()
+		wf := flow.RegisterFlow("TestIllegalOR0")
+		proc := wf.Process("TestIllegalOR0")
+		step := proc.NameStep(Fx[flow.Step](t).Step(), "1")
+		step.OR()
+	}
+	f1()
+	f2 := func() {
+		t.Logf("TestIllegalOR1")
+		defer func() {
+			if r := recover(); r != nil {
+				if !strings.Contains(r.(string), "condition failed") {
+					t.Errorf("illegal OR should panic with condition failed, but got %v", r)
+				}
+			} else {
+				t.Errorf("illegal OR should panic with condition failed, but success")
+			}
+		}()
+		wf := flow.RegisterFlow("TestIllegalOR1")
+		proc := wf.Process("TestIllegalOR1")
+		step := proc.NameStep(Fx[flow.Step](t).Step(), "1")
+		EQCondition(step).OR().OR()
+	}
+	f2()
+}
+
+func TestComparePanic(t *testing.T) {
+	defer resetCurrent()
+	atomic.StoreInt64(&letGo, 0)
+	wf := flow.RegisterFlow("TestComparePanic")
+	proc := wf.Process("TestComparePanic")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step := proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	EQCondition(step).EQ("PanicComparable", &PanicComparableImpl{Content: "panic"})
+	wf.AfterFlow(true, CheckResult(t, 11, flow.Success))
+	atomic.StoreInt64(&letGo, 1)
+	flow.DoneFlow("TestComparePanic", nil)
+
+	resetCurrent()
+	atomic.StoreInt64(&letGo, 0)
+	wf = flow.RegisterFlow("TestComparePanic2")
+	proc = wf.Process("TestComparePanic2")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	NEQCondition(step).NEQ("PanicComparable", PanicComparableImpl{Content: "panic"})
+	wf.AfterFlow(true, CheckResult(t, 11, flow.Success))
+	atomic.StoreInt64(&letGo, 1)
+	flow.DoneFlow("TestComparePanic2", nil)
+
+	resetCurrent()
+	atomic.StoreInt64(&letGo, 0)
+	wf = flow.RegisterFlow("TestComparePanic3")
+	proc = wf.Process("TestComparePanic3")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	LTCondition(step).LT("PanicComparable", PanicComparableImpl{Content: "panic"})
+	wf.AfterFlow(true, CheckResult(t, 11, flow.Success))
+	atomic.StoreInt64(&letGo, 1)
+	flow.DoneFlow("TestComparePanic3", nil)
+
+	resetCurrent()
+	atomic.StoreInt64(&letGo, 0)
+	wf = flow.RegisterFlow("TestComparePanic4")
+	proc = wf.Process("TestComparePanic4")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	LTECondition(step).LTE("PanicComparable", PanicComparableImpl{Content: "panic"})
+	wf.AfterFlow(true, CheckResult(t, 11, flow.Success))
+	atomic.StoreInt64(&letGo, 1)
+	flow.DoneFlow("TestComparePanic4", nil)
+
+	resetCurrent()
+	atomic.StoreInt64(&letGo, 0)
+	wf = flow.RegisterFlow("TestComparePanic5")
+	proc = wf.Process("TestComparePanic5")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	GTCondition(step).GT("PanicComparable", PanicComparableImpl{Content: "panic"})
+	wf.AfterFlow(true, CheckResult(t, 11, flow.Success))
+	atomic.StoreInt64(&letGo, 1)
+	flow.DoneFlow("TestComparePanic5", nil)
+
+	resetCurrent()
+	atomic.StoreInt64(&letGo, 0)
+	wf = flow.RegisterFlow("TestComparePanic6")
+	proc = wf.Process("TestComparePanic6")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	GTECondition(step).GTE("PanicComparable", PanicComparableImpl{Content: "panic"})
+	wf.AfterFlow(true, CheckResult(t, 11, flow.Success))
+	atomic.StoreInt64(&letGo, 1)
+	flow.DoneFlow("TestComparePanic6", nil)
+}
+
+func TestConditionRecover(t *testing.T) {
+	flow.RegisterType[EqualityImpl]()
+	flow.RegisterType[ComparableImpl]()
+	flow.RegisterType[PanicComparableImpl]()
+	defer resetCurrent()
+	wf := flow.RegisterFlow("TestConditionRecover0")
+	wf.EnableRecover()
+	proc := wf.Process("TestConditionRecover0")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step := proc.NameStep(Fx[flow.Step](t).Recover().Step(), "2", "1")
+	EQCondition(step)
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 2, flow.Success)).When(flow.Recovering)
+	ff := flow.DoneFlow("TestConditionRecover0", nil)
+	CheckResult(t, 3, flow.Error)(any(ff).(flow.WorkFlow))
+	Recover("TestConditionRecover0")
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestConditionRecover1")
+	wf.EnableRecover()
+	proc = wf.Process("TestConditionRecover1")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	EQCondition(step)
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Recover().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 1, flow.Success)).When(flow.Recovering)
+	ff = flow.DoneFlow("TestConditionRecover1", nil)
+	CheckResult(t, 4, flow.Error)(any(ff).(flow.WorkFlow))
+	Recover("TestConditionRecover1")
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestConditionRecover2")
+	wf.EnableRecover()
+	proc = wf.Process("TestConditionRecover2")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Recover().Step(), "2", "1")
+	EQCondition(step).SkipWithDependents()
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2", "3")
+	wf.AfterFlow(true, CheckResult(t, 2, flow.Success)).When(flow.Recovering)
+	ff = flow.DoneFlow("TestConditionRecover2", nil)
+	CheckResult(t, 3, flow.Error)(any(ff).(flow.WorkFlow))
+	Recover("TestConditionRecover2")
+}
+
+func TestConditionMerge(t *testing.T) {
+	defer resetCurrent()
+	wf := flow.RegisterFlow("TestConditionMerge0")
+	proc := wf.Process("MeetCondition")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step := proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	EQCondition(step)
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+
+	proc = wf.Process("NotMeetCondition")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.EQ("notExistKey", 1)
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+
+	wf = flow.RegisterFlow("TestConditionMerge1")
+	proc = wf.Process("TestConditionMerge10")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	NEQCondition(step)
+	proc.Merge("MeetCondition")
+	wf.AfterFlow(true, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestConditionMerge1", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestConditionMerge2")
+	proc = wf.Process("TestConditionMerge20")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	NEQCondition(step)
+	proc.Merge("NotMeetCondition")
+	wf.AfterFlow(true, CheckResult(t, 2, flow.Success))
+	flow.DoneFlow("TestConditionMerge2", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestConditionMerge3")
+	proc = wf.Process("TestConditionMerge30")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.EQ("notExistKey", 1)
+	proc.Merge("MeetCondition")
+	wf.AfterFlow(true, CheckResult(t, 2, flow.Success))
+	flow.DoneFlow("TestConditionMerge3", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestConditionMerge4")
+	proc = wf.Process("TestConditionMerge40")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.EQ("notExistKey", 1)
+	proc.Merge("NotMeetCondition")
+	wf.AfterFlow(true, CheckResult(t, 2, flow.Success))
+	flow.DoneFlow("TestConditionMerge4", nil)
+}
+
+func TestConditionMergeWithSkip(t *testing.T) {
+	defer resetCurrent()
+	wf := flow.RegisterFlow("TestConditionMergeWithSkip0")
+	proc := wf.Process("SkipDepends")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step := proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2")
+	step.EQ("notExistKey", 1).SkipWithDependents()
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "2")
+
+	proc = wf.Process("NotSkipDepends")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2")
+	step.EQ("notExistKey", 1)
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "2")
+
+	proc = wf.Process("SkipDependsWithExclude")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2")
+	step.EQ("notExistKey", 1).SkipWithDependents("4")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "2")
+
+	wf = flow.RegisterFlow("TestConditionMergeWithSkip1")
+	proc = wf.Process("TestConditionMergeWithSkip10")
+	proc.Merge("SkipDepends")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "5", "1")
+	wf.AfterFlow(true, CheckResult(t, 2, flow.Success))
+	flow.DoneFlow("TestConditionMergeWithSkip1", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestConditionMergeWithSkip2")
+	proc = wf.Process("TestConditionMergeWithSkip20")
+	proc.Merge("NotSkipDepends")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "5", "1")
+	wf.AfterFlow(true, CheckResult(t, 4, flow.Success))
+	flow.DoneFlow("TestConditionMergeWithSkip2", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestConditionMergeWithSkip3")
+	proc = wf.Process("TestConditionMergeWithSkip30")
+	proc.Merge("SkipDependsWithExclude")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "5", "1")
+	wf.AfterFlow(true, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestConditionMergeWithSkip3", nil)
+}
+
+func TestConditionMergeWithAdd(t *testing.T) {
+	defer resetCurrent()
+	wf := flow.RegisterFlow("TestConditionMergeWithAdd0")
+	proc := wf.Process("TestConditionMergeWithAdd0")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step := proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	EQCondition(step)
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "1")
+	step.EQ("notExistKey", 1)
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "1")
+	step.EQ("notExistKey", 1).SkipWithDependents()
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "5", "1")
+	step.EQ("notExistKey", 1).SkipWithDependents("7")
+	proc.NameStep(Fx[flow.Step](t).Inc(100).Step(), "6", "4")
+	proc.NameStep(Fx[flow.Step](t).Inc(10).Step(), "7", "5")
+	proc.NameStep(Fx[flow.Step](t).Inc(10).Step(), "8", "2")
+	wf.AfterFlow(true, CheckResult(t, 22, flow.Success))
+	flow.DoneFlow("TestConditionMergeWithAdd0", nil)
+
+	resetCurrent()
+	wf = flow.RegisterFlow("TestConditionMergeWithAdd1")
+	proc = wf.Process("TestConditionMergeWithAdd1")
+	proc.NameStep(Fx[flow.Step](t).Inc(1000).Step(), "9")
+	proc.Merge("TestConditionMergeWithAdd0")
+	wf.AfterFlow(true, CheckResult(t, 1022, flow.Success))
+	flow.DoneFlow("TestConditionMergeWithAdd1", nil)
+}
+
+func TestConditionMultiMerge(t *testing.T) {
+	defer resetCurrent()
+	wf := flow.RegisterFlow("TestConditionMultiMerge0")
+	proc := wf.Process("TestConditionMultiMerge0")
+	proc.NameStep(Fx[flow.Step](t).Cond().Step(), "1")
+	step := proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.SkipWithDependents("3")
+	EQCondition(step)
+
+	wf = flow.RegisterFlow("TestConditionMultiMerge1")
+	proc = wf.Process("TestConditionMultiMerge1")
+	proc.Merge("TestConditionMultiMerge0")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	NEQCondition(step)
+
+	wf = flow.RegisterFlow("TestConditionMultiMerge2")
+	proc = wf.Process("TestConditionMultiMerge2")
+	proc.Merge("TestConditionMultiMerge1")
+	step = proc.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	step.EQ("notExistKey", 1)
+	proc.NameStep(Fx[flow.Step](t).Inc(10).Step(), "3", "2")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "4", "2")
+	wf.AfterFlow(true, CheckResult(t, 11, flow.Success))
+	flow.DoneFlow("TestConditionMultiMerge2", nil)
+}

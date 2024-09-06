@@ -135,7 +135,7 @@ func (process *runProcess) schedule() {
 	if process.Has(Recovering) {
 		process.manageResources(recoverR)
 	}
-	procPersist.onBegin(process)
+	procPersist.onInsert(process)
 	process.advertise(beforeF)
 	if process.Has(CallbackFail) {
 		process.end = time.Now().UTC()
@@ -165,6 +165,7 @@ func (process *runProcess) startStep(step *runStep) {
 		return
 	}
 
+	// process is timeout or stop
 	if !process.Normal() {
 		step.append(Stop)
 		return
@@ -176,7 +177,9 @@ func (process *runProcess) startStep(step *runStep) {
 		}
 	}
 
-	if !step.meetCondition(step) {
+	// If the step has the Recovering flag, it means the step met the condition before recovering,
+	// so it should be executed again.
+	if !step.meetCondition(step) && !step.Has(Recovering) {
 		return
 	}
 
@@ -324,7 +327,7 @@ func (process *runProcess) startNextSteps(step *runStep) {
 func (process *runProcess) runStep(step *runStep) {
 	defer func() { step.finish <- true }()
 	step.start = time.Now().UTC()
-	stepPersist.onBegin(step)
+	stepPersist.onInsert(step)
 	process.stepCallback(step, beforeF)
 	// if beforeStep panic occur, the step will mark as panic
 	if step.Has(CallbackFail) {

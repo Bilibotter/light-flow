@@ -81,6 +81,7 @@ func (pm *ProcessMeta) Merge(name string) {
 			depends = append(depends, depend.name)
 		}
 		step := pm.NameStep(merged.run, merged.name, depends...)
+		step.condition = merged.condition
 		step.position.append(mergedE)
 		if merged.stepCfgInit {
 			step.extern = append(step.extern, &merged.stepConfig)
@@ -136,6 +137,7 @@ func (pm *ProcessMeta) mergeStep(merge *StepMeta) {
 	}
 
 	target.wireDepends()
+	target.mergeCond(&merge.condition)
 	pm.tailStep = target.name
 }
 

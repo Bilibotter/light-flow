@@ -248,7 +248,7 @@ func (rf *runFlow) Done() FinishedWorkFlow {
 	}
 	rf.initialize()
 	rf.start = time.Now().UTC()
-	flowPersist.onBegin(rf)
+	flowPersist.onInsert(rf)
 	defer rf.finalize()
 	rf.advertise(beforeF)
 	if rf.Has(CallbackFail) {
