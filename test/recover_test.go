@@ -229,7 +229,7 @@ func Recover0(t *testing.T, ff flow.FinishedWorkFlow) flow.FinishedWorkFlow {
 	atomic.AddInt64(&times, 1)
 	resetCurrent()
 	println()
-	t.Logf("start [%d]times recover >>>>>>>>>>>>>>", times)
+	t.Logf("start [%d] times recover >>>>>>>>>>>>>>", times)
 	f, err := ff.Recover()
 	if err != nil {
 		if !strings.Contains(fmt.Sprintf("%v", err), "recovery failed") {
@@ -1376,6 +1376,115 @@ func TestStepCallbackPanicWithAllScope5(t *testing.T) {
 	res := flow.DoneFlow("TestStepCallbackPanicWithAllScope5", nil)
 	CheckResult(t, 1, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestStepCallbackPanicWithAllScope5")
+}
+
+// disable log before running this test case will make it clearer
+func TestMultiTimesRecover0(t *testing.T) {
+	defer resetCurrent()
+	defer resetTimes()
+	defer flow.ResetDefaultCallback()
+	atomic.StoreInt64(&recoverFlag, 1)
+	df := flow.DefaultCallback()
+	wf := flow.RegisterFlow("TestMultiTimesRecover0")
+	wf.EnableRecover()
+	proc := wf.Process("TestMultiTimesRecover0")
+	df.BeforeFlow(true, Fx[flow.WorkFlow](t).MultiRecover(1).Callback("Default->Before"))
+	wf.BeforeFlow(true, Fx[flow.WorkFlow](t).MultiRecover(2).Callback("Flow->Before"))
+
+	df.BeforeProcess(true, Fx[flow.Process](t).MultiRecover(3).Callback("Default->Before"))
+	wf.BeforeProcess(true, Fx[flow.Process](t).MultiRecover(4).Callback("Flow->Before"))
+	proc.BeforeProcess(true, Fx[flow.Process](t).MultiRecover(5).Callback("Process->Before"))
+
+	df.BeforeStep(true, Fx[flow.Step](t).MultiRecover(6).Callback("Default->Before"))
+	wf.BeforeStep(true, Fx[flow.Step](t).MultiRecover(7).Callback("Flow->Before"))
+	proc.BeforeStep(true, Fx[flow.Step](t).MultiRecover(8).Callback("Process->Before"))
+
+	proc.NameStep(Fx[flow.Step](t).MultiRecover(9).Step(), "step1")
+
+	df.AfterStep(true, Fx[flow.Step](t).MultiRecover(10).Callback("Default->After"))
+	wf.AfterStep(true, Fx[flow.Step](t).MultiRecover(11).Callback("Flow->After"))
+	proc.AfterStep(true, Fx[flow.Step](t).MultiRecover(12).Callback("Process->After"))
+
+	df.AfterProcess(true, Fx[flow.Process](t).MultiRecover(13).Callback("Default->After"))
+	wf.AfterProcess(true, Fx[flow.Process](t).MultiRecover(14).Callback("Flow->After"))
+	proc.AfterProcess(true, Fx[flow.Process](t).MultiRecover(15).Callback("Process->After"))
+
+	df.AfterFlow(true, Fx[flow.WorkFlow](t).MultiRecover(16).Callback("Default->After"))
+	wf.AfterFlow(true, Fx[flow.WorkFlow](t).MultiRecover(17).Callback("Flow->After"))
+
+	// default before flow failed
+	ff := flow.DoneFlow("TestMultiTimesRecover0", nil)
+	CheckResult(t, 1, flow.CallbackFail)(any(ff).(flow.WorkFlow))
+
+	atomic.StoreInt64(&recoverFlag, 2)
+	// default before flow success, but flow before flow failed
+	Recover0(t, ff)
+	CheckResult(t, 102, flow.CallbackFail)(any(ff).(flow.WorkFlow))
+
+	atomic.StoreInt64(&recoverFlag, 2)
+	// flow before flow success, but default before process failed
+	Recover0(t, ff)
+	CheckResult(t, 303, flow.CallbackFail)(any(ff).(flow.WorkFlow))
+
+	atomic.StoreInt64(&recoverFlag, 2)
+	// default before process success, but flow before process failed
+	Recover0(t, ff)
+	CheckResult(t, 304, flow.CallbackFail)(any(ff).(flow.WorkFlow))
+
+	atomic.StoreInt64(&recoverFlag, 2)
+	// flow before process success, but process before process failed
+	Recover0(t, ff)
+	CheckResult(t, 305, flow.CallbackFail)(any(ff).(flow.WorkFlow))
+
+	atomic.StoreInt64(&recoverFlag, 2)
+	// process before process success, but default before step failed
+	Recover0(t, ff)
+	CheckResult(t, 606, flow.CallbackFail)(any(ff).(flow.WorkFlow))
+
+	atomic.StoreInt64(&recoverFlag, 2)
+	// default before step success, but flow before step failed
+	Recover0(t, ff)
+	CheckResult(t, 607, flow.CallbackFail)(any(ff).(flow.WorkFlow))
+
+	atomic.StoreInt64(&recoverFlag, 2)
+	// flow before step success, but process before step failed
+	Recover0(t, ff)
+	CheckResult(t, 608, flow.CallbackFail)(any(ff).(flow.WorkFlow))
+
+	atomic.StoreInt64(&recoverFlag, 2)
+	// process before step success, but step execute failed
+	Recover0(t, ff)
+	CheckResult(t, 909, flow.CallbackFail)(any(ff).(flow.WorkFlow))
+
+	atomic.StoreInt64(&recoverFlag, 2)
+	// step execute success, but default after step failed
+	Recover0(t, ff)
+	CheckResult(t, 610, flow.CallbackFail)(any(ff).(flow.WorkFlow))
+
+	atomic.StoreInt64(&recoverFlag, 2)
+	// default after step success, but flow after step failed
+	Recover0(t, ff)
+	CheckResult(t, 611, flow.CallbackFail)(any(ff).(flow.WorkFlow))
+
+	atomic.StoreInt64(&recoverFlag, 2)
+	// flow after step success, but process before step failed
+	Recover0(t, ff)
+	CheckResult(t, 612, flow.CallbackFail)(any(ff).(flow.WorkFlow))
+
+	atomic.StoreInt64(&recoverFlag, 2)
+	// process before step success, but default after process failed
+	Recover0(t, ff)
+	CheckResult(t, 313, flow.CallbackFail)(any(ff).(flow.WorkFlow))
+
+	atomic.StoreInt64(&recoverFlag, 2)
+	// default after process success, but flow after process failed
+	Recover0(t, ff)
+	CheckResult(t, 314, flow.CallbackFail)(any(ff).(flow.WorkFlow))
+
+	atomic.StoreInt64(&recoverFlag, 2)
+	// replay
+	Recover0(t, ff)
+	CheckResult(t, 314, flow.CallbackFail)(any(ff).(flow.WorkFlow))
 }
 
 func TestMultiTimesRecover(t *testing.T) {

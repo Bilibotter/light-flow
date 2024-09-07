@@ -179,6 +179,11 @@ func (c *condition) meetCondition(step Step) (meet bool) {
 	for _, exclude := range c.exclude {
 		step.setInternal(fmt.Sprintf(stepCD, exclude), nil)
 	}
+	for _, cond := range c.conditions {
+		for _, exclude := range cond.exclude {
+			step.setInternal(fmt.Sprintf(stepCD, exclude), nil)
+		}
+	}
 	return
 }
 
@@ -321,5 +326,4 @@ func (c *condition) addEvaluate(match string, expect any, operator string) ExecC
 func (c *condition) mergeCond(other *condition) {
 	c.conditions = append(c.conditions, other)
 	c.skipWithDependents = c.skipWithDependents || other.skipWithDependents
-	c.exclude = append(c.exclude, other.exclude...)
 }

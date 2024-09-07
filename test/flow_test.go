@@ -108,7 +108,7 @@ func TestMultipleExceptionStatus(t *testing.T) {
 		atomic.AddInt64(&current, 1)
 		return true, nil
 	})
-	workflow.AfterFlow(false, CheckResult(t, 5, flow.Timeout, flow.Error, flow.Panic))
+	workflow.AfterFlow(false, CheckResult(t, 6, flow.Timeout, flow.Error, flow.Panic))
 	flow.DoneFlow("TestMultipleExceptionStatus", nil)
 	// DoneFlow return due to timeout, but process not complete
 	atomic.StoreInt64(&letGo, 1)

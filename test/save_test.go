@@ -71,6 +71,12 @@ func onStepComplete(step flow.Step) error {
 		UpdatedAt:  step.EndTime(),
 		FinishedAt: step.EndTime(),
 	}
+	if step.EndTime().IsZero() {
+		println("Step end time is zero")
+	}
+	if entity.FinishedAt.IsZero() {
+		println("Step finished at is zero")
+	}
 	if step.Success() {
 		entity.Status = Success
 	} else {
@@ -323,6 +329,16 @@ func CheckFlowPersist(t *testing.T, ff flow.FinishedWorkFlow, expect int) {
 			}
 			if step.EndTime().Sub(*s.UpdatedAt) > time.Second {
 				t.Errorf("Step %s has wrong end time: %s, expected %s", step.Name(), s.UpdatedAt.UTC(), step.EndTime().UTC())
+			}
+			if step.EndTime() == nil {
+				t.Errorf("Step %s has no end time", step.Name())
+			}
+			if s.FinishedAt == nil {
+				if s.CreatedAt != nil {
+					t.Errorf("Step %s has no finished at time, but has created at time", step.Name())
+				} else {
+					t.Errorf("Step %s has no finished at time", step.Name())
+				}
 			}
 			if step.EndTime().Sub(*s.FinishedAt) > time.Second {
 				t.Errorf("Step %s has wrong end time: %s, expected %s", step.Name(), s.FinishedAt.UTC(), step.EndTime().UTC())

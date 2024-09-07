@@ -3,7 +3,6 @@ package test
 import (
 	"fmt"
 	flow "github.com/Bilibotter/light-flow"
-	"runtime"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -229,12 +228,11 @@ func TestProcessorWhenExceptionOccur(t *testing.T) {
 	process.NameStep(GeneratePanicStep(2), "2")
 	step := process.NameStep(GenerateErrorStep(3, "ms"), "3")
 	step.StepTimeout(time.Nanosecond)
-	workflow.AfterFlow(false, CheckResult(t, 9, flow.Timeout, flow.Error, flow.Panic))
+	workflow.AfterFlow(false, CheckResult(t, 10, flow.Timeout, flow.Error, flow.Panic))
 	flow.DoneFlow("TestProcessorWhenExceptionOccur", nil)
 	// DoneFlow return due to timeout, but step not complete
 	start := time.Now()
 	for atomic.LoadInt64(&current) != 11 && time.Now().Sub(start) < 200*time.Millisecond {
-		runtime.Gosched()
 	}
 }
 

@@ -29,7 +29,6 @@ type runFlow struct {
 	*FlowMeta
 	*simpleContext
 	id           string
-	compress     state
 	runProcesses map[string]*runProcess
 	start        time.Time
 	end          time.Time
@@ -150,7 +149,12 @@ func (fm *FlowMeta) Process(name string) *ProcessMeta {
 }
 
 func (rf *runFlow) HasAny(enum ...*StatusEnum) bool {
-	return rf.compress.Has(enum...)
+	for _, proc := range rf.runProcesses {
+		if proc.HasAny(enum...) {
+			return true
+		}
+	}
+	return rf.Has(enum...)
 }
 
 func (rf *runFlow) Processes() []FinishedProcess {
@@ -261,7 +265,15 @@ func (rf *runFlow) Done() FinishedWorkFlow {
 		go process.schedule()
 	}
 	rf.running.Wait()
-	rf.syncState()
+	for _, process := range rf.runProcesses {
+		if !process.Normal() {
+			rf.append(Failed)
+			break
+		}
+	}
+	if !rf.Has(Failed) {
+		rf.append(Success)
+	}
 	rf.end = time.Now().UTC()
 	rf.advertise(afterF)
 	return rf
@@ -283,19 +295,7 @@ func (rf *runFlow) advertise(flag uint64) {
 	rf.flowFilter(flag, rf)
 }
 
-func (rf *runFlow) syncState() {
-	rf.compress.add(rf.load())
-	if rf.compress.Normal() {
-		rf.compress.append(Success)
-		rf.append(Success)
-	} else {
-		rf.compress.append(Failed)
-		rf.append(Failed)
-	}
-}
-
 func (rf *runFlow) finalize() {
-	rf.syncState()
 	if !rf.Normal() && rf.isRecoverable() {
 		rf.saveCheckpoints()
 	}

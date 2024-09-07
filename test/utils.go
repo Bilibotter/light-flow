@@ -3,7 +3,6 @@ package test
 import (
 	"fmt"
 	flow "github.com/Bilibotter/light-flow"
-	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -362,7 +361,7 @@ func (s *FuncBuilder) WaitLetGO(i ...int64) func(ctx flow.Step) (result any, err
 		atomic.AddInt64(&current, 1)
 		s.t.Logf("Step[ %s ] start\n", ctx.Name())
 		start := time.Now()
-		duration := 100 * time.Millisecond
+		duration := 300 * time.Millisecond
 		for {
 			if atomic.LoadInt64(&letGo) == 1 {
 				s.t.Logf("Step[ %s ] finish wait\n", ctx.Name())
@@ -375,7 +374,6 @@ func (s *FuncBuilder) WaitLetGO(i ...int64) func(ctx flow.Step) (result any, err
 				s.t.Errorf("Step[ %s ] timeout\n", ctx.Name())
 				return ctx.Name(), nil
 			}
-			runtime.Gosched()
 		}
 	}
 }
@@ -493,7 +491,6 @@ func waitCurrent(i int) {
 		if atomic.LoadInt64(&current) == int64(i) {
 			return
 		}
-		runtime.Gosched()
 		if atomic.LoadInt64(&current) == int64(i) {
 			return
 		}

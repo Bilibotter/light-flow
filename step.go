@@ -186,6 +186,10 @@ func (step *runStep) FlowID() string {
 	return step.belong.FlowID()
 }
 
+func (step *runStep) FlowName() string {
+	return step.belong.FlowName()
+}
+
 func (step *runStep) Dependents() (stepNames []string) {
 	s := make([]string, len(step.depends))
 	for i, depend := range step.depends {
@@ -196,6 +200,10 @@ func (step *runStep) Dependents() (stepNames []string) {
 
 func (step *runStep) ProcessID() string {
 	return step.belong.id
+}
+
+func (step *runStep) ProcessName() string {
+	return step.belong.name
 }
 
 func (step *runStep) StartTime() *time.Time {
@@ -227,6 +235,14 @@ func (step *runStep) isRecoverable() bool {
 
 func (step *runStep) needRecover() bool {
 	return step.Has(CallbackFail) || (!step.Normal() && !step.Has(Cancel))
+}
+
+func (step *runStep) finalize() {
+	stepPersist.onUpdate(step)
+	if step.Has(Suspend) {
+		step.belong.append(Suspend)
+		step.belong.belong.append(Suspend)
+	}
 }
 
 func (step *runStep) composeError(stage string, err error) {

@@ -109,7 +109,7 @@ type procCtx interface {
 
 type procRuntime interface {
 	runtimeI
-	FlowID() string
+	flowInfo
 	// HasAny checks if any of the steps within a given process are in any of the specified states.
 	HasAny(...*StatusEnum) bool
 }
@@ -138,10 +138,20 @@ type stepCtx interface {
 
 type stepRuntime interface {
 	runtimeI
-	FlowID() string
-	ProcessID() string
+	flowInfo
+	procInfo
 	Dependents() (stepNames []string)
 	Err() error
+}
+
+type flowInfo interface {
+	FlowID() string
+	FlowName() string
+}
+
+type procInfo interface {
+	ProcessID() string
+	ProcessName() string
 }
 
 type runtimeI interface {

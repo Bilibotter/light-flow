@@ -13,7 +13,6 @@ type runProcess struct {
 	*dependentContext
 	belong    *runFlow
 	id        string
-	compress  state
 	runSteps  map[string]*runStep
 	resources map[string]*resource
 	start     time.Time
@@ -23,7 +22,12 @@ type runProcess struct {
 }
 
 func (process *runProcess) HasAny(enum ...*StatusEnum) bool {
-	return process.compress.Has(enum...)
+	for _, step := range process.runSteps {
+		if step.Has(enum...) {
+			return true
+		}
+	}
+	return process.Has(enum...)
 }
 
 func (process *runProcess) ID() string {
@@ -106,6 +110,10 @@ func (process *runProcess) FlowID() string {
 	return process.belong.id
 }
 
+func (process *runProcess) FlowName() string {
+	return process.belong.name
+}
+
 func (process *runProcess) Resume() ProcController {
 	if process.clear(Pause) {
 		process.pause.Done()
@@ -161,7 +169,7 @@ func (process *runProcess) startStep(step *runStep) {
 
 	// If prev step is abnormal, the current step will mark as cancel
 	// But other tasks that do not depend on the failed task will continue to execute
-	if !step.Normal() {
+	if step.Has(Cancel) {
 		return
 	}
 
@@ -195,7 +203,15 @@ func (process *runProcess) startStep(step *runStep) {
 	}
 
 	timer := time.NewTimer(timeout)
-	defer stepPersist.onUpdate(step)
+	defer step.finalize()
+	step.start = time.Now().UTC()
+	stepPersist.onInsert(step)
+	process.stepCallback(step, beforeF)
+	// if beforeStep panic occur, the step will mark as panic
+	if step.Has(CallbackFail) {
+		step.end = time.Now().UTC()
+		return
+	}
 	go process.runStep(step)
 	select {
 	case <-timer.C:
@@ -203,7 +219,16 @@ func (process *runProcess) startStep(step *runStep) {
 		step.composeError(execStage, fmt.Errorf("execute timeout"))
 	case <-step.finish:
 	}
+	if !step.Normal() && step.isRecoverable() {
+		step.append(Suspend)
+		step.setInternal(fmt.Sprintf(stepBP, step.Name()), &breakPoint{
+			Stage:   1<<0 | 1<<9, // execute default after step callback from 0
+			Index:   0,
+			SkipRun: false,
+		})
+	}
 	step.end = time.Now().UTC()
+	process.stepCallback(step, afterF)
 }
 
 func (process *runProcess) waitFinish() {
@@ -227,13 +252,13 @@ func (process *runProcess) waitFinish() {
 	}
 
 	for _, step := range process.runSteps {
-		process.compress.add(step.load())
+		if !step.Normal() {
+			process.append(Failed)
+			break
+		}
 	}
-	process.compress.add(process.load())
-	if process.compress.Normal() {
+	if !process.Has(Failed) {
 		process.append(Success)
-	} else {
-		process.append(Failed)
 	}
 }
 
@@ -244,9 +269,7 @@ func (process *runProcess) finalize() {
 		process.manageResources(suspendR)
 	}
 	process.manageResources(releaseR)
-	process.compress.add(process.load())
 	procPersist.onUpdate(process)
-	process.belong.compress.add(process.compress.load())
 	process.belong.running.Done()
 }
 
@@ -326,13 +349,6 @@ func (process *runProcess) startNextSteps(step *runStep) {
 
 func (process *runProcess) runStep(step *runStep) {
 	defer func() { step.finish <- true }()
-	step.start = time.Now().UTC()
-	stepPersist.onInsert(step)
-	process.stepCallback(step, beforeF)
-	// if beforeStep panic occur, the step will mark as panic
-	if step.Has(CallbackFail) {
-		return
-	}
 
 	retry := step.stepRetry
 	if retry < 0 {
@@ -344,24 +360,6 @@ func (process *runProcess) runStep(step *runStep) {
 			logger.Errorf("Step[ %s ] execute panic;\nID=%s;\nPanic=%v\n%s\n", step.name, step.id, r, stack())
 			step.append(Panic)
 			step.composeError(execStage, fmt.Errorf("execute panic: %v", r))
-		}
-		step.end = time.Now().UTC()
-		if !step.isRecoverable() {
-			process.stepCallback(step, afterF)
-			return
-		}
-		if !step.Normal() && !step.Has(CallbackFail) {
-			step.append(Suspend)
-			step.setInternal(fmt.Sprintf(stepBP, step.Name()), &breakPoint{
-				Stage:   1<<0 | 1<<9, // execute default after step callback from 0
-				Index:   0,
-				SkipRun: false,
-			})
-		}
-		process.stepCallback(step, afterF)
-		if step.Has(Suspend) {
-			step.belong.append(Suspend)
-			step.belong.belong.append(Suspend)
 		}
 	}()
 

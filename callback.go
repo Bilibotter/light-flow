@@ -309,7 +309,7 @@ func (chain *funcChain[T]) loadBreakPoint(runtime T) (point *breakPoint) {
 }
 
 func (chain *funcChain[T]) saveBreakPoint(runtime T, point *breakPoint) {
-	// replay the post-callback of flow and process and recover the post-callback of step
+	// Replay the post-callback of flow and process and recover the post-callback of step
 	if !chain.Before && !strings.HasSuffix(chain.Stage, stepScope) {
 		point.Index = 0
 		point.Stage = defaultStage | afterStage
