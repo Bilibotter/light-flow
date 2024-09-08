@@ -721,7 +721,7 @@ func (rf *runFlow) saveCheckpoints() {
 	recoverId := generateId()
 	checkpoints = append(checkpoints, &flowCheckpoint{runFlow: rf})
 	for _, proc := range rf.runProcesses {
-		if proc.Success() {
+		if proc.Normal() {
 			continue
 		}
 		for _, step := range proc.runSteps {

@@ -339,8 +339,8 @@ func (fx *FlexibleBuilder[T]) MultiRecover(incs ...int64) *FlexibleBuilder[T] {
 			atomic.StoreInt64(&recoverFlag, 0)
 			return nil, fmt.Errorf("error")
 		}
-		if atomic.LoadInt64(&recoverFlag) == 2 {
-			atomic.StoreInt64(&recoverFlag, 1)
+		if atomic.LoadInt64(&recoverFlag) >= 2 {
+			atomic.AddInt64(&recoverFlag, -1)
 		}
 		atomic.AddInt64(&current, 100)
 		return s.Name(), nil
