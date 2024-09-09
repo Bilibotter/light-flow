@@ -1,10 +1,20 @@
 package light_flow
 
-type eventStage int
+type eventType uint8
 
-type eventSeverity int
+type eventStage uint8
 
-type extraIndex int
+type eventSeverity uint8
+
+type eventScope uint8
+
+type extraIndex uint8
+
+const (
+	FlowScp eventScope = iota
+	ProcScp
+	StepScp
+)
 
 const (
 	InCondition eventStage = iota
