@@ -12,11 +12,7 @@ var dispatcher = &eventDispatcher{init: sync.Once{}, capacity: 64, handlerNum: 0
 var discardDelay int64 = 60
 var waitEventTimeout = 30 * time.Second
 
-var handlerRegistry = handlerRegister{
-	handlers: make(map[eventStage][]func(FlexEvent) (keepOn bool)),
-	discards: make(map[eventStage][]func(FlexEvent) (keepOn bool)),
-	unLog:    make(map[eventStage]bool),
-}
+var handlerRegistry = newEventRegister()
 
 var (
 	conditionName = map[eventType]string{}
@@ -61,6 +57,7 @@ type HandlerRegister interface {
 	Capacity(capacity int) HandlerRegister
 	MaxHandler(num int) HandlerRegister
 	EventTimeoutSec(sec int) HandlerRegister
+	Clear()
 }
 
 type FlexEvent interface {
@@ -72,17 +69,22 @@ type FlexEvent interface {
 
 type basicEventI interface {
 	exception
+	ID() string
+	Name() string
 	EventID() string
-	EventName() string
 	Stage() eventStage
-	Severity() eventSeverity
+	Level() eventLevel
 	Scope() eventScope
 	Timestamp() time.Time
-	Extra(index extraIndex) any
+	Extra() map[string]string
+	// Fetch fetches the value of a key from the event's extra map.
+	// If the key does not exist, an empty string is returned.
+	Fetch(key string) string
 }
 
 type exception interface {
-	Error() error
+	error
+	Panic() any
 	StackTrace() []byte // only panic event has stack trace
 }
 
@@ -122,18 +124,22 @@ type handlerLifecycle struct {
 }
 
 type flexEvent struct {
-	eventSeverity
+	error
+	proto
 	eventStage
+	eventScope
+	eventLevel
 	eventID   string
 	timestamp time.Time
-	err       error
+	object    any // panic object
 	stack     []byte
-	extra     []any
+	extra     map[string]string
 }
 
 type handlerRegister struct {
 	handlers map[eventStage][]func(FlexEvent) (keepOn bool)
 	discards map[eventStage][]func(FlexEvent) (keepOn bool)
+	logs     map[eventStage]func(FlexEvent)
 	unLog    map[eventStage]bool
 }
 
@@ -144,7 +150,50 @@ type eventHandler struct {
 }
 
 func HandlerRegistry() HandlerRegister {
-	return &handlerRegistry
+	return handlerRegistry
+}
+
+func errorEvent[T proto](runtime T, stage eventStage, err error) *flexEvent {
+	event := newEvent[T](runtime, stage)
+	event.error = err
+	event.eventLevel = ErrorLevel
+	return event
+}
+
+func panicEvent[T proto](runtime T, stage eventStage, object any, stack []byte) *flexEvent {
+	event := newEvent[T](runtime, stage)
+	event.object = object
+	event.stack = stack
+	event.eventLevel = PanicLevel
+	return event
+}
+
+func newEvent[T proto](runtime T, stage eventStage) *flexEvent {
+	event := &flexEvent{
+		proto:      runtime,
+		eventID:    generateId(),
+		timestamp:  time.Now(),
+		eventStage: stage,
+		eventLevel: ErrorLevel,
+	}
+	switch any(runtime).(type) {
+	case *runFlow:
+		event.eventScope = FlowScp
+	case *runProcess:
+		event.eventScope = ProcScp
+	case *runStep:
+		event.eventScope = StepScp
+	}
+	return event
+}
+
+func newEventRegister() *handlerRegister {
+	return &handlerRegister{
+		handlers: make(map[eventStage][]func(FlexEvent) (keepOn bool)),
+		discards: make(map[eventStage][]func(FlexEvent) (keepOn bool)),
+		unLog:    make(map[eventStage]bool),
+		logs:     map[eventStage]func(event FlexEvent){InCallback: callbackLog},
+	}
 }
 
 func (ed *eventDispatcher) send(event FlexEvent) {
@@ -209,29 +258,28 @@ func (ed *eventDispatcher) findHandler() *handlerLifecycle {
 				ed.RUnlock()
 				return handler
 			}
-			println("here")
 		}
 		ed.RUnlock()
 		return nil
 	}
-	if len(ed.handlers) >= int(ed.handlerNum) {
-		ed.RLock()
-		for _, handler := range ed.handlers {
-			// reuse discard handler
-			if atomic.CompareAndSwapInt64(&handler.status, unattachedH, idleH) {
-				atomic.AddInt64(&handler.latest, 1)
-				ed.RUnlock()
-				return handler
-			}
-		}
-		ed.RUnlock()
+	if len(ed.handlers) < int(ed.handlerNum) {
+		handler := new(handlerLifecycle)
+		handler.eventDispatcher = ed
+		ed.Lock()
+		defer ed.Unlock()
+		ed.handlers = append(ed.handlers, handler)
+		return handler
 	}
-	handler := new(handlerLifecycle)
-	handler.eventDispatcher = ed
-	ed.Lock()
-	defer ed.Unlock()
-	ed.handlers = append(ed.handlers, handler)
-	return handler
+	ed.RLock()
+	defer ed.RUnlock()
+	for _, handler := range ed.handlers {
+		// reuse discard handler
+		if atomic.CompareAndSwapInt64(&handler.status, unattachedH, idleH) {
+			atomic.AddInt64(&handler.latest, 1)
+			return handler
+		}
+	}
+	return nil
 }
 
 func (el *handlerLifecycle) loop(bind FlexEvent) {
@@ -239,18 +287,6 @@ func (el *handlerLifecycle) loop(bind FlexEvent) {
 		handlerRegistry.handle(bind)
 	}
 	index := atomic.LoadInt64(&el.latest)
-	defer func() {
-		if r := recover(); r == nil {
-			return
-		}
-		el.Lock()
-		defer el.Unlock()
-		if index != atomic.LoadInt64(&el.latest) {
-			return
-		}
-		atomic.StoreInt64(&el.status, unattachedH)
-		atomic.AddInt64(&el.handlerNum, -1)
-	}()
 	for {
 		select {
 		case event := <-el.eventBus:
@@ -301,11 +337,17 @@ func (el *handlerLifecycle) tryUnattached() bool {
 }
 
 func (h *handlerRegister) Handle(stage eventStage, handlers ...func(event FlexEvent) (keepOn bool)) HandlerRegister {
+	if len(handlers) == 0 {
+		panic("No handler is given")
+	}
 	h.handlers[stage] = append(h.handlers[stage], handlers...)
 	return h
 }
 
 func (h *handlerRegister) Discard(stage eventStage, discards ...func(event FlexEvent) (keepOn bool)) HandlerRegister {
+	if len(discards) == 0 {
+		panic("No discard is given")
+	}
 	h.discards[stage] = append(h.discards[stage], discards...)
 	return h
 }
@@ -335,6 +377,12 @@ func (h *handlerRegister) EventTimeoutSec(sec int) HandlerRegister {
 	return h
 }
 
+func (h *handlerRegister) Clear() {
+	h.handlers = map[eventStage][]func(FlexEvent) (keepOn bool){}
+	h.discards = map[eventStage][]func(FlexEvent) (keepOn bool){}
+	h.unLog = map[eventStage]bool{}
+}
+
 func (h *handlerRegister) handle(event FlexEvent) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -342,7 +390,7 @@ func (h *handlerRegister) handle(event FlexEvent) {
 		}
 	}()
 	if !h.unLog[event.Stage()] {
-		// log it
+		h.logs[event.Stage()](event)
 	}
 	for _, handler := range h.handlers[event.Stage()] {
 		if !handler(event) {
@@ -357,12 +405,85 @@ func (h *handlerRegister) discard(event FlexEvent) {
 			//todo log panic
 		}
 	}()
-	if !h.unLog[event.Stage()] {
-		// log it
-	}
 	for _, handler := range h.discards[event.Stage()] {
 		if !handler(event) {
 			return
 		}
+	}
+}
+
+func (f *flexEvent) Error() string {
+	if f.error != nil {
+		return f.error.Error()
+	}
+	return ""
+}
+
+func (f *flexEvent) Panic() any {
+	return f.object
+}
+
+func (f *flexEvent) StackTrace() []byte {
+	return f.stack
+}
+
+func (f *flexEvent) EventID() string {
+	return f.eventID
+}
+
+func (f *flexEvent) Stage() eventStage {
+	return f.eventStage
+}
+
+func (f *flexEvent) Level() eventLevel {
+	return f.eventLevel
+}
+
+func (f *flexEvent) Scope() eventScope {
+	return f.eventScope
+}
+
+func (f *flexEvent) Timestamp() time.Time {
+	return f.timestamp
+}
+
+func (f *flexEvent) Extra() map[string]string {
+	return f.extra
+}
+
+func (f *flexEvent) Fetch(key string) string {
+	return f.extra[key]
+}
+
+func (f *flexEvent) Flow() FlowInfo {
+	switch f.proto.(type) {
+	case *runFlow:
+		return f.proto.(*runFlow)
+	case *runProcess:
+		return f.proto.(*runProcess).belong
+	case *runStep:
+		return f.proto.(*runStep).belong.belong
+	default:
+		return nil
+	}
+}
+
+func (f *flexEvent) Proc() ProcInfo {
+	switch f.proto.(type) {
+	case *runProcess:
+		return f.proto.(*runProcess)
+	case *runStep:
+		return f.proto.(*runStep).belong
+	default:
+		return nil
+	}
+}
+
+func (f *flexEvent) Step() StepInfo {
+	switch f.proto.(type) {
+	case *runStep:
+		return f.proto.(*runStep)
+	default:
+		return nil
 	}
 }

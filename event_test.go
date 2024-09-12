@@ -47,23 +47,14 @@ func resetEventEnv() {
 }
 
 func resetRegistry() {
-	handlerRegistry = handlerRegister{
-		handlers: make(map[eventStage][]func(FlexEvent) (keepOn bool)),
-		discards: make(map[eventStage][]func(FlexEvent) (keepOn bool)),
-		unLog:    make(map[eventStage]bool),
-	}
+	handlerRegistry = newEventRegister()
 }
 
 type eventImpl struct {
 	name string
 }
 
-func (e *eventImpl) Error() error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (e *eventImpl) StackTrace() []byte {
+func (e *eventImpl) Panic() any {
 	//TODO implement me
 	panic("implement me")
 }
@@ -73,7 +64,37 @@ func (e *eventImpl) EventID() string {
 	panic("implement me")
 }
 
-func (e *eventImpl) EventName() string {
+func (e *eventImpl) Level() eventLevel {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (e *eventImpl) Extra() map[string]string {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (e *eventImpl) Fetch(key string) string {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (e *eventImpl) Error() string {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (e *eventImpl) StackTrace() []byte {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (e *eventImpl) ID() string {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (e *eventImpl) Name() string {
 	return e.name
 }
 
@@ -81,7 +102,7 @@ func (e *eventImpl) Stage() eventStage {
 	return testStage
 }
 
-func (e *eventImpl) Severity() eventSeverity {
+func (e *eventImpl) Severity() eventLevel {
 	//TODO implement me
 	panic("implement me")
 }
@@ -92,11 +113,6 @@ func (e *eventImpl) Scope() eventScope {
 }
 
 func (e *eventImpl) Timestamp() time.Time {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (e *eventImpl) Extra(index extraIndex) any {
 	//TODO implement me
 	panic("implement me")
 }
@@ -118,9 +134,9 @@ func (e *eventImpl) Step() StepInfo {
 
 func sleepEvent(t *testing.T) func(event FlexEvent) bool {
 	return func(event FlexEvent) bool {
-		t.Logf("Event[ %s ] start", event.EventName())
+		t.Logf("Event[ %s ] start", event.Name())
 		time.Sleep(10 * time.Millisecond)
-		t.Logf("Event[ %s ] end", event.EventName())
+		t.Logf("Event[ %s ] end", event.Name())
 		atomic.AddInt64(&current, 1)
 		return true
 	}
@@ -128,16 +144,16 @@ func sleepEvent(t *testing.T) func(event FlexEvent) bool {
 
 func untilLetGo(t *testing.T) func(event FlexEvent) bool {
 	return func(event FlexEvent) bool {
-		t.Logf("start Event[ %s ]", event.EventName())
+		t.Logf("start Event[ %s ]", event.Name())
 		atomic.AddInt64(&current, 1)
 		now := time.Now()
 		for tmp := atomic.LoadInt64(&letGo); tmp == 0; tmp = atomic.LoadInt64(&letGo) {
 			if time.Since(now) > 600*time.Millisecond {
-				t.Errorf("Event[ %s ] wait letGo timeout", event.EventName())
+				t.Errorf("Event[ %s ] wait letGo timeout", event.Name())
 				return true
 			}
 		}
-		t.Logf("end Event[ %s ]", event.EventName())
+		t.Logf("end Event[ %s ]", event.Name())
 		atomic.AddInt64(&current, 1)
 		return true
 	}
@@ -145,7 +161,7 @@ func untilLetGo(t *testing.T) func(event FlexEvent) bool {
 
 func dropHint(t *testing.T) func(event FlexEvent) bool {
 	return func(event FlexEvent) bool {
-		t.Logf("Event[ %s ] discard", event.EventName())
+		t.Logf("Event[ %s ] discard", event.Name())
 		return true
 	}
 }
@@ -157,7 +173,7 @@ func noDelay(_ FlexEvent) bool {
 
 func TestSend(t *testing.T) {
 	defer resetEventEnv()
-	HandlerRegistry().Handle(testStage, sleepEvent(t))
+	HandlerRegistry().Handle(testStage, sleepEvent(t)).DisableLog(InCallback)
 	dispatcher.send(&eventImpl{"TestSend"})
 	waitCurrent(1)
 }
@@ -165,7 +181,7 @@ func TestSend(t *testing.T) {
 func TestSingleHandler(t *testing.T) {
 	defer resetEventEnv()
 	atomic.StoreInt64(&letGo, 0)
-	HandlerRegistry().Handle(testStage, untilLetGo(t)).MaxHandler(1).Capacity(64).Discard(testStage, dropHint(t))
+	HandlerRegistry().Handle(testStage, untilLetGo(t)).MaxHandler(1).Capacity(64).Discard(testStage, dropHint(t)).DisableLog(InCallback)
 	for i := 0; i < 32; i++ {
 		go dispatcher.send(&eventImpl{"TestSingleHandler" + strconv.Itoa(i)})
 	}
@@ -185,7 +201,7 @@ func TestHandlerExpired(t *testing.T) {
 	defer resetEventEnv()
 	atomic.StoreInt64(&letGo, 0)
 	HandlerRegistry().Handle(testStage, untilLetGo(t)).Discard(testStage, dropHint(t)).
-		MaxHandler(12).Capacity(8).EventTimeoutSec(-1)
+		MaxHandler(12).Capacity(8).EventTimeoutSec(-1).DisableLog(InCallback)
 	atomic.StoreInt64(&discardDelay, 3600)
 	for i := 0; i < 20; i++ {
 		go dispatcher.send(&eventImpl{"TestHandlerExpired" + strconv.Itoa(i)})
@@ -205,7 +221,7 @@ func TestHandlerExpired(t *testing.T) {
 func TestHandlerAdd(t *testing.T) {
 	defer resetEventEnv()
 	atomic.StoreInt64(&letGo, 0)
-	HandlerRegistry().Handle(testStage, untilLetGo(t)).MaxHandler(64).Capacity(8).Discard(testStage, dropHint(t))
+	HandlerRegistry().Handle(testStage, untilLetGo(t)).MaxHandler(64).Capacity(8).Discard(testStage, dropHint(t)).DisableLog(InCallback)
 	for i := 0; i < 32; i++ {
 		go dispatcher.send(&eventImpl{"TestHandlerAdd" + strconv.Itoa(i)})
 	}
@@ -223,7 +239,7 @@ func TestDiscardHandlerReuse(t *testing.T) {
 	defer resetEventEnv()
 	atomic.StoreInt64(&letGo, 0)
 	HandlerRegistry().Handle(testStage, untilLetGo(t)).Discard(testStage, dropHint(t)).
-		MaxHandler(64).Capacity(8)
+		MaxHandler(64).Capacity(8).DisableLog(InCallback)
 	atomic.StoreInt64(&discardDelay, 0)
 	waitEventTimeout = 1 * time.Millisecond
 	for i := 0; i < 32; i++ {
@@ -279,7 +295,7 @@ func TestHandlerDiscard(t *testing.T) {
 	defer resetEventEnv()
 	atomic.StoreInt64(&letGo, 0)
 	HandlerRegistry().Handle(testStage, untilLetGo(t)).Discard(testStage, dropHint(t)).
-		MaxHandler(64).Capacity(8)
+		MaxHandler(64).Capacity(8).DisableLog(InCallback)
 	atomic.StoreInt64(&discardDelay, 0)
 	waitEventTimeout = 1 * time.Millisecond
 	for i := 0; i < 32; i++ {
@@ -312,7 +328,7 @@ func TestMultipleEvent(t *testing.T) {
 	defer resetEventEnv()
 	HandlerRegistry().
 		Handle(testStage, noDelay).Discard(testStage, noDelay).
-		MaxHandler(32).Capacity(128)
+		MaxHandler(32).Capacity(128).DisableLog(InCallback)
 	for i := 0; i < 4000; i++ {
 		go dispatcher.send(&eventImpl{})
 	}
