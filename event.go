@@ -1,12 +1,22 @@
 package light_flow
 
 import (
+	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
-var eventBus = eventDispatcher{init: sync.Once{}, maxBus: 64, maxHandler: 16, timeoutSec: 300}
+var dispatcher = &eventDispatcher{init: sync.Once{}, capacity: 64, handlerNum: 0, maxHandler: 16, timeoutSec: 300}
+
+var discardDelay int64 = 60
+var waitEventTimeout = 30 * time.Second
+
+var handlerRegistry = handlerRegister{
+	handlers: make(map[eventStage][]func(FlexEvent) (keepOn bool)),
+	discards: make(map[eventStage][]func(FlexEvent) (keepOn bool)),
+	unLog:    make(map[eventStage]bool),
+}
 
 var (
 	conditionName = map[eventType]string{}
@@ -24,7 +34,7 @@ var (
 )
 
 /*************************************************************
- * event bus status
+ * Event Bus Status
  *************************************************************/
 
 const (
@@ -33,7 +43,7 @@ const (
 )
 
 /*************************************************************
- * handler status
+ * Handler Status
  *************************************************************/
 
 const (
@@ -44,18 +54,13 @@ const (
 	unattachedH
 )
 
-type FlowInfo interface {
-	flowRuntime
-}
-
-type ProcInfo interface {
-	procRuntime
-	Get(key string) (value any, exist bool)
-}
-
-type StepInfo interface {
-	stepRuntime
-	Get(key string) (value any, exist bool)
+type HandlerRegister interface {
+	Handle(stage eventStage, handles ...func(event FlexEvent) (keepOn bool)) HandlerRegister
+	Discard(stage eventStage, discards ...func(event FlexEvent) (keepOn bool)) HandlerRegister
+	DisableLog(stages ...eventStage) HandlerRegister
+	Capacity(capacity int) HandlerRegister
+	MaxHandler(num int) HandlerRegister
+	EventTimeoutSec(sec int) HandlerRegister
 }
 
 type FlexEvent interface {
@@ -81,6 +86,41 @@ type exception interface {
 	StackTrace() []byte // only panic event has stack trace
 }
 
+type FlowInfo interface {
+	flowRuntime
+}
+
+type ProcInfo interface {
+	procRuntime
+	Get(key string) (value any, exist bool)
+}
+
+type StepInfo interface {
+	stepRuntime
+	Get(key string) (value any, exist bool)
+}
+
+type eventDispatcher struct {
+	sync.RWMutex
+	init       sync.Once
+	timeoutSec int64
+	handlers   []*handlerLifecycle
+	handlerNum int64
+	maxHandler int64
+	busStatus  int64
+	capacity   int
+	discarding int64
+	eventBus   chan FlexEvent
+	quit       chan empty
+}
+
+type handlerLifecycle struct {
+	*eventDispatcher
+	status     int64
+	latest     int64
+	expiration int64
+}
+
 type flexEvent struct {
 	eventSeverity
 	eventStage
@@ -91,205 +131,238 @@ type flexEvent struct {
 	extra     []any
 }
 
-type eventDispatcher struct {
-	sync.WaitGroup
-	sync.RWMutex
-	init       sync.Once
-	timeoutSec int64
-	handlers   []*eventHandler
-	handlerNum int64
-	maxHandler int64
-	busStatus  int64
-	maxBus     int
-	using      int64
-	discarding int64
-	eventBus0  chan FlexEvent
-	eventBus1  chan FlexEvent
+type handlerRegister struct {
+	handlers map[eventStage][]func(FlexEvent) (keepOn bool)
+	discards map[eventStage][]func(FlexEvent) (keepOn bool)
+	unLog    map[eventStage]bool
 }
 
 type eventHandler struct {
-	status     int64
-	latest     int64
-	expiration int64
+	handle  func(event FlexEvent) (keepOn bool)
+	target  *set[string]
+	exclude *set[string]
 }
 
-func (es *eventDispatcher) send(event FlexEvent) {
-	es.init.Do(es.start)
-	master := es.eventBus0
-	if atomic.LoadInt64(&es.using) == 1 {
-		master = es.eventBus1
-	}
+func HandlerRegistry() HandlerRegister {
+	return &handlerRegistry
+}
+
+func (ed *eventDispatcher) send(event FlexEvent) {
+	ed.init.Do(ed.start)
 	select {
-	case master <- event:
+	case ed.eventBus <- event:
 		return
 	default:
 	}
-	handlers := atomic.LoadInt64(&es.handlerNum)
-	if handlers <= int64(len(master)) && handlers < es.maxHandler {
-		go es.addHandler(event)
+	if ed.addHandler(event) {
 		return
 	}
-	go es.expand(event)
+	go handlerRegistry.discard(event)
 }
 
-func (es *eventDispatcher) start() {
-	es.eventBus0 = make(chan FlexEvent, 8)
-	es.eventBus1 = make(chan FlexEvent, 2)
+func (ed *eventDispatcher) start() {
+	ed.eventBus = make(chan FlexEvent, ed.capacity)
+	ed.quit = make(chan empty, 1)
+	ed.boostHandler()
 }
 
-func (es *eventDispatcher) addHandler(event FlexEvent) {
-	handler := es.findHandler()
+func (ed *eventDispatcher) boostHandler() {
+	boost := handlerLifecycle{
+		eventDispatcher: ed,
+		latest:          1,
+		status:          runningH,
+		expiration:      time.Now().Unix() + ed.timeoutSec,
+	}
+	go boost.loop(nil)
+	atomic.AddInt64(&ed.handlerNum, 1)
+	ed.Lock()
+	defer ed.Unlock()
+	ed.handlers = append(ed.handlers, &boost)
+}
+
+func (ed *eventDispatcher) exit() {
+	ed.quit <- empty{}
+}
+
+func (ed *eventDispatcher) addHandler(event FlexEvent) bool {
+	handler := ed.findHandler()
 	if handler != nil {
-		atomic.AddInt64(&handler.latest, 1)
-		atomic.StoreInt64(&handler.expiration, time.Now().Unix()+es.timeoutSec)
+		atomic.StoreInt64(&handler.expiration, time.Now().Unix()+ed.timeoutSec)
 		atomic.StoreInt64(&handler.status, runningH)
 		go handler.loop(event)
-		return
+		return true
 	}
-	es.expand(event)
+	return false
 }
 
-func (es *eventDispatcher) findHandler() *eventHandler {
-	if atomic.AddInt64(&es.handlerNum, 1) > es.maxHandler {
-		atomic.AddInt64(&es.handlerNum, -1)
+func (ed *eventDispatcher) findHandler() *handlerLifecycle {
+	if atomic.AddInt64(&ed.handlerNum, 1) > ed.maxHandler {
+		atomic.AddInt64(&ed.handlerNum, -1)
 		now := time.Now().Unix()
-		es.RLock()
-		defer es.RUnlock()
+		ed.RLock()
 		// Replace the timeout handler with a new one
-		for _, handler := range es.handlers {
-			if atomic.LoadInt64(&handler.expiration) > now && atomic.CompareAndSwapInt64(&handler.status, runningH, expiredH) {
+		start := rand.Intn(len(ed.handlers))
+		for i := 0; i < len(ed.handlers); i++ {
+			handler := ed.handlers[(start+i)%len(ed.handlers)]
+			if atomic.LoadInt64(&handler.expiration) <= now && atomic.CompareAndSwapInt64(&handler.status, runningH, expiredH) {
+				atomic.AddInt64(&handler.latest, 1)
+				ed.RUnlock()
 				return handler
 			}
+			println("here")
 		}
+		ed.RUnlock()
 		return nil
 	}
-	length := int64(len(es.handlers))
-	if length <= (es.handlerNum + es.handlerNum>>2) {
-		es.RLock()
-		defer es.RUnlock()
-		for _, handler := range es.handlers {
+	if len(ed.handlers) >= int(ed.handlerNum) {
+		ed.RLock()
+		for _, handler := range ed.handlers {
 			// reuse discard handler
 			if atomic.CompareAndSwapInt64(&handler.status, unattachedH, idleH) {
+				atomic.AddInt64(&handler.latest, 1)
+				ed.RUnlock()
 				return handler
 			}
 		}
+		ed.RUnlock()
 	}
-	handler := new(eventHandler)
-	es.Lock()
-	defer es.Unlock()
-	es.handlers = append(es.handlers, handler)
+	handler := new(handlerLifecycle)
+	handler.eventDispatcher = ed
+	ed.Lock()
+	defer ed.Unlock()
+	ed.handlers = append(ed.handlers, handler)
 	return handler
 }
 
-func (eh *eventHandler) loop(bind FlexEvent) {
-	// todo deal with bind event
-	index := atomic.LoadInt64(&eh.latest)
-	var event FlexEvent
+func (el *handlerLifecycle) loop(bind FlexEvent) {
+	if bind != nil {
+		handlerRegistry.handle(bind)
+	}
+	index := atomic.LoadInt64(&el.latest)
+	defer func() {
+		if r := recover(); r == nil {
+			return
+		}
+		el.Lock()
+		defer el.Unlock()
+		if index != atomic.LoadInt64(&el.latest) {
+			return
+		}
+		atomic.StoreInt64(&el.status, unattachedH)
+		atomic.AddInt64(&el.handlerNum, -1)
+	}()
 	for {
 		select {
-		case event = <-eventBus.eventBus0:
-			//todo handler event
-		case event = <-eventBus.eventBus1:
-			//todo handler event
+		case event := <-el.eventBus:
+			handlerRegistry.handle(event)
+		case <-el.quit:
+			el.quit <- empty{}
+			return
 		default:
-			if eh.tryDiscard() {
+			if el.tryUnattached() {
 				return
 			}
 		}
 		// handler timeout and is replaced by the new
-		if index != atomic.LoadInt64(&eh.latest) {
+		if index != atomic.LoadInt64(&el.latest) {
 			return
 		}
-		atomic.StoreInt64(&eh.expiration, time.Now().Unix()+eventBus.timeoutSec)
+		atomic.StoreInt64(&el.expiration, time.Now().Unix()+el.timeoutSec)
 	}
 }
 
-func (eh *eventHandler) tryDiscard() bool {
-	if !atomic.CompareAndSwapInt64(&eh.status, runningH, discardH) {
+func (el *handlerLifecycle) tryUnattached() bool {
+	// Prevent from marking as expired
+	if !atomic.CompareAndSwapInt64(&el.status, runningH, discardH) {
 		return false
 	}
-	var event FlexEvent
-	timer := time.NewTimer(30 * time.Second)
+	timer := time.NewTimer(waitEventTimeout)
 	select {
-	case event = <-eventBus.eventBus0:
-		//todo handler event
+	case event := <-el.eventBus:
+		handlerRegistry.handle(event)
+		atomic.CompareAndSwapInt64(&el.status, discardH, runningH)
 		return false
-	case event = <-eventBus.eventBus1:
-		//todo handler event
-		return false
+	case <-el.quit:
+		el.quit <- empty{}
+		return true
 	case <-timer.C:
 	}
-	discarding := atomic.LoadInt64(&eventBus.discarding)
+	discarding := atomic.LoadInt64(&el.discarding)
 	// Gradually remove the excess handlers.
-	if time.Now().Unix()-discarding > 30 {
-		return atomic.CompareAndSwapInt64(&eventBus.discarding, discarding, time.Now().Unix())
+	if time.Now().Unix()-discarding >= discardDelay {
+		if atomic.CompareAndSwapInt64(&el.discarding, discarding, time.Now().Unix()) {
+			atomic.StoreInt64(&el.status, unattachedH)
+			atomic.AddInt64(&el.handlerNum, -1)
+			return true
+		}
 	}
+	atomic.CompareAndSwapInt64(&el.status, discardH, runningH)
 	return false
 }
 
-func (es *eventDispatcher) expand(bind FlexEvent) {
-	if es.tryDiscardEvent(bind) {
-		return
-	}
-	if atomic.LoadInt64(&es.busStatus) == busExpand || !atomic.CompareAndSwapInt64(&es.busStatus, busIdle, busExpand) {
-		es.Wait()
-		es.send(bind)
-		return
-	}
+func (h *handlerRegister) Handle(stage eventStage, handlers ...func(event FlexEvent) (keepOn bool)) HandlerRegister {
+	h.handlers[stage] = append(h.handlers[stage], handlers...)
+	return h
+}
 
-	capacity := es.handlerNum + es.handlerNum/2
-	slave := es.eventBus1
-	if es.using == 1 {
-		slave = es.eventBus0
-	}
-	if len(slave) != 0 {
-		capacity = es.handlerNum + es.handlerNum
-	}
+func (h *handlerRegister) Discard(stage eventStage, discards ...func(event FlexEvent) (keepOn bool)) HandlerRegister {
+	h.discards[stage] = append(h.discards[stage], discards...)
+	return h
+}
 
-	if len(slave) >= int(capacity) {
-		atomic.StoreInt64(&es.using, ^es.using)
-		atomic.StoreInt64(&es.busStatus, busIdle)
-		return
+func (h *handlerRegister) DisableLog(stages ...eventStage) HandlerRegister {
+	for _, stage := range stages {
+		h.unLog[stage] = true
 	}
+	return h
+}
 
-	newMaster := make(chan FlexEvent, capacity)
-	keepOn := true
-	for {
-		select {
-		case e := <-slave:
-			newMaster <- e
-		default:
-			keepOn = false
+func (h *handlerRegister) Capacity(capacity int) HandlerRegister {
+	if capacity <= 0 {
+		panic("The capacity must be greater than 0")
+	}
+	dispatcher.capacity = capacity
+	return h
+}
+
+func (h *handlerRegister) MaxHandler(num int) HandlerRegister {
+	dispatcher.maxHandler = int64(num)
+	return h
+}
+
+func (h *handlerRegister) EventTimeoutSec(sec int) HandlerRegister {
+	dispatcher.timeoutSec = int64(sec)
+	return h
+}
+
+func (h *handlerRegister) handle(event FlexEvent) {
+	defer func() {
+		if r := recover(); r != nil {
+			//todo log panic
 		}
-		if !keepOn {
-			break
-		}
+	}()
+	if !h.unLog[event.Stage()] {
+		// log it
 	}
-
-	atomic.StoreInt64(&es.using, ^es.using)
-	atomic.StoreInt64(&es.busStatus, busIdle)
-
-	// DCL
-	for {
-		select {
-		case e := <-slave:
-			newMaster <- e
-		default:
-			keepOn = false
-		}
-		if !keepOn {
-			break
+	for _, handler := range h.handlers[event.Stage()] {
+		if !handler(event) {
+			return
 		}
 	}
 }
 
-func (es *eventDispatcher) tryDiscardEvent(event FlexEvent) bool {
-	if es.maxBus <= 0 {
-		return false
+func (h *handlerRegister) discard(event FlexEvent) {
+	defer func() {
+		if r := recover(); r != nil {
+			//todo log panic
+		}
+	}()
+	if !h.unLog[event.Stage()] {
+		// log it
 	}
-	if len(es.eventBus0) >= es.maxBus || len(es.eventBus1) >= es.maxBus {
-		//todo discard event
-		return true
+	for _, handler := range h.discards[event.Stage()] {
+		if !handler(event) {
+			return
+		}
 	}
-	return false
 }

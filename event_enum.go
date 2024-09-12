@@ -10,11 +10,18 @@ type eventScope uint8
 
 type extraIndex uint8
 
+/*************************************************************
+ * Event Scope
+ *************************************************************/
 const (
 	FlowScp eventScope = iota
 	ProcScp
 	StepScp
 )
+
+/*************************************************************
+ * Event Stage
+ *************************************************************/
 
 const (
 	InCondition eventStage = iota
@@ -23,6 +30,10 @@ const (
 	InSuspend
 	InRecover
 )
+
+/*************************************************************
+ * Event Severity
+ *************************************************************/
 
 const (
 	HintLevel eventSeverity = iota
