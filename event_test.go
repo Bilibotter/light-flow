@@ -54,6 +54,41 @@ type eventImpl struct {
 	name string
 }
 
+func (e *eventImpl) ExtraInfo() map[string]string {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (e *eventImpl) Extra(key string) string {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (e *eventImpl) FlowID() string {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (e *eventImpl) FlowName() string {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (e *eventImpl) ProcessID() string {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (e *eventImpl) ProcessName() string {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (e *eventImpl) Get(key string) (any, bool) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (e *eventImpl) Panic() any {
 	//TODO implement me
 	panic("implement me")
@@ -65,11 +100,6 @@ func (e *eventImpl) EventID() string {
 }
 
 func (e *eventImpl) Level() eventLevel {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (e *eventImpl) Extra() map[string]string {
 	//TODO implement me
 	panic("implement me")
 }
@@ -107,27 +137,12 @@ func (e *eventImpl) Severity() eventLevel {
 	panic("implement me")
 }
 
-func (e *eventImpl) Scope() eventScope {
+func (e *eventImpl) Layer() eventLayer {
 	//TODO implement me
 	panic("implement me")
 }
 
 func (e *eventImpl) Timestamp() time.Time {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (e *eventImpl) Flow() FlowInfo {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (e *eventImpl) Proc() ProcInfo {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (e *eventImpl) Step() StepInfo {
 	//TODO implement me
 	panic("implement me")
 }

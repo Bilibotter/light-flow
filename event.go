@@ -62,9 +62,9 @@ type HandlerRegister interface {
 
 type FlexEvent interface {
 	basicEventI
-	Flow() FlowInfo // never return nil
-	Proc() ProcInfo // if event is not a proc event or step event, return nil
-	Step() StepInfo // if event is not a step event, return nil
+	flowInfo
+	procInfo
+	Get(key string) (any, bool) // Get value from context, only available for step and process.
 }
 
 type basicEventI interface {
@@ -74,32 +74,18 @@ type basicEventI interface {
 	EventID() string
 	Stage() eventStage
 	Level() eventLevel
-	Scope() eventScope
+	Layer() eventLayer
 	Timestamp() time.Time
-	Extra() map[string]string
-	// Fetch fetches the value of a key from the event's extra map.
+	ExtraInfo() map[string]string
+	// Extra fetches the value of a key from the event's extra map.
 	// If the key does not exist, an empty string is returned.
-	Fetch(key string) string
+	Extra(key string) string
 }
 
 type exception interface {
 	error
 	Panic() any
 	StackTrace() []byte // only panic event has stack trace
-}
-
-type FlowInfo interface {
-	flowRuntime
-}
-
-type ProcInfo interface {
-	procRuntime
-	Get(key string) (value any, exist bool)
-}
-
-type StepInfo interface {
-	stepRuntime
-	Get(key string) (value any, exist bool)
 }
 
 type eventDispatcher struct {
@@ -127,7 +113,7 @@ type flexEvent struct {
 	error
 	proto
 	eventStage
-	eventScope
+	eventLayer
 	eventLevel
 	eventID   string
 	timestamp time.Time
@@ -178,11 +164,11 @@ func newEvent[T proto](runtime T, stage eventStage) *flexEvent {
 	}
 	switch any(runtime).(type) {
 	case *runFlow:
-		event.eventScope = FlowScp
+		event.eventLayer = FlowLyr
 	case *runProcess:
-		event.eventScope = ProcScp
+		event.eventLayer = ProcLyr
 	case *runStep:
-		event.eventScope = StepScp
+		event.eventLayer = StepLyr
 	}
 	return event
 }
@@ -192,7 +178,10 @@ func newEventRegister() *handlerRegister {
 		handlers: make(map[eventStage][]func(FlexEvent) (keepOn bool)),
 		discards: make(map[eventStage][]func(FlexEvent) (keepOn bool)),
 		unLog:    make(map[eventStage]bool),
-		logs:     map[eventStage]func(event FlexEvent){InCallback: callbackLog},
+		logs: map[eventStage]func(event FlexEvent){
+			InCallback: commonLog(callbackOrder),
+			InSuspend:  commonLog(suspendOrder),
+		},
 	}
 }
 
@@ -439,51 +428,77 @@ func (f *flexEvent) Level() eventLevel {
 	return f.eventLevel
 }
 
-func (f *flexEvent) Scope() eventScope {
-	return f.eventScope
+func (f *flexEvent) Layer() eventLayer {
+	return f.eventLayer
 }
 
 func (f *flexEvent) Timestamp() time.Time {
 	return f.timestamp
 }
 
-func (f *flexEvent) Extra() map[string]string {
+func (f *flexEvent) ExtraInfo() map[string]string {
 	return f.extra
 }
 
-func (f *flexEvent) Fetch(key string) string {
+func (f *flexEvent) Extra(key string) string {
 	return f.extra[key]
 }
 
-func (f *flexEvent) Flow() FlowInfo {
+func (f *flexEvent) FlowID() string {
 	switch f.proto.(type) {
 	case *runFlow:
-		return f.proto.(*runFlow)
+		return f.proto.(*runFlow).ID()
 	case *runProcess:
-		return f.proto.(*runProcess).belong
+		return f.proto.(*runProcess).FlowID()
 	case *runStep:
-		return f.proto.(*runStep).belong.belong
+		return f.proto.(*runStep).FlowID()
 	default:
-		return nil
+		return ""
 	}
 }
 
-func (f *flexEvent) Proc() ProcInfo {
+func (f *flexEvent) FlowName() string {
 	switch f.proto.(type) {
+	case *runFlow:
+		return f.proto.(*runFlow).Name()
 	case *runProcess:
-		return f.proto.(*runProcess)
+		return f.proto.(*runProcess).FlowName()
 	case *runStep:
-		return f.proto.(*runStep).belong
+		return f.proto.(*runStep).FlowName()
 	default:
-		return nil
+		return ""
 	}
 }
 
-func (f *flexEvent) Step() StepInfo {
+func (f *flexEvent) ProcessID() string {
 	switch f.proto.(type) {
+	case *runProcess:
+		return f.proto.(*runProcess).Name()
 	case *runStep:
-		return f.proto.(*runStep)
+		return f.proto.(*runStep).ProcessName()
 	default:
-		return nil
+		return ""
+	}
+}
+
+func (f *flexEvent) ProcessName() string {
+	switch f.proto.(type) {
+	case *runProcess:
+		return f.proto.(*runProcess).ID()
+	case *runStep:
+		return f.proto.(*runStep).ProcessID()
+	default:
+		return ""
+	}
+}
+
+func (f *flexEvent) Get(key string) (any, bool) {
+	switch f.proto.(type) {
+	case *runProcess:
+		return f.proto.(*runProcess).Get(key)
+	case *runStep:
+		return f.proto.(*runStep).Get(key)
+	default:
+		return nil, false
 	}
 }

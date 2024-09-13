@@ -282,6 +282,7 @@ func TestMain(m *testing.M) {
 		}
 		pool <- db
 	}
+	flow.SetEncryptor(flow.NewAES256Encryptor([]byte("light-flow"), "pwd", "password"))
 	flow.SetMaxSerializeSize(10240)
 	flow.SetPersist(&persisitImpl{})
 	flow.RegisterType[Person]()

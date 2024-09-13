@@ -33,9 +33,9 @@ const (
 )
 
 var (
-	maxSize                          = 4096
-	enableEncrypt                    = true
-	pwdEncryptor  SymmetricEncryptor = &aes256Encryptor{newRoutineUnsafeSet[string]("pwd", "password")}
+	maxSize       = 4096
+	enableEncrypt = false
+	pwdEncryptor  SymmetricEncryptor
 	persister     Persist
 )
 
@@ -139,6 +139,7 @@ type stepCheckpoint struct {
 
 type aes256Encryptor struct {
 	*set[string]
+	secret []byte
 }
 
 func init() {
@@ -155,12 +156,21 @@ func init() {
 	RegisterType[map[string]*resSerializable]()
 }
 
+func suspendExtra(position string) map[string]string {
+	return map[string]string{"Position": position}
+}
+
 func DisableEncrypt() {
 	enableEncrypt = false
 }
 
+func NewAES256Encryptor(secret []byte, needEncrypt ...string) SymmetricEncryptor {
+	return &aes256Encryptor{newRoutineUnsafeSet[string](needEncrypt...), secret}
+}
+
 func SetEncryptor(encryptor SymmetricEncryptor) {
 	pwdEncryptor = encryptor
+	enableEncrypt = true
 }
 
 func SetPersist(impl Persist) {
@@ -379,16 +389,6 @@ func unwrapInterfaceMap(listMap []map[string]any) {
 	}
 }
 
-func createSecret(checkpoint CheckPoint) []byte {
-	secret := pwdEncryptor.GetSecret()
-	if secret == nil {
-		if _, ok := pwdEncryptor.(*aes256Encryptor); ok {
-			secret = []byte(checkpoint.GetRecoverId())
-		}
-	}
-	return secret
-}
-
 func serialize[T any](value T) ([]byte, error) {
 	wrapIfNeed(value)
 	var buf bytes.Buffer
@@ -417,7 +417,7 @@ func deserialize[T any](data []byte) (result T, err error) {
 	return result, nil
 }
 
-func encryptIfNeed(key string, value any, secret []byte) (any, error) {
+func encryptIfNeed(key string, value any) (any, error) {
 	if !enableEncrypt {
 		return value, nil
 	}
@@ -425,7 +425,7 @@ func encryptIfNeed(key string, value any, secret []byte) (any, error) {
 		return value, nil
 	}
 	if plainText, ok := value.(string); ok {
-		return pwdEncryptor.Encrypt(plainText, secret)
+		return pwdEncryptor.Encrypt(plainText, pwdEncryptor.GetSecret())
 	}
 	return value, nil
 }
@@ -464,7 +464,7 @@ func (b *aes256Encryptor) NeedEncrypt(key string) bool {
 }
 
 func (b *aes256Encryptor) GetSecret() []byte {
-	return nil
+	return b.secret
 }
 
 func (b *aes256Encryptor) Encrypt(plainText string, secret []byte) (string, error) {
@@ -548,13 +548,14 @@ func (point *flowCheckpoint) setRecoverId(id string) {
 }
 
 func (point *flowCheckpoint) buildSnapshot() (err error) {
-	secret := createSecret(point)
 	ctx := make(map[string]any)
 	for k, v := range point.table {
 		// remove breakpoints not saved in current recovery
-		ctx[k], err = encryptIfNeed(k, v, secret)
+		ctx[k], err = encryptIfNeed(k, v)
 		if err != nil {
-			logger.Errorf(snapshotErrorLog, "WorkFlow", point.GetName(), point.GetUid(), "encrypt", err.Error())
+			event := errorEvent(point.runFlow, InSuspend, err)
+			event.extra = suspendExtra("Encrypt")
+			dispatcher.send(event)
 			return
 		}
 	}
@@ -567,7 +568,9 @@ func (point *flowCheckpoint) buildSnapshot() (err error) {
 	}
 	point.snapshot, err = serialize([]map[string]any{ctx, point.internal})
 	if err != nil {
-		logger.Errorf(snapshotErrorLog, "WorkFlow", point.GetName(), point.GetUid(), "serialize", err.Error())
+		event := errorEvent(point.runFlow, InSuspend, err)
+		event.extra = suspendExtra("Serialize")
+		dispatcher.send(event)
 	}
 	return
 }
@@ -613,7 +616,6 @@ func (point *procCheckpoint) setRecoverId(id string) {
 }
 
 func (point *procCheckpoint) buildSnapshot() (err error) {
-	secret := createSecret(point)
 	snapshot := make(map[string][]node)
 	for k := range point.nodes {
 		for head := point.nodes[k]; head != nil; head = head.Next {
@@ -623,9 +625,11 @@ func (point *procCheckpoint) buildSnapshot() (err error) {
 					continue
 				}
 			}
-			head.Value, err = encryptIfNeed(k, head.Value, secret)
+			head.Value, err = encryptIfNeed(k, head.Value)
 			if err != nil {
-				logger.Errorf(snapshotErrorLog, "Process", point.GetName(), point.GetUid(), "encrypt", err.Error())
+				event := errorEvent(point.runProcess, InSuspend, err)
+				event.extra = suspendExtra("Encrypt")
+				dispatcher.send(event)
 				return
 			}
 			snapshot[k] = append(snapshot[k], *head)
@@ -633,7 +637,9 @@ func (point *procCheckpoint) buildSnapshot() (err error) {
 	}
 	point.snapshot, err = serialize(snapshot)
 	if err != nil {
-		logger.Errorf(snapshotErrorLog, "Process", point.GetName(), point.GetUid(), "serialize", err.Error())
+		event := errorEvent(point.runProcess, InSuspend, err)
+		event.extra = suspendExtra("Serialize")
+		dispatcher.send(event)
 	}
 	return
 }
@@ -695,7 +701,7 @@ func (rf *runFlow) loadCheckpoint(checkpoint CheckPoint) error {
 	snapshot := combine[0]
 	for k := range snapshot {
 		v := snapshot[k]
-		snapshot[k], err = decryptIfNeed(k, v, createSecret(checkpoint))
+		snapshot[k], err = decryptIfNeed(k, v, pwdEncryptor.GetSecret())
 		if err != nil {
 			return err
 		}
@@ -714,7 +720,8 @@ func (rf *runFlow) loadCheckpoint(checkpoint CheckPoint) error {
 func (rf *runFlow) saveCheckpoints() {
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Errorf(saveLog, rf.name, rf.id, r, stack())
+			event := panicEvent(rf, InSuspend, r, stack())
+			dispatcher.send(event)
 		}
 	}()
 	checkpoints := make([]CheckPoint, 0)
@@ -745,7 +752,10 @@ func (rf *runFlow) saveCheckpoints() {
 		Name:      rf.name,
 	}
 	if err := persister.SaveCheckpointAndRecord(checkpoints, record); err != nil {
-		panic(err)
+		event := errorEvent(rf, InSuspend, err)
+		event.extra = suspendExtra("Save")
+		dispatcher.send(event)
+		return
 	}
 }
 
@@ -770,7 +780,7 @@ func (process *runProcess) loadCheckpoint(checkpoint CheckPoint) error {
 			if point, ok := nodeList[i].Value.(*breakPoint); ok {
 				point.Used = true
 			}
-			newNode.Value, err = decryptIfNeed(k, nodeList[i].Value, createSecret(checkpoint))
+			newNode.Value, err = decryptIfNeed(k, nodeList[i].Value, pwdEncryptor.GetSecret())
 			if err != nil {
 				err = fmt.Errorf("recovery failed: decrypt error: %w", err)
 				return err

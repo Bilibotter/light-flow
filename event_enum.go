@@ -6,15 +6,15 @@ type eventStage uint8
 
 type eventLevel uint8
 
-type eventScope uint8
+type eventLayer uint8
 
 /*************************************************************
  * Event Scope
  *************************************************************/
 const (
-	FlowScp eventScope = iota
-	ProcScp
-	StepScp
+	FlowLyr eventLayer = iota
+	ProcLyr
+	StepLyr
 )
 
 /*************************************************************
@@ -41,13 +41,13 @@ const (
 	PanicLevel
 )
 
-func (s eventScope) String() string {
+func (s eventLayer) String() string {
 	switch s {
-	case FlowScp:
+	case FlowLyr:
 		return "Flow"
-	case ProcScp:
+	case ProcLyr:
 		return "Process"
-	case StepScp:
+	case StepLyr:
 		return "Step"
 	default:
 		return "Unknown"

@@ -113,22 +113,12 @@ func ResetDefaultCallback() {
 
 func callbackExtra(necessity, position, scope, order string) map[string]string {
 	extra := map[string]string{
-		"necessity": necessity,
-		"position":  position,
-		"scope":     scope,
-		"order":     order,
+		"Necessity": necessity,
+		"Position":  position,
+		"Scope":     scope,
+		"Order":     order,
 	}
 	return extra
-}
-
-func callbackLog(event FlexEvent) {
-	if event.Level() == ErrorLevel {
-		logger.Errorf(callbackErrorFmt, event.Stage(), event.Fetch("position"), event.Fetch("order"), event.Fetch("scope"), event.Fetch("necessity"), event.Error())
-		return
-	}
-	if event.Level() == PanicLevel {
-		logger.Errorf(callbackPanicFmt, event.Stage(), event.Fetch("position"), event.Fetch("order"), event.Fetch("scope"), event.Fetch("necessity"), event.Panic(), event.StackTrace())
-	}
 }
 
 func buildFlowCallback(scope string) flowCallback {

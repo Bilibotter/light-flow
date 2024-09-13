@@ -1,20 +1,25 @@
 package light_flow
 
 import (
+	"fmt"
 	"log"
 	"os"
+	"strings"
+)
+
+var (
+	callbackOrder = []string{"Position", "Order", "Scope", "Necessity"}
+	suspendOrder  = []string{"Position"}
 )
 
 const (
 	resourceErrorFmt = "Process[Name: %s, ID: %s] %s Resource[ %s ] failed;\nerror=%s"
 	resourcePanicFmt = "Process[Name: %s, ID: %s] %s Resource[ %s ] panic;\npanic=%v\n%s"
 	recoverLog       = "panic occur while WorkFlow[ %s ] recovering;\nID=%s\nPanic=%s\n%s"
-	saveLog          = "panic occur while WorkFlow[ %s ] saving checkpoints;\nID=%s\nPanic=%s\n%s"
-	callbackPanicFmt = "[Stage: %s] [Position: %s] [Order: %s] [Scope: %s] [Necessity: %s] - Failed | Panic: %v\n%s"
-	callbackErrorFmt = "[Stage: %s] [Position: %s] [Order: %s] [Scope: %s] [Necessity: %s] - Failed | Error: %s"
-	snapshotErrorLog = "build snapshot failed: %s[Name=%s, ID=%s] %s error: %s"
 	persistPanicLog  = "persist failed: %s[Name:%s, ID:%s] persist panic while %s\npanic: %v\n%s"
 	persistErrorLog  = "persist failed: %s[Name:%s, ID:%s] persist error while %s: %s"
+	errorLog         = "[Stage: %s] [%s: %s] %s[ID: %s] - Failed | Error: %s"
+	panicLog         = "[Stage: %s] [%s: %s] %s[ID: %s] - Failed | Panic: %v\n%s"
 )
 
 const (
@@ -44,6 +49,24 @@ type LoggerI interface {
 // defaultLogger
 type defaultLogger struct {
 	*log.Logger
+}
+
+func commonLog(order []string) func(event FlexEvent) {
+	return func(event FlexEvent) {
+		sb := strings.Builder{}
+		if event.ExtraInfo() != nil {
+			for _, key := range order {
+				sb.WriteString(fmt.Sprintf("[%s: %s] ", key, event.Extra(key)))
+			}
+		}
+		if event.Level() == ErrorLevel {
+			logger.Errorf(errorLog, event.Stage(), event.Layer(), event.Name(), sb.String(), event.ID(), event.Error())
+			return
+		}
+		if event.Level() == PanicLevel {
+			logger.Errorf(panicLog, event.Stage(), event.Layer(), event.Name(), sb.String(), event.ID(), event.Panic(), event.StackTrace())
+		}
+	}
 }
 
 func newDefaultLogger() *defaultLogger {
