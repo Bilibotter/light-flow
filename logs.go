@@ -8,14 +8,14 @@ import (
 )
 
 var (
-	callbackOrder = []string{"Position", "Order", "Scope", "Necessity"}
-	suspendOrder  = []string{"Position"}
+	callbackOrder = []string{"Location", "Order", "Scope", "Necessity"}
+	suspendOrder  = []string{"Location"}
+	recoverOrder  = []string{"Location"}
 )
 
 const (
 	resourceErrorFmt = "Process[Name: %s, ID: %s] %s Resource[ %s ] failed;\nerror=%s"
 	resourcePanicFmt = "Process[Name: %s, ID: %s] %s Resource[ %s ] panic;\npanic=%v\n%s"
-	recoverLog       = "panic occur while WorkFlow[ %s ] recovering;\nID=%s\nPanic=%s\n%s"
 	persistPanicLog  = "persist failed: %s[Name:%s, ID:%s] persist panic while %s\npanic: %v\n%s"
 	persistErrorLog  = "persist failed: %s[Name:%s, ID:%s] persist error while %s: %s"
 	errorLog         = "[Stage: %s] [%s: %s] %s[ID: %s] - Failed | Error: %s"

@@ -13,48 +13,55 @@ type noSerializable struct {
 }
 
 type errorSave struct {
-	saveError bool
-	savePanic bool
+	persist                      *persisitImpl
+	latestRecordError            bool
+	latestRecordPanic            bool
+	listPointsError              bool
+	listPointsPanic              bool
+	updateRecordError            bool
+	updateRecordPanic            bool
+	saveCheckpointAndRecordError bool
+	saveCheckpointAndRecordPanic bool
 }
 
 func (e *errorSave) GetLatestRecord(rootUid string) (flow.RecoverRecord, error) {
-	if e.saveError {
+	if e.latestRecordError {
 		return nil, fmt.Errorf("save error")
 	}
-	if e.savePanic {
+	if e.latestRecordPanic {
 		panic("save panic")
 	}
-	return nil, nil
+	return e.persist.GetLatestRecord(rootUid)
 }
 
 func (e *errorSave) ListCheckpoints(recoveryId string) ([]flow.CheckPoint, error) {
-	if e.saveError {
+	if e.listPointsError {
 		return nil, fmt.Errorf("save error")
 	}
-	if e.savePanic {
+	if e.listPointsPanic {
 		panic("save panic")
 	}
-	return nil, nil
+	return e.persist.ListCheckpoints(recoveryId)
 }
 
 func (e *errorSave) UpdateRecordStatus(record flow.RecoverRecord) error {
-	if e.saveError {
+	if e.updateRecordError {
 		return fmt.Errorf("save error")
 	}
-	if e.savePanic {
+	if e.updateRecordPanic {
 		panic("save panic")
 	}
-	return nil
+	return e.persist.UpdateRecordStatus(record)
 }
 
 func (e *errorSave) SaveCheckpointAndRecord(checkpoint []flow.CheckPoint, record flow.RecoverRecord) error {
-	if e.saveError {
+	if e.saveCheckpointAndRecordError {
 		return fmt.Errorf("save error")
 	}
-	if e.savePanic {
+	if e.saveCheckpointAndRecordPanic {
 		panic("save panic")
 	}
-	return nil
+	return e.persist.SaveCheckpointAndRecord(checkpoint, record)
 }
 
 type errorEncryptor struct {
@@ -93,7 +100,7 @@ func (e *errorEncryptor) GetSecret() []byte {
 }
 
 func resetEventEnv() {
-	flow.SetPersist(&persisitImpl{})
+	flow.SuspendPersist(&persisitImpl{})
 	flow.HandlerRegistry().Clear()
 	flow.SetEncryptor(flow.NewAES256Encryptor([]byte("light-flow"), "pwd", "password"))
 	resetCurrent()
@@ -144,11 +151,56 @@ func eventCheck(t *testing.T) func(event flow.FlexEvent) {
 	}
 }
 
+func flexErrorCheck(t *testing.T, stage flow.EventStage, location string) func(event flow.FlexEvent) bool {
+	f := eventCheck(t)
+	return func(event flow.FlexEvent) bool {
+		t.Logf("Event[ %s ] start", event.Name())
+		f(event)
+		if event.Error() == "" {
+			t.Errorf("Expected error, got empty")
+		}
+		if event.Level() != flow.ErrorLevel {
+			t.Errorf("Expected error event, got %s", event.Level())
+		}
+		if event.Extra("Location") != location {
+			t.Errorf("Expected location %s, got %s", location, event.Extra("Location"))
+		}
+		if event.Stage() != stage {
+			t.Errorf("Expected stage %s, got %s", stage, event.Stage())
+		}
+		t.Logf("Event[ %s ] end", event.Name())
+		atomic.AddInt64(&current, 1)
+		return true
+	}
+}
+
+func flexPanicCheck(t *testing.T, stage flow.EventStage, location string) func(event flow.FlexEvent) bool {
+	f := eventCheck(t)
+	return func(event flow.FlexEvent) bool {
+		t.Logf("Event[ %s ] start", event.Name())
+		f(event)
+		if event.Level() != flow.PanicLevel {
+			t.Errorf("Expected error event, got %s", event.Level())
+		}
+		if event.StackTrace() == nil {
+			t.Errorf("Expected stack trace, got nil")
+		}
+		if event.Extra("Location") != location {
+			t.Errorf("Expected location %s, got %s", location, event.Extra("Location"))
+		}
+		if event.Stage() != stage {
+			t.Errorf("Expected stage %s, got %s", stage, event.Stage())
+		}
+		t.Logf("Event[ %s ] end", event.Name())
+		atomic.AddInt64(&current, 1)
+		return true
+	}
+}
+
 func callbackErrHandler(t *testing.T) func(event flow.FlexEvent) (keepOn bool) {
 	f := eventCheck(t)
 	return func(event flow.FlexEvent) (keepOn bool) {
 		t.Logf("Event[ %s ] start", event.Name())
-		atomic.AddInt64(&current, 1)
 		f(event)
 		if event.Error() == "" {
 			t.Errorf("Expected error, got empty")
@@ -159,7 +211,7 @@ func callbackErrHandler(t *testing.T) func(event flow.FlexEvent) (keepOn bool) {
 		if event.Stage() != flow.InCallback {
 			t.Errorf("Expected stage, got %s", event.Stage())
 		}
-		if event.Extra("Position") == "" {
+		if event.Extra("Location") == "" {
 			t.Errorf("Expected position, got empty string")
 		}
 		if event.Extra("Order") == "" {
@@ -172,6 +224,7 @@ func callbackErrHandler(t *testing.T) func(event flow.FlexEvent) (keepOn bool) {
 			t.Errorf("Expected scope, got empty string")
 		}
 		t.Logf("Event[ %s ] end", event.Name())
+		atomic.AddInt64(&current, 1)
 		return true
 	}
 }
@@ -181,7 +234,6 @@ func callbackPanicHandler(t *testing.T) func(event flow.FlexEvent) (keepOn bool)
 	return func(event flow.FlexEvent) (keepOn bool) {
 		t.Logf("Event[ %s ] start", event.Name())
 		f(event)
-		atomic.AddInt64(&current, 1)
 		if event.Panic() == nil {
 			t.Errorf("Expected panic, got nil")
 		}
@@ -194,7 +246,7 @@ func callbackPanicHandler(t *testing.T) func(event flow.FlexEvent) (keepOn bool)
 		if event.Stage() != flow.InCallback {
 			t.Errorf("Expected stage, got %s", event.Stage())
 		}
-		if event.Extra("Position") == "" {
+		if event.Extra("Location") == "" {
 			t.Errorf("Expected position, got empty string")
 		}
 		if event.Extra("Order") == "" {
@@ -207,6 +259,7 @@ func callbackPanicHandler(t *testing.T) func(event flow.FlexEvent) (keepOn bool)
 			t.Errorf("Expected scope, got empty string")
 		}
 		t.Logf("Event[ %s ] end", event.Name())
+		atomic.AddInt64(&current, 1)
 		return true
 	}
 }
@@ -216,7 +269,6 @@ func encryptErrorHandler(t *testing.T) func(event flow.FlexEvent) (keepOn bool) 
 	return func(event flow.FlexEvent) (keepOn bool) {
 		t.Logf("Event[ %s ] start", event.Name())
 		f(event)
-		atomic.AddInt64(&current, 1)
 		if event.Error() == "" {
 			t.Errorf("Expected error, got empty")
 		}
@@ -226,10 +278,11 @@ func encryptErrorHandler(t *testing.T) func(event flow.FlexEvent) (keepOn bool) 
 		if event.Stage() != flow.InSuspend {
 			t.Errorf("Expected stage, got %s", event.Stage())
 		}
-		if event.Extra("Position") != "Encrypt" {
-			t.Errorf("Expected position, got %s", event.Extra("Position"))
+		if event.Extra("Location") != "Encrypt" {
+			t.Errorf("Expected position, got %s", event.Extra("Location"))
 		}
 		t.Logf("Event[ %s ] end", event.Name())
+		atomic.AddInt64(&current, 1)
 		return true
 	}
 }
@@ -239,7 +292,6 @@ func saveErrorHandler(t *testing.T) func(event flow.FlexEvent) (keepOn bool) {
 	return func(event flow.FlexEvent) (keepOn bool) {
 		t.Logf("Event[ %s ] start", event.Name())
 		f(event)
-		atomic.AddInt64(&current, 1)
 		if event.Error() == "" {
 			t.Errorf("Expected error, got empty")
 		}
@@ -249,10 +301,11 @@ func saveErrorHandler(t *testing.T) func(event flow.FlexEvent) (keepOn bool) {
 		if event.Stage() != flow.InSuspend {
 			t.Errorf("Expected stage, got %s", event.Stage())
 		}
-		if event.Extra("Position") != "Save" {
-			t.Errorf("Expected position, got %s", event.Extra("Position"))
+		if event.Extra("Location") != "Persist" {
+			t.Errorf("Expected position, got %s", event.Extra("Location"))
 		}
 		t.Logf("Event[ %s ] end", event.Name())
+		atomic.AddInt64(&current, 1)
 		return true
 	}
 }
@@ -262,7 +315,6 @@ func serializeErrorHandler(t *testing.T) func(event flow.FlexEvent) (keepOn bool
 	return func(event flow.FlexEvent) (keepOn bool) {
 		t.Logf("Event[ %s ] start", event.Name())
 		f(event)
-		atomic.AddInt64(&current, 1)
 		if event.Error() == "" {
 			t.Errorf("Expected error, got empty")
 		}
@@ -272,10 +324,11 @@ func serializeErrorHandler(t *testing.T) func(event flow.FlexEvent) (keepOn bool
 		if event.Stage() != flow.InSuspend {
 			t.Errorf("Expected stage, got %s", event.Stage())
 		}
-		if event.Extra("Position") != "Serialize" {
-			t.Errorf("Expected position, got %s", event.Extra("Position"))
+		if event.Extra("Location") != "Serialize" {
+			t.Errorf("Expected position, got %s", event.Extra("Location"))
 		}
 		t.Logf("Event[ %s ] end", event.Name())
+		atomic.AddInt64(&current, 1)
 		return true
 	}
 }
@@ -285,7 +338,6 @@ func suspendPanicHandler(t *testing.T) func(event flow.FlexEvent) (keepOn bool) 
 	return func(event flow.FlexEvent) (keepOn bool) {
 		t.Logf("Event[ %s ] start", event.Name())
 		f(event)
-		atomic.AddInt64(&current, 1)
 		if event.Panic() == nil {
 			t.Errorf("Expected panic, got nil")
 		}
@@ -299,6 +351,7 @@ func suspendPanicHandler(t *testing.T) func(event flow.FlexEvent) (keepOn bool) 
 			t.Errorf("Expected stage, got %s", event.Stage())
 		}
 		t.Logf("Event[ %s ] end", event.Name())
+		atomic.AddInt64(&current, 1)
 		return true
 	}
 }
@@ -365,15 +418,15 @@ func TestCallbackPanicEvent(t *testing.T) {
 	CheckResult(t, 3, flow.CallbackFail)(any(ff).(flow.WorkFlow))
 }
 
-func TestEncryptErrorEvent(t *testing.T) {
+func TestSuspendEncryptErrorEvent(t *testing.T) {
 	defer resetEventEnv()
 	flow.SetEncryptor(&errorEncryptor{encryptFailed: true})
 	flow.HandlerRegistry().Handle(flow.InSuspend, encryptErrorHandler(t))
-	wf := flow.RegisterFlow("TestEncryptErrorEvent")
+	wf := flow.RegisterFlow("TestSuspendEncryptErrorEvent")
 	wf.EnableRecover()
-	process := wf.Process("TestEncryptErrorEvent")
+	process := wf.Process("TestSuspendEncryptErrorEvent")
 	process.NameStep(Fx[flow.Step](t).SetCtx().Recover().Step(), "1")
-	ff := flow.DoneFlow("TestEncryptErrorEvent", nil)
+	ff := flow.DoneFlow("TestSuspendEncryptErrorEvent", nil)
 	waitCurrent(3)
 	CheckResult(t, 3, flow.Error)(any(ff).(flow.WorkFlow))
 	_, err := ff.Recover()
@@ -401,15 +454,15 @@ func TestEncryptErrorEvent(t *testing.T) {
 	}
 }
 
-func TestSaveErrorEvent(t *testing.T) {
+func TestSuspendSaveErrorEvent(t *testing.T) {
 	defer resetEventEnv()
-	flow.SetPersist(&errorSave{saveError: true})
+	flow.SuspendPersist(&errorSave{persist: &persisitImpl{}, saveCheckpointAndRecordError: true})
 	flow.HandlerRegistry().Handle(flow.InSuspend, saveErrorHandler(t))
-	wf := flow.RegisterFlow("TestSaveErrorEvent")
+	wf := flow.RegisterFlow("TestSuspendSaveErrorEvent")
 	wf.EnableRecover()
-	process := wf.Process("TestSaveErrorEvent")
+	process := wf.Process("TestSuspendSaveErrorEvent")
 	process.NameStep(Fx[flow.Step](t).SetCtx().Recover().Step(), "1")
-	ff := flow.DoneFlow("TestSaveErrorEvent", nil)
+	ff := flow.DoneFlow("TestSuspendSaveErrorEvent", nil)
 	waitCurrent(3)
 	CheckResult(t, 3, flow.Error)(any(ff).(flow.WorkFlow))
 	_, err := ff.Recover()
@@ -420,7 +473,7 @@ func TestSaveErrorEvent(t *testing.T) {
 	}
 
 	resetEventEnv()
-	flow.SetPersist(&errorSave{savePanic: true})
+	flow.SuspendPersist(&errorSave{persist: &persisitImpl{}, saveCheckpointAndRecordPanic: true})
 	flow.HandlerRegistry().Handle(flow.InSuspend, suspendPanicHandler(t))
 	wf = flow.RegisterFlow("TestSavePanicEvent")
 	wf.EnableRecover()
@@ -431,17 +484,17 @@ func TestSaveErrorEvent(t *testing.T) {
 	CheckResult(t, 3, flow.Error)(any(ff).(flow.WorkFlow))
 }
 
-func TestSerializeErrorEvent(t *testing.T) {
+func TestSuspendSerializeErrorEvent(t *testing.T) {
 	defer resetEventEnv()
 	flow.HandlerRegistry().Handle(flow.InSuspend, serializeErrorHandler(t))
-	wf := flow.RegisterFlow("TestSerializeErrorEvent")
+	wf := flow.RegisterFlow("TestSuspendSerializeErrorEvent")
 	wf.EnableRecover()
-	process := wf.Process("TestSerializeErrorEvent")
+	process := wf.Process("TestSuspendSerializeErrorEvent")
 	process.NameStep(func(ctx flow.Step) (any, error) {
 		ctx.Set("foo", noSerializable{"1", "2"})
 		return nil, fmt.Errorf("error")
 	}, "1")
-	ff := flow.DoneFlow("TestSerializeErrorEvent", nil)
+	ff := flow.DoneFlow("TestSuspendSerializeErrorEvent", nil)
 	waitCurrent(1)
 	CheckResult(t, 1, flow.Error)(any(ff).(flow.WorkFlow))
 	_, err := ff.Recover()
@@ -450,4 +503,108 @@ func TestSerializeErrorEvent(t *testing.T) {
 	} else {
 		t.Logf("Got error: %v", err)
 	}
+}
+
+func TestRecoverPersistErrorEvent(t *testing.T) {
+	defer resetEventEnv()
+	flow.SuspendPersist(&errorSave{persist: &persisitImpl{}, latestRecordError: true})
+	flow.HandlerRegistry().Handle(flow.InRecover, flexErrorCheck(t, flow.InRecover, "Persist"))
+	wf := flow.RegisterFlow("TestRecoverPersistErrorEvent")
+	wf.EnableRecover()
+	proc := wf.Process("TestRecoverPersistErrorEvent")
+	proc.NameStep(Fx[flow.Step](t).SetCtx().Recover().Step(), "1")
+	ff := flow.DoneFlow("TestRecoverPersistErrorEvent", nil)
+	CheckResult(t, 2, flow.Error)(any(ff).(flow.WorkFlow))
+	_, err := ff.Recover()
+	if err == nil {
+		t.Errorf("Expected error, got nil")
+	} else {
+		t.Logf("Got error: %v", err)
+	}
+	waitCurrent(3)
+
+	resetEventEnv()
+	flow.SuspendPersist(&errorSave{persist: &persisitImpl{}, listPointsError: true})
+	flow.HandlerRegistry().Handle(flow.InRecover, flexErrorCheck(t, flow.InRecover, "Persist"))
+	wf = flow.RegisterFlow("TestRecoverPersistErrorEvent0")
+	wf.EnableRecover()
+	proc = wf.Process("TestRecoverPersistErrorEvent0")
+	proc.NameStep(Fx[flow.Step](t).SetCtx().Recover().Step(), "1")
+	ff = flow.DoneFlow("TestRecoverPersistErrorEvent0", nil)
+	CheckResult(t, 2, flow.Error)(any(ff).(flow.WorkFlow))
+	_, err = ff.Recover()
+	if err == nil {
+		t.Errorf("Expected error, got nil")
+	} else {
+		t.Logf("Got error: %v", err)
+	}
+	waitCurrent(3)
+
+	resetEventEnv()
+	flow.SuspendPersist(&errorSave{persist: &persisitImpl{}, updateRecordError: true})
+	flow.HandlerRegistry().Handle(flow.InRecover, flexErrorCheck(t, flow.InRecover, "Persist"))
+	wf = flow.RegisterFlow("TestRecoverPersistErrorEvent1")
+	wf.EnableRecover()
+	proc = wf.Process("TestRecoverPersistErrorEvent1")
+	proc.NameStep(Fx[flow.Step](t).SetCtx().Recover().Step(), "1")
+	ff = flow.DoneFlow("TestRecoverPersistErrorEvent1", nil)
+	CheckResult(t, 2, flow.Error)(any(ff).(flow.WorkFlow))
+	_, err = ff.Recover()
+	if err == nil {
+		t.Errorf("Expected error, got nil")
+	} else {
+		t.Logf("Got error: %v", err)
+	}
+	waitCurrent(3)
+
+	resetEventEnv()
+	flow.SuspendPersist(&errorSave{persist: &persisitImpl{}, latestRecordPanic: true})
+	flow.HandlerRegistry().Handle(flow.InRecover, flexPanicCheck(t, flow.InRecover, ""))
+	wf = flow.RegisterFlow("TestRecoverPersistPanicEvent")
+	wf.EnableRecover()
+	proc = wf.Process("TestRecoverPersistPanicEvent")
+	proc.NameStep(Fx[flow.Step](t).SetCtx().Recover().Step(), "1")
+	ff = flow.DoneFlow("TestRecoverPersistPanicEvent", nil)
+	CheckResult(t, 2, flow.Error)(any(ff).(flow.WorkFlow))
+	_, err = ff.Recover()
+	if err == nil {
+		t.Errorf("Expected error, got nil")
+	} else {
+		t.Logf("Got error: %v", err)
+	}
+	waitCurrent(3)
+
+	resetEventEnv()
+	flow.SuspendPersist(&errorSave{persist: &persisitImpl{}, listPointsPanic: true})
+	flow.HandlerRegistry().Handle(flow.InRecover, flexPanicCheck(t, flow.InRecover, ""))
+	wf = flow.RegisterFlow("TestRecoverPersistPanicEvent0")
+	wf.EnableRecover()
+	proc = wf.Process("TestRecoverPersistPanicEvent0")
+	proc.NameStep(Fx[flow.Step](t).SetCtx().Recover().Step(), "1")
+	ff = flow.DoneFlow("TestRecoverPersistPanicEvent0", nil)
+	CheckResult(t, 2, flow.Error)(any(ff).(flow.WorkFlow))
+	_, err = ff.Recover()
+	if err == nil {
+		t.Errorf("Expected error, got nil")
+	} else {
+		t.Logf("Got error: %v", err)
+	}
+	waitCurrent(3)
+
+	resetEventEnv()
+	flow.SuspendPersist(&errorSave{persist: &persisitImpl{}, updateRecordPanic: true})
+	flow.HandlerRegistry().Handle(flow.InRecover, flexPanicCheck(t, flow.InRecover, ""))
+	wf = flow.RegisterFlow("TestRecoverPersistPanicEvent1")
+	wf.EnableRecover()
+	proc = wf.Process("TestRecoverPersistPanicEvent1")
+	proc.NameStep(Fx[flow.Step](t).SetCtx().Recover().Step(), "1")
+	ff = flow.DoneFlow("TestRecoverPersistPanicEvent1", nil)
+	CheckResult(t, 2, flow.Error)(any(ff).(flow.WorkFlow))
+	_, err = ff.Recover()
+	if err == nil {
+		t.Errorf("Expected error, got nil")
+	} else {
+		t.Logf("Got error: %v", err)
+	}
+	waitCurrent(3)
 }

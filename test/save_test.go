@@ -212,15 +212,15 @@ func emptyProcFunc(_ flow.Process) error { return nil }
 func emptyFlowFunc(_ flow.WorkFlow) error { return nil }
 
 func resetPersist() {
-	flow.ConfigureStepPersist().OnInsert(emptyStepFunc).OnUpdate(emptyStepFunc)
-	flow.ConfigureProcPersist().OnInsert(emptyProcFunc).OnUpdate(emptyProcFunc)
-	flow.ConfigureFlowPersist().OnInsert(emptyFlowFunc).OnUpdate(emptyFlowFunc)
+	flow.StepPersist().OnInsert(emptyStepFunc).OnUpdate(emptyStepFunc)
+	flow.ProcPersist().OnInsert(emptyProcFunc).OnUpdate(emptyProcFunc)
+	flow.FlowPersist().OnInsert(emptyFlowFunc).OnUpdate(emptyFlowFunc)
 }
 
 func setPersist() {
-	flow.ConfigureStepPersist().OnInsert(onStepBegin).OnUpdate(onStepComplete)
-	flow.ConfigureProcPersist().OnInsert(onProcessBegin).OnUpdate(onProcessComplete)
-	flow.ConfigureFlowPersist().OnInsert(onFlowBegin).OnUpdate(onFlowComplete)
+	flow.StepPersist().OnInsert(onStepBegin).OnUpdate(onStepComplete)
+	flow.ProcPersist().OnInsert(onProcessBegin).OnUpdate(onProcessComplete)
+	flow.FlowPersist().OnInsert(onFlowBegin).OnUpdate(onFlowComplete)
 }
 
 func stringStatus(status int8) string {

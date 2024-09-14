@@ -99,7 +99,7 @@ func (e *eventImpl) EventID() string {
 	panic("implement me")
 }
 
-func (e *eventImpl) Level() eventLevel {
+func (e *eventImpl) Level() EventLevel {
 	//TODO implement me
 	panic("implement me")
 }
@@ -128,16 +128,16 @@ func (e *eventImpl) Name() string {
 	return e.name
 }
 
-func (e *eventImpl) Stage() eventStage {
+func (e *eventImpl) Stage() EventStage {
 	return testStage
 }
 
-func (e *eventImpl) Severity() eventLevel {
+func (e *eventImpl) Severity() EventLevel {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (e *eventImpl) Layer() eventLayer {
+func (e *eventImpl) Layer() EventLayer {
 	//TODO implement me
 	panic("implement me")
 }

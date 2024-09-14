@@ -650,7 +650,7 @@ func TestFieldRestrict(t *testing.T) {
 func TestDefaultFlowConfigValid(t *testing.T) {
 	defer resetDefaultConfig()
 	defer resetCurrent()
-	SetPersist(persistMock{})
+	SuspendPersist(persistMock{})
 	DefaultConfig().EnableRecover()
 	wf1 := RegisterFlow("TestDefaultFlowConfigValid1")
 	wf1.DisableRecover()
@@ -669,7 +669,7 @@ func TestDefaultFlowConfigValid(t *testing.T) {
 func TestDefaultProcessConfigValid(t *testing.T) {
 	defer resetDefaultConfig()
 	defer resetCurrent()
-	SetPersist(persistMock{})
+	SuspendPersist(persistMock{})
 	DefaultConfig().EnableRecover()
 	DefaultConfig().StepRetry(1)
 	DefaultConfig().StepTimeout(time.Hour)
@@ -701,7 +701,7 @@ func TestDefaultProcessConfigValid(t *testing.T) {
 func TestFlowProcessConfigValid(t *testing.T) {
 	defer resetDefaultConfig()
 	defer resetCurrent()
-	SetPersist(persistMock{})
+	SuspendPersist(persistMock{})
 	DefaultConfig().EnableRecover()
 	DefaultConfig().StepRetry(1)
 	DefaultConfig().StepTimeout(time.Hour)
@@ -755,7 +755,7 @@ func TestConfigMergeValid(t *testing.T) {
 func TestStepStepConfigValid(t *testing.T) {
 	defer resetDefaultConfig()
 	defer resetCurrent()
-	SetPersist(persistMock{})
+	SuspendPersist(persistMock{})
 	DefaultConfig().EnableRecover()
 	DefaultConfig().StepRetry(1)
 	DefaultConfig().StepTimeout(time.Hour)

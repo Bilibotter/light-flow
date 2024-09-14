@@ -1,6 +1,7 @@
 package light_flow
 
 import (
+	"fmt"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -11,23 +12,8 @@ var dispatcher = &eventDispatcher{init: sync.Once{}, capacity: 64, handlerNum: 0
 
 var discardDelay int64 = 60
 var waitEventTimeout = 30 * time.Second
-
+var send = dispatcher.send
 var handlerRegistry = newEventRegister()
-
-var (
-	conditionName = map[eventType]string{}
-	callbackName  = map[eventType]string{}
-	persistName   = map[eventType]string{}
-	suspendName   = map[eventType]string{}
-	recoverName   = map[eventType]string{}
-	eventNames    = map[eventStage]map[eventType]string{
-		InCondition: conditionName,
-		InCallback:  callbackName,
-		InPersist:   persistName,
-		InSuspend:   suspendName,
-		InRecover:   recoverName,
-	}
-)
 
 /*************************************************************
  * Event Bus Status
@@ -51,9 +37,9 @@ const (
 )
 
 type HandlerRegister interface {
-	Handle(stage eventStage, handles ...func(event FlexEvent) (keepOn bool)) HandlerRegister
-	Discard(stage eventStage, discards ...func(event FlexEvent) (keepOn bool)) HandlerRegister
-	DisableLog(stages ...eventStage) HandlerRegister
+	Handle(stage EventStage, handles ...func(event FlexEvent) (keepOn bool)) HandlerRegister
+	Discard(stage EventStage, discards ...func(event FlexEvent) (keepOn bool)) HandlerRegister
+	DisableLog(stages ...EventStage) HandlerRegister
 	Capacity(capacity int) HandlerRegister
 	MaxHandler(num int) HandlerRegister
 	EventTimeoutSec(sec int) HandlerRegister
@@ -72,9 +58,9 @@ type basicEventI interface {
 	ID() string
 	Name() string
 	EventID() string
-	Stage() eventStage
-	Level() eventLevel
-	Layer() eventLayer
+	Stage() EventStage
+	Level() EventLevel
+	Layer() EventLayer
 	Timestamp() time.Time
 	ExtraInfo() map[string]string
 	// Extra fetches the value of a key from the event's extra map.
@@ -112,9 +98,9 @@ type handlerLifecycle struct {
 type flexEvent struct {
 	error
 	proto
-	eventStage
-	eventLayer
-	eventLevel
+	EventStage
+	EventLayer
+	EventLevel
 	eventID   string
 	timestamp time.Time
 	object    any // panic object
@@ -123,10 +109,10 @@ type flexEvent struct {
 }
 
 type handlerRegister struct {
-	handlers map[eventStage][]func(FlexEvent) (keepOn bool)
-	discards map[eventStage][]func(FlexEvent) (keepOn bool)
-	logs     map[eventStage]func(FlexEvent)
-	unLog    map[eventStage]bool
+	handlers map[EventStage][]func(FlexEvent) (keepOn bool)
+	discards map[EventStage][]func(FlexEvent) (keepOn bool)
+	logs     map[EventStage]func(FlexEvent)
+	unLog    map[EventStage]bool
 }
 
 type eventHandler struct {
@@ -139,48 +125,49 @@ func HandlerRegistry() HandlerRegister {
 	return handlerRegistry
 }
 
-func errorEvent[T proto](runtime T, stage eventStage, err error) *flexEvent {
+func errorEvent[T proto](runtime T, stage EventStage, err error) *flexEvent {
 	event := newEvent[T](runtime, stage)
 	event.error = err
-	event.eventLevel = ErrorLevel
+	event.EventLevel = ErrorLevel
 	return event
 }
 
-func panicEvent[T proto](runtime T, stage eventStage, object any, stack []byte) *flexEvent {
+func panicEvent[T proto](runtime T, stage EventStage, object any, stack []byte) *flexEvent {
 	event := newEvent[T](runtime, stage)
 	event.object = object
 	event.stack = stack
-	event.eventLevel = PanicLevel
+	event.EventLevel = PanicLevel
 	return event
 }
 
-func newEvent[T proto](runtime T, stage eventStage) *flexEvent {
+func newEvent[T proto](runtime T, stage EventStage) *flexEvent {
 	event := &flexEvent{
 		proto:      runtime,
 		eventID:    generateId(),
 		timestamp:  time.Now(),
-		eventStage: stage,
-		eventLevel: ErrorLevel,
+		EventStage: stage,
+		EventLevel: ErrorLevel,
 	}
 	switch any(runtime).(type) {
 	case *runFlow:
-		event.eventLayer = FlowLyr
+		event.EventLayer = FlowLyr
 	case *runProcess:
-		event.eventLayer = ProcLyr
+		event.EventLayer = ProcLyr
 	case *runStep:
-		event.eventLayer = StepLyr
+		event.EventLayer = StepLyr
 	}
 	return event
 }
 
 func newEventRegister() *handlerRegister {
 	return &handlerRegister{
-		handlers: make(map[eventStage][]func(FlexEvent) (keepOn bool)),
-		discards: make(map[eventStage][]func(FlexEvent) (keepOn bool)),
-		unLog:    make(map[eventStage]bool),
-		logs: map[eventStage]func(event FlexEvent){
+		handlers: make(map[EventStage][]func(FlexEvent) (keepOn bool)),
+		discards: make(map[EventStage][]func(FlexEvent) (keepOn bool)),
+		unLog:    make(map[EventStage]bool),
+		logs: map[EventStage]func(event FlexEvent){
 			InCallback: commonLog(callbackOrder),
 			InSuspend:  commonLog(suspendOrder),
+			InRecover:  commonLog(recoverOrder),
 		},
 	}
 }
@@ -325,7 +312,7 @@ func (el *handlerLifecycle) tryUnattached() bool {
 	return false
 }
 
-func (h *handlerRegister) Handle(stage eventStage, handlers ...func(event FlexEvent) (keepOn bool)) HandlerRegister {
+func (h *handlerRegister) Handle(stage EventStage, handlers ...func(event FlexEvent) (keepOn bool)) HandlerRegister {
 	if len(handlers) == 0 {
 		panic("No handler is given")
 	}
@@ -333,7 +320,7 @@ func (h *handlerRegister) Handle(stage eventStage, handlers ...func(event FlexEv
 	return h
 }
 
-func (h *handlerRegister) Discard(stage eventStage, discards ...func(event FlexEvent) (keepOn bool)) HandlerRegister {
+func (h *handlerRegister) Discard(stage EventStage, discards ...func(event FlexEvent) (keepOn bool)) HandlerRegister {
 	if len(discards) == 0 {
 		panic("No discard is given")
 	}
@@ -341,7 +328,7 @@ func (h *handlerRegister) Discard(stage eventStage, discards ...func(event FlexE
 	return h
 }
 
-func (h *handlerRegister) DisableLog(stages ...eventStage) HandlerRegister {
+func (h *handlerRegister) DisableLog(stages ...EventStage) HandlerRegister {
 	for _, stage := range stages {
 		h.unLog[stage] = true
 	}
@@ -367,15 +354,16 @@ func (h *handlerRegister) EventTimeoutSec(sec int) HandlerRegister {
 }
 
 func (h *handlerRegister) Clear() {
-	h.handlers = map[eventStage][]func(FlexEvent) (keepOn bool){}
-	h.discards = map[eventStage][]func(FlexEvent) (keepOn bool){}
-	h.unLog = map[eventStage]bool{}
+	h.handlers = map[EventStage][]func(FlexEvent) (keepOn bool){}
+	h.discards = map[EventStage][]func(FlexEvent) (keepOn bool){}
+	h.unLog = map[EventStage]bool{}
 }
 
 func (h *handlerRegister) handle(event FlexEvent) {
 	defer func() {
 		if r := recover(); r != nil {
 			//todo log panic
+			fmt.Printf("panic: %v\n%s", r, stack())
 		}
 	}()
 	if !h.unLog[event.Stage()] {
@@ -420,16 +408,16 @@ func (f *flexEvent) EventID() string {
 	return f.eventID
 }
 
-func (f *flexEvent) Stage() eventStage {
-	return f.eventStage
+func (f *flexEvent) Stage() EventStage {
+	return f.EventStage
 }
 
-func (f *flexEvent) Level() eventLevel {
-	return f.eventLevel
+func (f *flexEvent) Level() EventLevel {
+	return f.EventLevel
 }
 
-func (f *flexEvent) Layer() eventLayer {
-	return f.eventLayer
+func (f *flexEvent) Layer() EventLayer {
+	return f.EventLayer
 }
 
 func (f *flexEvent) Timestamp() time.Time {
@@ -501,4 +489,11 @@ func (f *flexEvent) Get(key string) (any, bool) {
 	default:
 		return nil, false
 	}
+}
+
+func (f *flexEvent) write(key, value string) {
+	if f.extra == nil {
+		f.extra = make(map[string]string, 1)
+	}
+	f.extra[key] = value
 }

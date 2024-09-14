@@ -37,7 +37,6 @@ var (
 	Recovering = &StatusEnum{0b1 << 4, "Recovering"}
 	// Entity can be recovered at an appropriate time.
 	Suspend      = &StatusEnum{0b1 << 5, "Suspend"}
-	Skip         = &StatusEnum{0b1 << 6, "Skip"} // Step was skipped due to condition not met.
 	Success      = &StatusEnum{0b1 << 15, "Success"}
 	NormalMask   = &StatusEnum{0b1<<16 - 1, "NormalMask"}
 	abnormal     = []*StatusEnum{Cancel, Timeout, Panic, Error, Stop, CallbackFail, Failed}

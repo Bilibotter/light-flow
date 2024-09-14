@@ -475,7 +475,7 @@ func TestResourceKeyDuplicate(t *testing.T) {
 			atomic.AddInt64(&current, 1)
 			return nil
 		})
-	SetPersist(&pImpl{})
+	SuspendPersist(&pImpl{})
 	wf := RegisterFlow("TestResourceKeyDuplicate")
 	wf.EnableRecover()
 	proc := wf.Process("TestResourceKeyDuplicate")

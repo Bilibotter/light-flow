@@ -1,18 +1,16 @@
 package light_flow
 
-type eventType uint8
+type EventStage uint8
 
-type eventStage uint8
+type EventLevel uint8
 
-type eventLevel uint8
-
-type eventLayer uint8
+type EventLayer uint8
 
 /*************************************************************
  * Event Scope
  *************************************************************/
 const (
-	FlowLyr eventLayer = iota
+	FlowLyr EventLayer = iota
 	ProcLyr
 	StepLyr
 )
@@ -22,11 +20,12 @@ const (
  *************************************************************/
 
 const (
-	InCondition eventStage = iota
+	InCondition EventStage = iota
 	InCallback
 	InPersist
 	InSuspend
 	InRecover
+	InResource
 )
 
 /*************************************************************
@@ -34,14 +33,14 @@ const (
  *************************************************************/
 
 const (
-	HintLevel eventLevel = iota
+	HintLevel EventLevel = iota
 	InfoLevel
 	WarnLevel
 	ErrorLevel
 	PanicLevel
 )
 
-func (s eventLayer) String() string {
+func (s EventLayer) String() string {
 	switch s {
 	case FlowLyr:
 		return "Flow"
@@ -54,7 +53,7 @@ func (s eventLayer) String() string {
 	}
 }
 
-func (s eventStage) String() string {
+func (s EventStage) String() string {
 	switch s {
 	case InCondition:
 		return "Condition"
@@ -71,7 +70,7 @@ func (s eventStage) String() string {
 	}
 }
 
-func (s eventLevel) String() string {
+func (s EventLevel) String() string {
 	switch s {
 	case HintLevel:
 		return "Hint"

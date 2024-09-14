@@ -111,10 +111,10 @@ func ResetDefaultCallback() {
 	defaultCallback = buildFlowCallback(defaultScope)
 }
 
-func callbackExtra(necessity, position, scope, order string) map[string]string {
+func callbackExtra(necessity, location, scope, order string) map[string]string {
 	extra := map[string]string{
 		"Necessity": necessity,
-		"Position":  position,
+		"Location":  location,
 		"Scope":     scope,
 		"Order":     order,
 	}
@@ -253,7 +253,7 @@ func (chain *funcChain[T]) filter(runtime T) (runNext bool) {
 		if r != nil {
 			event := panicEvent(runtime, InCallback, r, stack())
 			event.extra = callbackExtra(chain.necessity(index), chain.Stage, chain.Scope, strconv.Itoa(index+1))
-			dispatcher.send(event)
+			send(event)
 			// non-must callback panic, ignore it
 			if index >= chain.Index {
 				return
@@ -295,7 +295,7 @@ func (chain *funcChain[T]) filter(runtime T) (runNext bool) {
 		if err != nil {
 			event := errorEvent(runtime, InCallback, err)
 			event.extra = callbackExtra(chain.necessity(index), chain.Stage, chain.Scope, strconv.Itoa(index+1))
-			dispatcher.send(event)
+			send(event)
 			if index < chain.Index {
 				runNext = false
 				if handler, ok := any(runtime).(errorHandler); ok {

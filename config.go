@@ -60,7 +60,7 @@ func (t ternary) Valid() bool {
 
 func (f *flowConfig) EnableRecover() FlowConfig {
 	if persister == nil {
-		panic("Persist must be set to use the recovery feature, please invoke SetPersist(impl Persist) first")
+		panic("Persist must be set to use the recovery feature, please invoke SuspendPersist(impl Persist) first")
 	}
 	f.recoverable = 1
 	return f

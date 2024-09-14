@@ -171,7 +171,6 @@ func (c *condition) meetCondition(step Step) (meet bool) {
 		return
 	}
 
-	step.append(Skip)
 	if !c.skipWithDependents {
 		return
 	}

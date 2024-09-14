@@ -232,8 +232,8 @@ func Recover0(t *testing.T, ff flow.FinishedWorkFlow) flow.FinishedWorkFlow {
 	t.Logf("start [%d] times recover >>>>>>>>>>>>>>", times)
 	f, err := ff.Recover()
 	if err != nil {
-		if !strings.Contains(fmt.Sprintf("%v", err), "recovery failed") {
-			t.Errorf("error message should contain 'recovery failed', but got %v", err)
+		if !strings.Contains(fmt.Sprintf("%v", err), "Flow[Name") {
+			t.Errorf("error message should contain 'Flow[Name', but got %v", err)
 		}
 	}
 	println()
@@ -284,7 +284,7 @@ func TestMain(m *testing.M) {
 	}
 	flow.SetEncryptor(flow.NewAES256Encryptor([]byte("light-flow"), "pwd", "password"))
 	flow.SetMaxSerializeSize(10240)
-	flow.SetPersist(&persisitImpl{})
+	flow.SuspendPersist(&persisitImpl{})
 	flow.RegisterType[Person]()
 	os.Exit(m.Run())
 }

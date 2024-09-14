@@ -80,15 +80,15 @@ func (fp *flowPersistor) OnUpdate(f func(WorkFlow) error) FlowPersistor {
 	return fp
 }
 
-func ConfigureStepPersist() StepPersistor {
+func StepPersist() StepPersistor {
 	return stepPersist
 }
 
-func ConfigureProcPersist() ProcPersistor {
+func ProcPersist() ProcPersistor {
 	return procPersist
 }
 
-func ConfigureFlowPersist() FlowPersistor {
+func FlowPersist() FlowPersistor {
 	return flowPersist
 }
 
