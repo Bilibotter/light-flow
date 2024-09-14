@@ -464,7 +464,7 @@ func TestNodeMap(t *testing.T) {
 
 func TestResourceKeyDuplicate(t *testing.T) {
 	defer resetCurrent()
-	RegisterResourceManager("TestResourceKeyDuplicate").
+	AddResource("TestResourceKeyDuplicate").
 		OnRecover(func(res Resource) error {
 			t.Logf("recover resource %s", res.Name())
 			atomic.AddInt64(&current, 1)

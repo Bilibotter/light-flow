@@ -188,7 +188,7 @@ func noDelay(_ FlexEvent) bool {
 
 func TestSend(t *testing.T) {
 	defer resetEventEnv()
-	HandlerRegistry().Handle(testStage, sleepEvent(t)).DisableLog(InCallback)
+	EventHandler().Handle(testStage, sleepEvent(t)).DisableLog(InCallback)
 	dispatcher.send(&eventImpl{"TestSend"})
 	waitCurrent(1)
 }
@@ -196,7 +196,7 @@ func TestSend(t *testing.T) {
 func TestSingleHandler(t *testing.T) {
 	defer resetEventEnv()
 	atomic.StoreInt64(&letGo, 0)
-	HandlerRegistry().Handle(testStage, untilLetGo(t)).MaxHandler(1).Capacity(64).Discard(testStage, dropHint(t)).DisableLog(InCallback)
+	EventHandler().Handle(testStage, untilLetGo(t)).MaxHandler(1).Capacity(64).Discard(testStage, dropHint(t)).DisableLog(InCallback)
 	for i := 0; i < 32; i++ {
 		go dispatcher.send(&eventImpl{"TestSingleHandler" + strconv.Itoa(i)})
 	}
@@ -215,7 +215,7 @@ func TestSingleHandler(t *testing.T) {
 func TestHandlerExpired(t *testing.T) {
 	defer resetEventEnv()
 	atomic.StoreInt64(&letGo, 0)
-	HandlerRegistry().Handle(testStage, untilLetGo(t)).Discard(testStage, dropHint(t)).
+	EventHandler().Handle(testStage, untilLetGo(t)).Discard(testStage, dropHint(t)).
 		MaxHandler(12).Capacity(8).EventTimeoutSec(-1).DisableLog(InCallback)
 	atomic.StoreInt64(&discardDelay, 3600)
 	for i := 0; i < 20; i++ {
@@ -236,7 +236,7 @@ func TestHandlerExpired(t *testing.T) {
 func TestHandlerAdd(t *testing.T) {
 	defer resetEventEnv()
 	atomic.StoreInt64(&letGo, 0)
-	HandlerRegistry().Handle(testStage, untilLetGo(t)).MaxHandler(64).Capacity(8).Discard(testStage, dropHint(t)).DisableLog(InCallback)
+	EventHandler().Handle(testStage, untilLetGo(t)).MaxHandler(64).Capacity(8).Discard(testStage, dropHint(t)).DisableLog(InCallback)
 	for i := 0; i < 32; i++ {
 		go dispatcher.send(&eventImpl{"TestHandlerAdd" + strconv.Itoa(i)})
 	}
@@ -253,7 +253,7 @@ func TestHandlerAdd(t *testing.T) {
 func TestDiscardHandlerReuse(t *testing.T) {
 	defer resetEventEnv()
 	atomic.StoreInt64(&letGo, 0)
-	HandlerRegistry().Handle(testStage, untilLetGo(t)).Discard(testStage, dropHint(t)).
+	EventHandler().Handle(testStage, untilLetGo(t)).Discard(testStage, dropHint(t)).
 		MaxHandler(64).Capacity(8).DisableLog(InCallback)
 	atomic.StoreInt64(&discardDelay, 0)
 	waitEventTimeout = 1 * time.Millisecond
@@ -309,7 +309,7 @@ func TestDiscardHandlerReuse(t *testing.T) {
 func TestHandlerDiscard(t *testing.T) {
 	defer resetEventEnv()
 	atomic.StoreInt64(&letGo, 0)
-	HandlerRegistry().Handle(testStage, untilLetGo(t)).Discard(testStage, dropHint(t)).
+	EventHandler().Handle(testStage, untilLetGo(t)).Discard(testStage, dropHint(t)).
 		MaxHandler(64).Capacity(8).DisableLog(InCallback)
 	atomic.StoreInt64(&discardDelay, 0)
 	waitEventTimeout = 1 * time.Millisecond
@@ -341,7 +341,7 @@ func TestHandlerDiscard(t *testing.T) {
 
 func TestMultipleEvent(t *testing.T) {
 	defer resetEventEnv()
-	HandlerRegistry().
+	EventHandler().
 		Handle(testStage, noDelay).Discard(testStage, noDelay).
 		MaxHandler(32).Capacity(128).DisableLog(InCallback)
 	for i := 0; i < 4000; i++ {

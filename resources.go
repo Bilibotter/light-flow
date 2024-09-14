@@ -5,11 +5,11 @@ import (
 )
 
 const (
-	initializeR = "initialize"
-	releaseR    = "release"
-	suspendR    = "suspend"
-	recoverR    = "recover"
-	attachR     = "attach"
+	initializeR = "Initialize"
+	releaseR    = "Release"
+	suspendR    = "Suspend"
+	recoverR    = "Recover"
+	attachR     = "Attach"
 )
 
 var resourceManagers = make(map[string]*resourceManager)
@@ -60,7 +60,7 @@ type resSerializable struct {
 	Entity any
 }
 
-func RegisterResourceManager(name string) ResourceManager {
+func AddResource(name string) ResourceManager {
 	if !isValidIdentifier(name) {
 		panic(patternHint)
 	}

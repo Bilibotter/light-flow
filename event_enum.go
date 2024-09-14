@@ -20,12 +20,12 @@ const (
  *************************************************************/
 
 const (
-	InCondition EventStage = iota
-	InCallback
+	InCallback EventStage = iota
 	InPersist
 	InSuspend
 	InRecover
 	InResource
+	stageTail // used to make restrict test
 )
 
 /*************************************************************
@@ -55,8 +55,6 @@ func (s EventLayer) String() string {
 
 func (s EventStage) String() string {
 	switch s {
-	case InCondition:
-		return "Condition"
 	case InCallback:
 		return "Callback"
 	case InPersist:
@@ -65,6 +63,8 @@ func (s EventStage) String() string {
 		return "Suspend"
 	case InRecover:
 		return "Recover"
+	case InResource:
+		return "Resource"
 	default:
 		return "Unknown"
 	}

@@ -16,15 +16,6 @@ var send = dispatcher.send
 var handlerRegistry = newEventRegister()
 
 /*************************************************************
- * Event Bus Status
- *************************************************************/
-
-const (
-	busIdle int64 = iota
-	busExpand
-)
-
-/*************************************************************
  * Handler Status
  *************************************************************/
 
@@ -115,13 +106,7 @@ type handlerRegister struct {
 	unLog    map[EventStage]bool
 }
 
-type eventHandler struct {
-	handle  func(event FlexEvent) (keepOn bool)
-	target  *set[string]
-	exclude *set[string]
-}
-
-func HandlerRegistry() HandlerRegister {
+func EventHandler() HandlerRegister {
 	return handlerRegistry
 }
 
@@ -168,6 +153,7 @@ func newEventRegister() *handlerRegister {
 			InCallback: commonLog(callbackOrder),
 			InSuspend:  commonLog(suspendOrder),
 			InRecover:  commonLog(recoverOrder),
+			InResource: commonLog(resourceOrder),
 		},
 	}
 }

@@ -132,7 +132,7 @@ func TestNoRegisterResourceAttach(t *testing.T) {
 func TestResourceAttach(t *testing.T) {
 	defer resetCurrent()
 	atomic.StoreInt64(&letGo, 0)
-	flow.RegisterResourceManager("TestResourceAttachResource")
+	flow.AddResource("TestResourceAttachResource")
 	wf := flow.RegisterFlow("TestResourceAttach")
 	process := wf.Process("TestResourceAttach")
 	process.NameStep(Fx[flow.Step](t).Attach("TestResourceAttachResource", "***", map[string]any{"int": 1, "str": "hello", "bool": true, "float": 3.14}).Broadcast().Step(), "1")
@@ -143,7 +143,7 @@ func TestResourceAttach(t *testing.T) {
 
 	resetCurrent()
 	atomic.StoreInt64(&letGo, 0)
-	flow.RegisterResourceManager("TestResourceAttachResource2")
+	flow.AddResource("TestResourceAttachResource2")
 	wf = flow.RegisterFlow("TestResourceAttach2")
 	process = wf.Process("TestResourceAttach2")
 	process.NameStep(Fx[flow.Step](t).Attach("TestResourceAttachResource", "***", map[string]any{"int": 1, "str": "hello", "bool": true, "float": 3.14}).Broadcast().Step(), "1")
@@ -160,7 +160,7 @@ func TestResourceAttach(t *testing.T) {
 func TestResourceAttachInBeforeProcess(t *testing.T) {
 	defer resetCurrent()
 	atomic.StoreInt64(&letGo, 0)
-	flow.RegisterResourceManager("TestResourceAttachInBeforeProcess0")
+	flow.AddResource("TestResourceAttachInBeforeProcess0")
 	wf := flow.RegisterFlow("TestResourceAttachInBeforeProcess0")
 	process := wf.Process("TestResourceAttachInBeforeProcess0")
 	process.BeforeProcess(true, Fx[flow.Process](t).Attach("TestResourceAttachInBeforeProcess0", "***", map[string]any{"int": 1, "str": "hello", "bool": true, "float": 3.14}).Callback())
@@ -171,7 +171,7 @@ func TestResourceAttachInBeforeProcess(t *testing.T) {
 	// Test if the resource will be released while before-process callback failed
 	resetCurrent()
 	atomic.StoreInt64(&letGo, 0)
-	flow.RegisterResourceManager("TestResourceAttachInBeforeProcess1").
+	flow.AddResource("TestResourceAttachInBeforeProcess1").
 		OnRelease(resourceRelease(t)).
 		OnInitialize(resourceInit)
 	wf = flow.RegisterFlow("TestResourceAttachInBeforeProcess1")
@@ -187,7 +187,7 @@ func TestResourceInitialize(t *testing.T) {
 	atomic.StoreInt64(&letGo, 0)
 	initParam := "*"
 	resName := "TestResourceInitialize"
-	flow.RegisterResourceManager(resName).
+	flow.AddResource(resName).
 		OnInitialize(resourceInit)
 	wf := flow.RegisterFlow("TestResourceInitialize")
 	process := wf.Process("TestResourceInitialize")
@@ -203,7 +203,7 @@ func TestResourceInitializeError(t *testing.T) {
 	atomic.StoreInt64(&letGo, 0)
 	initParam := "*"
 	resName := "TestResourceInitializeError"
-	flow.RegisterResourceManager("TestResourceInitializeResourceError").
+	flow.AddResource("TestResourceInitializeResourceError").
 		OnInitialize(resourceInitError)
 	wf := flow.RegisterFlow("TestResourceInitializeError")
 	process := wf.Process("TestResourceInitializeError")
@@ -227,7 +227,7 @@ func TestResourceInitializePanic(t *testing.T) {
 	atomic.StoreInt64(&letGo, 0)
 	initParam := "*"
 	resName := "TestResourceInitializePanic"
-	flow.RegisterResourceManager(resName).
+	flow.AddResource(resName).
 		OnInitialize(resourceInitPanic)
 	wf := flow.RegisterFlow("TestResourceInitializePanic")
 	process := wf.Process("TestResourceInitializePanic")
@@ -250,7 +250,7 @@ func TestResourceUpdate(t *testing.T) {
 	atomic.StoreInt64(&letGo, 0)
 	initParam := "*"
 	resName := "TestResourceUpdate0"
-	flow.RegisterResourceManager(resName).
+	flow.AddResource(resName).
 		OnInitialize(resourceInit).
 		OnRelease(resourceRelease(t))
 	wf := flow.RegisterFlow("TestResourceUpdate0")
@@ -274,7 +274,7 @@ func TestResourceRelease(t *testing.T) {
 	atomic.StoreInt64(&letGo, 0)
 	initParam := "*"
 	resName := "TestResourceRelease"
-	flow.RegisterResourceManager(resName).
+	flow.AddResource(resName).
 		OnInitialize(resourceInit).
 		OnRelease(resourceRelease(t))
 	wf := flow.RegisterFlow("TestResourceRelease")
@@ -291,7 +291,7 @@ func TestResourceReleaseError(t *testing.T) {
 	atomic.StoreInt64(&letGo, 0)
 	initParam := "*"
 	resName := "TestResourceReleaseError"
-	flow.RegisterResourceManager(resName).
+	flow.AddResource(resName).
 		OnInitialize(resourceInit).
 		OnRelease(resourceReleaseError(t))
 	wf := flow.RegisterFlow("TestResourceReleaseError")
@@ -316,7 +316,7 @@ func TestResourceReleasePanic(t *testing.T) {
 	atomic.StoreInt64(&letGo, 0)
 	initParam := "*"
 	resName := "TestResourceReleasePanic"
-	flow.RegisterResourceManager(resName).
+	flow.AddResource(resName).
 		OnInitialize(resourceInit).
 		OnRelease(resourceReleasePanic(t))
 	wf := flow.RegisterFlow("TestResourceReleasePanic")
@@ -341,7 +341,7 @@ func TestReleaseAttachedFailedResource(t *testing.T) {
 	atomic.StoreInt64(&letGo, 0)
 	initParam := "*"
 	resName := "TestReleaseAttachedFailedResource"
-	flow.RegisterResourceManager(resName).
+	flow.AddResource(resName).
 		OnInitialize(resourceInitError).
 		OnRelease(resourceRelease(t))
 	wf := flow.RegisterFlow("TestReleaseAttachedFailedResource")
@@ -365,7 +365,7 @@ func TestReleaseAttachedPanicResource(t *testing.T) {
 	atomic.StoreInt64(&letGo, 0)
 	initParam := "*"
 	resName := "TestReleaseAttachedPanicResource"
-	flow.RegisterResourceManager(resName).
+	flow.AddResource(resName).
 		OnInitialize(resourceInitPanic).
 		OnRelease(resourceRelease(t))
 	wf := flow.RegisterFlow("TestReleaseAttachedPanicResource")
@@ -409,7 +409,7 @@ func TestReleaseWhileStepError(t *testing.T) {
 	atomic.StoreInt64(&letGo, 0)
 	initParam := "*"
 	resName := "TestReleaseWhileStepError"
-	flow.RegisterResourceManager(resName).
+	flow.AddResource(resName).
 		OnInitialize(resourceInit).
 		OnRelease(resourceRelease(t))
 	wf := flow.RegisterFlow("TestReleaseWhileStepError")
@@ -424,7 +424,7 @@ func TestReleaseWhileStepPanic(t *testing.T) {
 	atomic.StoreInt64(&letGo, 0)
 	initParam := "*"
 	resName := "TestReleaseWhileStepPanic"
-	flow.RegisterResourceManager(resName).
+	flow.AddResource(resName).
 		OnInitialize(resourceInit).
 		OnRelease(resourceRelease(t))
 	wf := flow.RegisterFlow("TestReleaseWhileStepPanic")
@@ -440,7 +440,7 @@ func TestResourceRecover(t *testing.T) {
 	atomic.StoreInt64(&letGo, 0)
 	initParam := "*"
 	resName := "TestResourceRecover"
-	flow.RegisterResourceManager(resName).
+	flow.AddResource(resName).
 		OnInitialize(resourceInit).
 		OnRelease(resourceRelease(t)).
 		OnRecover(recoverResource(t, initParam+resName, initParam+initParam+resName, map[string]any{"int": 1, "str": "hello", "bool": true, "float": 3.14, "person": Person{"Tom", 20}}))
@@ -464,7 +464,7 @@ func TestResourceRecover0(t *testing.T) {
 	atomic.StoreInt64(&letGo, 0)
 	initParam := "*"
 	resName := "TestResourceRecover0"
-	flow.RegisterResourceManager(resName).
+	flow.AddResource(resName).
 		OnInitialize(resourceInit).
 		OnRelease(resourceRelease(t)).
 		OnRecover(recoverResource0(t, initParam+resName, initParam+initParam+resName, map[string]any{"int": 10, "str": "hello0", "bool": false, "float": 33.14, "person": Person{"Amy", 21}}))
@@ -488,7 +488,7 @@ func TestResourceSuspend(t *testing.T) {
 	atomic.StoreInt64(&letGo, 0)
 	initParam := "*"
 	resName := "TestResourceSuspend"
-	flow.RegisterResourceManager(resName).
+	flow.AddResource(resName).
 		OnInitialize(resourceInit).
 		OnRelease(resourceRelease(t)).
 		OnSuspend(suspendResource(t, initParam+resName, initParam+initParam+resName, map[string]any{"int": 10, "str": "hello0", "bool": false, "float": 33.14, "person": Person{"Amy", 21}}))
@@ -512,7 +512,7 @@ func TestResourceSuspendAndRecover(t *testing.T) {
 	atomic.StoreInt64(&letGo, 0)
 	initParam := "*"
 	resName := "TestResourceSuspendAndRecover"
-	flow.RegisterResourceManager(resName).
+	flow.AddResource(resName).
 		OnInitialize(resourceInit).
 		OnRelease(resourceRelease(t)).
 		OnSuspend(suspendResource(t, initParam+resName, initParam+initParam+resName, map[string]any{"int": 10, "str": "hello0", "bool": false, "float": 33.14, "person": Person{"Amy", 21}})).
@@ -535,7 +535,7 @@ func TestResourceClearAndRecover(t *testing.T) {
 	defer resetCurrent()
 	executeSuc = false
 	resName := "TestResourceClearAndRecover"
-	flow.RegisterResourceManager(resName).
+	flow.AddResource(resName).
 		OnInitialize(func(res flow.Resource, initParam any) (entity any, err error) {
 			res.Put("password", "******")
 			atomic.AddInt64(&current, 1)

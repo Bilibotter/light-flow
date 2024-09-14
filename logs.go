@@ -11,6 +11,7 @@ var (
 	callbackOrder = []string{"Location", "Order", "Scope", "Necessity"}
 	suspendOrder  = []string{"Location"}
 	recoverOrder  = []string{"Location"}
+	resourceOrder = []string{"Action", "Resource"}
 )
 
 const (
@@ -56,6 +57,9 @@ func commonLog(order []string) func(event FlexEvent) {
 		sb := strings.Builder{}
 		if event.ExtraInfo() != nil {
 			for _, key := range order {
+				if event.Extra(key) == "" {
+					continue
+				}
 				sb.WriteString(fmt.Sprintf("[%s: %s] ", key, event.Extra(key)))
 			}
 		}
