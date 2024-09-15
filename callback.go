@@ -2,6 +2,7 @@ package light_flow
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -30,8 +31,8 @@ const (
 )
 
 const (
-	mustS    = "must"
-	nonMustS = "non-must"
+	mustS    = "Must"
+	nonMustS = "Non-Must"
 )
 
 var (
@@ -110,12 +111,22 @@ func ResetDefaultCallback() {
 	defaultCallback = buildFlowCallback(defaultScope)
 }
 
+func callbackExtra(necessity, location, scope, order string) map[string]string {
+	extra := map[string]string{
+		"Necessity": necessity,
+		"Location":  location,
+		"Scope":     scope,
+		"Order":     order,
+	}
+	return extra
+}
+
 func buildFlowCallback(scope string) flowCallback {
 	fc := flowCallback{}
 	fc.beforeFlow.Scope = scope
 	fc.afterFlow.Scope = scope
-	fc.beforeFlow.Stage = beforeS + "-" + flowScope
-	fc.afterFlow.Stage = afterS + "-" + flowScope
+	fc.beforeFlow.Stage = beforeS + flowScope
+	fc.afterFlow.Stage = afterS + flowScope
 	fc.beforeFlow.Before = true
 	fc.procCallback = buildProcCallback(scope)
 	fc.beforeFlow.buildStage0()
@@ -127,13 +138,13 @@ func buildProcCallback(scope string) procCallback {
 	pc := procCallback{}
 	pc.beforeProc.Scope = scope
 	pc.afterProc.Scope = scope
-	pc.beforeProc.Stage = beforeS + "-" + procScope
-	pc.afterProc.Stage = afterS + "-" + procScope
+	pc.beforeProc.Stage = beforeS + procScope
+	pc.afterProc.Stage = afterS + procScope
 	pc.beforeStep.Scope = scope
 	pc.beforeProc.Before = true
 	pc.afterStep.Scope = scope
-	pc.beforeStep.Stage = beforeS + "-" + stepScope
-	pc.afterStep.Stage = afterS + "-" + stepScope
+	pc.beforeStep.Stage = beforeS + stepScope
+	pc.afterStep.Stage = afterS + stepScope
 	pc.beforeStep.Before = true
 	pc.beforeStep.buildStage0()
 	pc.afterStep.buildStage0()
@@ -240,7 +251,9 @@ func (chain *funcChain[T]) filter(runtime T) (runNext bool) {
 	defer func() {
 		r := recover()
 		if r != nil {
-			logger.Errorf(callbackPanicLog, chain.Stage, runtime.ID(), runtime.Name(), chain.necessity(index), chain.Scope, index+1, r, stack())
+			event := panicEvent(runtime, InCallback, r, stack())
+			event.extra = callbackExtra(chain.necessity(index), chain.Stage, chain.Scope, strconv.Itoa(index+1))
+			dispatcher.send(event)
 			// non-must callback panic, ignore it
 			if index >= chain.Index {
 				return
@@ -280,7 +293,9 @@ func (chain *funcChain[T]) filter(runtime T) (runNext bool) {
 			continue
 		}
 		if err != nil {
-			logger.Errorf(callbackErrorLog, chain.Stage, runtime.ID(), runtime.Name(), chain.necessity(index), chain.Scope, index+1, err.Error())
+			event := errorEvent(runtime, InCallback, err)
+			event.extra = callbackExtra(chain.necessity(index), chain.Stage, chain.Scope, strconv.Itoa(index+1))
+			dispatcher.send(event)
 			if index < chain.Index {
 				runNext = false
 				if handler, ok := any(runtime).(errorHandler); ok {

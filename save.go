@@ -1,94 +1,94 @@
 package light_flow
 
 const (
-	beginAction     = "begin"
-	completedAction = "completed"
+	insertOP = "Insert"
+	updateOP = "Update"
 )
 
 var (
-	stepPersist = &stepPersistor{
+	stepPersist = &stepPersistence{
 		onInsert: emptyStepFunc,
 		onUpdate: emptyStepFunc,
 	}
-	procPersist = &procPersistor{
+	procPersist = &procPersistence{
 		onInsert: emptyProcFunc,
 		onUpdate: emptyProcFunc,
 	}
-	flowPersist = &flowPersistor{
+	flowPersist = &flowPersistence{
 		onInsert: emptyFlowFunc,
 		onUpdate: emptyFlowFunc,
 	}
 )
 
-type StepPersistor interface {
-	OnInsert(func(Step) error) StepPersistor
-	OnUpdate(func(Step) error) StepPersistor
+type StepPersistence interface {
+	OnInsert(func(Step) error) StepPersistence
+	OnUpdate(func(Step) error) StepPersistence
 }
 
-type ProcPersistor interface {
-	OnInsert(func(Process) error) ProcPersistor
-	OnUpdate(func(Process) error) ProcPersistor
+type ProcPersistence interface {
+	OnInsert(func(Process) error) ProcPersistence
+	OnUpdate(func(Process) error) ProcPersistence
 }
 
-type FlowPersistor interface {
-	OnInsert(func(WorkFlow) error) FlowPersistor
-	OnUpdate(func(WorkFlow) error) FlowPersistor
+type FlowPersistence interface {
+	OnInsert(func(WorkFlow) error) FlowPersistence
+	OnUpdate(func(WorkFlow) error) FlowPersistence
 }
 
-type stepPersistor struct {
+type stepPersistence struct {
 	onInsert func(Step)
 	onUpdate func(Step)
 }
 
-type procPersistor struct {
+type procPersistence struct {
 	onInsert func(Process)
 	onUpdate func(Process)
 }
 
-type flowPersistor struct {
+type flowPersistence struct {
 	onInsert func(WorkFlow)
 	onUpdate func(WorkFlow)
 }
 
-func (sp *stepPersistor) OnInsert(f func(Step) error) StepPersistor {
-	sp.onInsert = wrapPersist[Step](beginAction, f)
+func (sp *stepPersistence) OnInsert(f func(Step) error) StepPersistence {
+	sp.onInsert = wrapPersist[Step](insertOP, f)
 	return sp
 }
 
-func (sp *stepPersistor) OnUpdate(f func(Step) error) StepPersistor {
-	sp.onUpdate = wrapPersist[Step](completedAction, f)
+func (sp *stepPersistence) OnUpdate(f func(Step) error) StepPersistence {
+	sp.onUpdate = wrapPersist[Step](updateOP, f)
 	return sp
 }
 
-func (pp *procPersistor) OnInsert(f func(Process) error) ProcPersistor {
-	pp.onInsert = wrapPersist[Process](beginAction, f)
+func (pp *procPersistence) OnInsert(f func(Process) error) ProcPersistence {
+	pp.onInsert = wrapPersist[Process](insertOP, f)
 	return pp
 }
 
-func (pp *procPersistor) OnUpdate(f func(Process) error) ProcPersistor {
-	pp.onUpdate = wrapPersist[Process](completedAction, f)
+func (pp *procPersistence) OnUpdate(f func(Process) error) ProcPersistence {
+	pp.onUpdate = wrapPersist[Process](updateOP, f)
 	return pp
 }
 
-func (fp *flowPersistor) OnInsert(f func(WorkFlow) error) FlowPersistor {
-	fp.onInsert = wrapPersist[WorkFlow](beginAction, f)
+func (fp *flowPersistence) OnInsert(f func(WorkFlow) error) FlowPersistence {
+	fp.onInsert = wrapPersist[WorkFlow](insertOP, f)
 	return fp
 }
 
-func (fp *flowPersistor) OnUpdate(f func(WorkFlow) error) FlowPersistor {
-	fp.onUpdate = wrapPersist[WorkFlow](completedAction, f)
+func (fp *flowPersistence) OnUpdate(f func(WorkFlow) error) FlowPersistence {
+	fp.onUpdate = wrapPersist[WorkFlow](updateOP, f)
 	return fp
 }
 
-func ConfigureStepPersist() StepPersistor {
+func StepPersist() StepPersistence {
 	return stepPersist
 }
 
-func ConfigureProcPersist() ProcPersistor {
+func ProcPersist() ProcPersistence {
 	return procPersist
 }
 
-func ConfigureFlowPersist() FlowPersistor {
+func FlowPersist() FlowPersistence {
 	return flowPersist
 }
 
@@ -96,19 +96,12 @@ func wrapPersist[p proto](action string, f func(p) error) func(p) {
 	return func(foo p) {
 		defer func() {
 			if r := recover(); r != nil {
-				var t string
-				switch any(foo).(type) {
-				case Step:
-					t = "Step"
-				case Process:
-					t = "Process"
-				case WorkFlow:
-					t = "WorkFlow"
-				}
-				logger.Errorf(persistPanicLog, t, foo.Name(), foo.ID(), action, r, stack())
+				event := panicEvent(foo, InPersist, r, stack())
+				event.write("Action", action)
+				dispatcher.send(event)
 			}
 		}()
-		if action == beginAction {
+		if action == insertOP {
 			foo.append(Pending)
 			// Entity was already inserted before recovery, avoid to insert it again.
 			if foo.Has(Recovering) {
@@ -117,16 +110,9 @@ func wrapPersist[p proto](action string, f func(p) error) func(p) {
 		}
 		err := f(foo)
 		if err != nil {
-			var t string
-			switch any(foo).(type) {
-			case Step:
-				t = "Step"
-			case Process:
-				t = "Process"
-			case WorkFlow:
-				t = "WorkFlow"
-			}
-			logger.Errorf(persistErrorLog, t, foo.Name(), foo.ID(), action, err.Error())
+			event := errorEvent(foo, InPersist, err)
+			event.write("Action", action)
+			dispatcher.send(event)
 		}
 	}
 }

@@ -31,6 +31,18 @@ type PanicComparableImpl struct {
 	Content string
 }
 
+func emptyStepFunc(_ flow.Step) error { return nil }
+
+func emptyProcFunc(_ flow.Process) error { return nil }
+
+func emptyFlowFunc(_ flow.WorkFlow) error { return nil }
+
+func resetPersist() {
+	flow.StepPersist().OnInsert(emptyStepFunc).OnUpdate(emptyStepFunc)
+	flow.ProcPersist().OnInsert(emptyProcFunc).OnUpdate(emptyProcFunc)
+	flow.FlowPersist().OnInsert(emptyFlowFunc).OnUpdate(emptyFlowFunc)
+}
+
 func (p *PanicComparableImpl) Equal(_ any) bool {
 	if atomic.LoadInt64(&letGo) == 0 {
 		return true
@@ -339,8 +351,8 @@ func (fx *FlexibleBuilder[T]) MultiRecover(incs ...int64) *FlexibleBuilder[T] {
 			atomic.StoreInt64(&recoverFlag, 0)
 			return nil, fmt.Errorf("error")
 		}
-		if atomic.LoadInt64(&recoverFlag) == 2 {
-			atomic.StoreInt64(&recoverFlag, 1)
+		if atomic.LoadInt64(&recoverFlag) >= 2 {
+			atomic.AddInt64(&recoverFlag, -1)
 		}
 		atomic.AddInt64(&current, 100)
 		return s.Name(), nil

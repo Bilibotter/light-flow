@@ -1,20 +1,26 @@
 package light_flow
 
 import (
+	"fmt"
 	"log"
 	"os"
+	"strings"
+)
+
+var (
+	callbackOrder = []string{"Location", "Order", "Scope", "Necessity"}
+	suspendOrder  = []string{"Location"}
+	recoverOrder  = []string{"Location"}
+	resourceOrder = []string{"Action", "Resource"}
+	persistOrder  = []string{"Action"}
+	eventOrder    []string
 )
 
 const (
-	resourceErrorFmt = "Process[Name: %s, ID: %s] %s Resource[ %s ] failed;\nerror=%s"
-	resourcePanicFmt = "Process[Name: %s, ID: %s] %s Resource[ %s ] panic;\npanic=%v\n%s"
-	recoverLog       = "panic occur while WorkFlow[ %s ] recovering;\nID=%s\nPanic=%s\n%s"
-	saveLog          = "panic occur while WorkFlow[ %s ] saving checkpoints;\nID=%s\nPanic=%s\n%s"
-	callbackPanicLog = "%s Callback panic;\nID=%s;\nBelong=%s;\nNecessity=%s, Scope=%s, Iteration=%d;\nPanic=%v\n%s"
-	callbackErrorLog = "%s Callback error;\nID=%s;\nBelong=%s;\nNecessity=%s, Scope=%s, Iteration=%d;\nError=%s"
-	snapshotErrorLog = "build snapshot failed: %s[Name=%s, ID=%s] %s error: %s"
-	persistPanicLog  = "persist failed: %s[Name:%s, ID:%s] persist panic while %s\npanic: %v\n%s"
-	persistErrorLog  = "persist failed: %s[Name:%s, ID:%s] persist error while %s: %s"
+	handlePanicLog  = "Handle event failed | [Stage: %s] [%s: %s] [ID: %s] | Panic: %v\n%s"
+	discardPanicLog = "Discard event failed | [Stage: %s] [%s: %s] [ID: %s] | Panic: %v\n%s"
+	errorLog        = "[Stage: %s] [%s: %s] %s[ID: %s] - Failed | Error: %s"
+	panicLog        = "[Stage: %s] [%s: %s] %s[ID: %s] - Failed | Panic: %v\n%s"
 )
 
 const (
@@ -44,6 +50,27 @@ type LoggerI interface {
 // defaultLogger
 type defaultLogger struct {
 	*log.Logger
+}
+
+func commonLog(order []string) func(event FlexEvent) {
+	return func(event FlexEvent) {
+		sb := strings.Builder{}
+		if event.ExtraInfo() != nil {
+			for _, key := range order {
+				if event.Extra(key) == "" {
+					continue
+				}
+				sb.WriteString(fmt.Sprintf("[%s: %s] ", key, event.Extra(key)))
+			}
+		}
+		if event.Level() == ErrorLevel {
+			logger.Errorf(errorLog, event.Stage(), event.Layer(), event.Name(), sb.String(), event.ID(), event.Error())
+			return
+		}
+		if event.Level() == PanicLevel {
+			logger.Errorf(panicLog, event.Stage(), event.Layer(), event.Name(), sb.String(), event.ID(), event.Panic(), event.StackTrace())
+		}
+	}
 }
 
 func newDefaultLogger() *defaultLogger {

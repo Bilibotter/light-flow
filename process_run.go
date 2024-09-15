@@ -277,10 +277,13 @@ func (process *runProcess) manageResources(action string) {
 	if process.resources == nil {
 		return
 	}
-	var resName string
+	resName := "-"
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Errorf(resourcePanicFmt, process.Name(), process.id, action, resName, r, stack())
+			event := panicEvent(process, InResource, r, stack())
+			event.write("Action", action)
+			event.write("Resource", resName)
+			dispatcher.send(event)
 		}
 	}()
 	var err error
@@ -288,14 +291,17 @@ func (process *runProcess) manageResources(action string) {
 		resName = name
 		switch action {
 		case releaseR:
-			err = resourceManagers[resName].onRelease(res)
+			err = resourceManagers[name].onRelease(res)
 		case recoverR:
-			err = resourceManagers[resName].onRecover(res)
+			err = resourceManagers[name].onRecover(res)
 		case suspendR:
-			err = resourceManagers[resName].onSuspend(res)
+			err = resourceManagers[name].onSuspend(res)
 		}
 		if err != nil {
-			logger.Errorf(resourceErrorFmt, process.Name(), process.id, action, resName, err.Error())
+			event := errorEvent(process, InResource, err)
+			event.write("Action", action)
+			event.write("Resource", name)
+			dispatcher.send(event)
 		}
 	}
 	if action == suspendR {
@@ -419,8 +425,11 @@ func (process *runProcess) advertise(flag uint64) {
 func (process *runProcess) Attach(resName string, initParam any) (_ Resource, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Errorf(resourcePanicFmt, process.Name(), process.id, initializeR, resName, r, stack())
-			err = fmt.Errorf(resourceErrorFmt, process.Name(), process.id, attachR, resName, fmt.Sprintf("panic=%v", r))
+			event := panicEvent(process, InResource, r, stack())
+			event.write("Action", attachR)
+			event.write("Resource", resName)
+			dispatcher.send(event)
+			err = fmt.Errorf("panic=%v", r)
 		}
 	}()
 	if foo, find := process.Acquire(resName); find {
@@ -428,13 +437,16 @@ func (process *runProcess) Attach(resName string, initParam any) (_ Resource, er
 	}
 	manager, exist := getResourceManager(resName)
 	if !exist {
-		err = fmt.Errorf(resourceErrorFmt, process.Name(), process.id, initializeR, resName, "Resource[ %s ] not registered")
+		err = fmt.Errorf("[Resource: %s] not registered", resName)
 		return nil, err
 	}
 	res := &resource{boundProc: process, resName: resName}
 	instance, err := manager.onInitialize(res, initParam)
 	if err != nil {
-		err = fmt.Errorf(resourceErrorFmt, process.Name(), process.id, initializeR, resName, err.Error())
+		event := errorEvent(process, InResource, err)
+		event.write("Action", initializeR)
+		event.write("Resource", resName)
+		dispatcher.send(event)
 		return nil, err
 	}
 	res.entity = instance
