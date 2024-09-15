@@ -12,15 +12,15 @@ var (
 	suspendOrder  = []string{"Location"}
 	recoverOrder  = []string{"Location"}
 	resourceOrder = []string{"Action", "Resource"}
+	persistOrder  = []string{"Action"}
+	eventOrder    []string
 )
 
 const (
-	resourceErrorFmt = "Process[Name: %s, ID: %s] %s Resource[ %s ] failed;\nerror=%s"
-	resourcePanicFmt = "Process[Name: %s, ID: %s] %s Resource[ %s ] panic;\npanic=%v\n%s"
-	persistPanicLog  = "persist failed: %s[Name:%s, ID:%s] persist panic while %s\npanic: %v\n%s"
-	persistErrorLog  = "persist failed: %s[Name:%s, ID:%s] persist error while %s: %s"
-	errorLog         = "[Stage: %s] [%s: %s] %s[ID: %s] - Failed | Error: %s"
-	panicLog         = "[Stage: %s] [%s: %s] %s[ID: %s] - Failed | Panic: %v\n%s"
+	handlePanicLog  = "Handle event failed | [Stage: %s] [%s: %s] [ID: %s] | Panic: %v\n%s"
+	discardPanicLog = "Discard event failed | [Stage: %s] [%s: %s] [ID: %s] | Panic: %v\n%s"
+	errorLog        = "[Stage: %s] [%s: %s] %s[ID: %s] - Failed | Error: %s"
+	panicLog        = "[Stage: %s] [%s: %s] %s[ID: %s] - Failed | Panic: %v\n%s"
 )
 
 const (

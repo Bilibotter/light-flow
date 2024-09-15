@@ -108,11 +108,24 @@ func (e *errorEncryptor) GetSecret() []byte {
 	return []byte("secret")
 }
 
+func errorStepFunc(_ flow.Step) error { return fmt.Errorf("error step persist") }
+
+func errorProcFunc(_ flow.Process) error { return fmt.Errorf("error proc persist") }
+
+func errorFlowFunc(_ flow.WorkFlow) error { return fmt.Errorf("error flow persist") }
+
+func panicStepFunc(_ flow.Step) error { panic("step panic") }
+
+func panicProcFunc(_ flow.Process) error { panic("proc panic") }
+
+func panicFlowFunc(_ flow.WorkFlow) error { panic("flow panic") }
+
 func resetEventEnv() {
 	flow.SuspendPersist(&persisitImpl{})
 	flow.EventHandler().Clear()
 	flow.SetEncryptor(flow.NewAES256Encryptor([]byte("light-flow"), "pwd", "password"))
 	resetCurrent()
+	resetPersist()
 }
 
 func eventCheck(t *testing.T) func(event flow.FlexEvent) {
@@ -129,7 +142,7 @@ func eventCheck(t *testing.T) func(event flow.FlexEvent) {
 		if event.Timestamp().IsZero() {
 			t.Errorf("Expected timestamp, got zero value")
 		}
-		if event.Layer() == flow.ProcLyr {
+		if event.Layer() == flow.ProcLayer {
 			if event.FlowName() == "" {
 				t.Errorf("Expected flow name, got empty string")
 			}
@@ -143,7 +156,7 @@ func eventCheck(t *testing.T) func(event flow.FlexEvent) {
 				t.Errorf("Expected proc name, got empty string")
 			}
 		}
-		if event.Layer() == flow.StepLyr {
+		if event.Layer() == flow.StepLayer {
 			if event.FlowID() == "" {
 				t.Errorf("Expected flow ID, got empty string")
 			}
@@ -724,4 +737,128 @@ func TestResourceEvent(t *testing.T) {
 		t.Errorf("expect error==nil, but got err %s", err.Error())
 	}
 	waitCurrent(4)
+}
+
+func TestPersistEvent(t *testing.T) {
+	defer resetEventEnv()
+	flow.FlowPersist().OnInsert(errorFlowFunc)
+	flow.EventHandler().Handle(flow.InPersist, flexErrorCheck(t, flow.InPersist, "", map[string]string{"Action": "Insert"}))
+	wf := flow.RegisterFlow("TestPersistEvent0")
+	proc := wf.Process("TestPersistEvent0")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "1")
+	ff := flow.DoneFlow("TestPersistEvent0", nil)
+	waitCurrent(2)
+	CheckResult(t, 2, flow.Success)(any(ff).(flow.WorkFlow))
+
+	resetEventEnv()
+	flow.FlowPersist().OnInsert(panicFlowFunc)
+	flow.EventHandler().Handle(flow.InPersist, flexPanicCheck(t, flow.InPersist, "", map[string]string{"Action": "Insert"}))
+	wf = flow.RegisterFlow("TestPersistEvent1")
+	proc = wf.Process("TestPersistEvent1")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "1")
+	ff = flow.DoneFlow("TestPersistEvent1", nil)
+	waitCurrent(2)
+	CheckResult(t, 2, flow.Success)(any(ff).(flow.WorkFlow))
+
+	resetEventEnv()
+	flow.ProcPersist().OnInsert(errorProcFunc)
+	flow.EventHandler().Handle(flow.InPersist, flexErrorCheck(t, flow.InPersist, "", map[string]string{"Action": "Insert"}))
+	wf = flow.RegisterFlow("TestPersistEvent2")
+	proc = wf.Process("TestPersistEvent2")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "1")
+	ff = flow.DoneFlow("TestPersistEvent2", nil)
+	waitCurrent(2)
+	CheckResult(t, 2, flow.Success)(any(ff).(flow.WorkFlow))
+
+	resetEventEnv()
+	flow.ProcPersist().OnInsert(panicProcFunc)
+	flow.EventHandler().Handle(flow.InPersist, flexPanicCheck(t, flow.InPersist, "", map[string]string{"Action": "Insert"}))
+	wf = flow.RegisterFlow("TestPersistEvent3")
+	proc = wf.Process("TestPersistEvent3")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "1")
+	ff = flow.DoneFlow("TestPersistEvent3", nil)
+	waitCurrent(2)
+	CheckResult(t, 2, flow.Success)(any(ff).(flow.WorkFlow))
+
+	resetEventEnv()
+	flow.StepPersist().OnInsert(errorStepFunc)
+	flow.EventHandler().Handle(flow.InPersist, flexErrorCheck(t, flow.InPersist, "", map[string]string{"Action": "Insert"}))
+	wf = flow.RegisterFlow("TestPersistEvent4")
+	proc = wf.Process("TestPersistEvent4")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "1")
+	ff = flow.DoneFlow("TestPersistEvent4", nil)
+	waitCurrent(2)
+	CheckResult(t, 2, flow.Success)(any(ff).(flow.WorkFlow))
+
+	resetEventEnv()
+	flow.StepPersist().OnInsert(panicStepFunc)
+	flow.EventHandler().Handle(flow.InPersist, flexPanicCheck(t, flow.InPersist, "", map[string]string{"Action": "Insert"}))
+	wf = flow.RegisterFlow("TestPersistEvent5")
+	proc = wf.Process("TestPersistEvent5")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "1")
+	ff = flow.DoneFlow("TestPersistEvent5", nil)
+	waitCurrent(2)
+	CheckResult(t, 2, flow.Success)(any(ff).(flow.WorkFlow))
+}
+
+func TestPersistEvent0(t *testing.T) {
+	defer resetEventEnv()
+	flow.FlowPersist().OnUpdate(errorFlowFunc)
+	flow.EventHandler().Handle(flow.InPersist, flexErrorCheck(t, flow.InPersist, "", map[string]string{"Action": "Update"}))
+	wf := flow.RegisterFlow("TestPersistEvent00")
+	proc := wf.Process("TestPersistEvent00")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "1")
+	ff := flow.DoneFlow("TestPersistEvent00", nil)
+	waitCurrent(2)
+	CheckResult(t, 2, flow.Success)(any(ff).(flow.WorkFlow))
+
+	resetEventEnv()
+	flow.FlowPersist().OnUpdate(panicFlowFunc)
+	flow.EventHandler().Handle(flow.InPersist, flexPanicCheck(t, flow.InPersist, "", map[string]string{"Action": "Update"}))
+	wf = flow.RegisterFlow("TestPersistEvent01")
+	proc = wf.Process("TestPersistEvent01")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "1")
+	ff = flow.DoneFlow("TestPersistEvent01", nil)
+	waitCurrent(2)
+	CheckResult(t, 2, flow.Success)(any(ff).(flow.WorkFlow))
+
+	resetEventEnv()
+	flow.ProcPersist().OnUpdate(errorProcFunc)
+	flow.EventHandler().Handle(flow.InPersist, flexErrorCheck(t, flow.InPersist, "", map[string]string{"Action": "Update"}))
+	wf = flow.RegisterFlow("TestPersistEvent02")
+	proc = wf.Process("TestPersistEvent02")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "1")
+	ff = flow.DoneFlow("TestPersistEvent02", nil)
+	waitCurrent(2)
+	CheckResult(t, 2, flow.Success)(any(ff).(flow.WorkFlow))
+
+	resetEventEnv()
+	flow.ProcPersist().OnUpdate(panicProcFunc)
+	flow.EventHandler().Handle(flow.InPersist, flexPanicCheck(t, flow.InPersist, "", map[string]string{"Action": "Update"}))
+	wf = flow.RegisterFlow("TestPersistEvent03")
+	proc = wf.Process("TestPersistEvent03")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "1")
+	ff = flow.DoneFlow("TestPersistEvent03", nil)
+	waitCurrent(2)
+	CheckResult(t, 2, flow.Success)(any(ff).(flow.WorkFlow))
+
+	resetEventEnv()
+	flow.StepPersist().OnUpdate(errorStepFunc)
+	flow.EventHandler().Handle(flow.InPersist, flexErrorCheck(t, flow.InPersist, "", map[string]string{"Action": "Update"}))
+	wf = flow.RegisterFlow("TestPersistEvent04")
+	proc = wf.Process("TestPersistEvent04")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "1")
+	ff = flow.DoneFlow("TestPersistEvent04", nil)
+	waitCurrent(2)
+	CheckResult(t, 2, flow.Success)(any(ff).(flow.WorkFlow))
+
+	resetEventEnv()
+	flow.StepPersist().OnUpdate(panicStepFunc)
+	flow.EventHandler().Handle(flow.InPersist, flexPanicCheck(t, flow.InPersist, "", map[string]string{"Action": "Update"}))
+	wf = flow.RegisterFlow("TestPersistEvent05")
+	proc = wf.Process("TestPersistEvent05")
+	proc.NameStep(Fx[flow.Step](t).Inc().Step(), "1")
+	ff = flow.DoneFlow("TestPersistEvent05", nil)
+	waitCurrent(2)
+	CheckResult(t, 2, flow.Success)(any(ff).(flow.WorkFlow))
 }

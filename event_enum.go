@@ -7,12 +7,12 @@ type EventLevel uint8
 type EventLayer uint8
 
 /*************************************************************
- * Event Scope
+ * Event Layer
  *************************************************************/
 const (
-	FlowLyr EventLayer = iota
-	ProcLyr
-	StepLyr
+	FlowLayer EventLayer = iota
+	ProcLayer
+	StepLayer
 )
 
 /*************************************************************
@@ -25,11 +25,11 @@ const (
 	InSuspend
 	InRecover
 	InResource
-	stageTail // used to make restrict test
+	inEvent
 )
 
 /*************************************************************
- * Event Severity
+ * Event Level
  *************************************************************/
 
 const (
@@ -42,11 +42,11 @@ const (
 
 func (s EventLayer) String() string {
 	switch s {
-	case FlowLyr:
+	case FlowLayer:
 		return "Flow"
-	case ProcLyr:
+	case ProcLayer:
 		return "Process"
-	case StepLyr:
+	case StepLayer:
 		return "Step"
 	default:
 		return "Unknown"

@@ -1,7 +1,6 @@
 package light_flow
 
 import (
-	"fmt"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -12,7 +11,6 @@ var dispatcher = &eventDispatcher{init: sync.Once{}, capacity: 64, handlerNum: 0
 
 var discardDelay int64 = 60
 var waitEventTimeout = 30 * time.Second
-var send = dispatcher.send
 var handlerRegistry = newEventRegister()
 
 /*************************************************************
@@ -45,7 +43,7 @@ type FlexEvent interface {
 }
 
 type basicEventI interface {
-	exception
+	errorResult
 	ID() string
 	Name() string
 	EventID() string
@@ -59,7 +57,7 @@ type basicEventI interface {
 	Extra(key string) string
 }
 
-type exception interface {
+type errorResult interface {
 	error
 	Panic() any
 	StackTrace() []byte // only panic event has stack trace
@@ -135,11 +133,11 @@ func newEvent[T proto](runtime T, stage EventStage) *flexEvent {
 	}
 	switch any(runtime).(type) {
 	case *runFlow:
-		event.EventLayer = FlowLyr
+		event.EventLayer = FlowLayer
 	case *runProcess:
-		event.EventLayer = ProcLyr
+		event.EventLayer = ProcLayer
 	case *runStep:
-		event.EventLayer = StepLyr
+		event.EventLayer = StepLayer
 	}
 	return event
 }
@@ -154,6 +152,8 @@ func newEventRegister() *handlerRegister {
 			InSuspend:  commonLog(suspendOrder),
 			InRecover:  commonLog(recoverOrder),
 			InResource: commonLog(resourceOrder),
+			InPersist:  commonLog(persistOrder),
+			inEvent:    commonLog(eventOrder),
 		},
 	}
 }
@@ -231,8 +231,8 @@ func (ed *eventDispatcher) findHandler() *handlerLifecycle {
 		handler := new(handlerLifecycle)
 		handler.eventDispatcher = ed
 		ed.Lock()
-		defer ed.Unlock()
 		ed.handlers = append(ed.handlers, handler)
+		ed.Unlock()
 		return handler
 	}
 	ed.RLock()
@@ -357,8 +357,7 @@ func (h *handlerRegister) Clear() {
 func (h *handlerRegister) handle(event FlexEvent) {
 	defer func() {
 		if r := recover(); r != nil {
-			//todo log panic
-			fmt.Printf("panic: %v\n%s", r, stack())
+			logger.Errorf(handlePanicLog, event.Stage(), event.Layer(), event.Name(), event.ID(), r, stack())
 		}
 	}()
 	if !h.unLog[event.Stage()] {
@@ -374,7 +373,7 @@ func (h *handlerRegister) handle(event FlexEvent) {
 func (h *handlerRegister) discard(event FlexEvent) {
 	defer func() {
 		if r := recover(); r != nil {
-			//todo log panic
+			logger.Errorf(discardPanicLog, event.Stage(), event.Layer(), event.Name(), event.ID(), r, stack())
 		}
 	}()
 	for _, handler := range h.discards[event.Stage()] {

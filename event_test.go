@@ -34,6 +34,9 @@ func waitCurrent(i int) {
 
 func resetEventEnv() {
 	dispatcher.exit()
+	FlowPersist().OnInsert(func(_ WorkFlow) error {
+		return nil
+	})
 	resetCurrent()
 	resetRegistry()
 	atomic.StoreInt64(&discardDelay, 60)
@@ -242,6 +245,9 @@ func TestHandlerAdd(t *testing.T) {
 	}
 	waitCurrent(24)
 	if atomic.LoadInt64(&dispatcher.handlerNum) != 24 {
+		if int(atomic.LoadInt64(&dispatcher.handlerNum))+len(dispatcher.eventBus) != 32 {
+			t.Logf("Handler num=%d, capacity=%d, length=%d", atomic.LoadInt64(&dispatcher.handlerNum), len(dispatcher.eventBus), len(dispatcher.handlers))
+		}
 		t.Errorf("handler num should be 24, but got %d, capacity=%d, length=%d", atomic.LoadInt64(&dispatcher.handlerNum), len(dispatcher.eventBus), len(dispatcher.handlers))
 	}
 	atomic.StoreInt64(&letGo, 1)
@@ -362,4 +368,79 @@ func TestMultipleEvent(t *testing.T) {
 		go dispatcher.send(&eventImpl{})
 	}
 	waitCurrent(4000)
+}
+
+func TestEventHandlerDiscardPanic(t *testing.T) {
+	defer resetEventEnv()
+	t.Logf("Dispather capacity=%d, maxHandler=%d", dispatcher.capacity, dispatcher.maxHandler)
+	t.Logf("Dsipatcher handler num=%d, eventBus length=%d", dispatcher.handlerNum, len(dispatcher.eventBus))
+	FlowPersist().OnInsert(func(flow WorkFlow) error {
+		return fmt.Errorf("persist error")
+	})
+	canOpen := int64(0)
+	EventHandler().
+		Handle(InPersist, func(event FlexEvent) (keepOn bool) {
+			t.Logf("receive event: %s", event.Name())
+			for now := time.Now(); time.Since(now) < time.Second; {
+				if atomic.LoadInt64(&canOpen) == 1 {
+					atomic.AddInt64(&current, 1)
+					return true
+				}
+			}
+			t.Errorf("handler wait timeout")
+			return true
+		}).
+		Discard(InPersist, func(event FlexEvent) (keepOn bool) {
+			t.Logf("discard event: %s", event.Name())
+			atomic.AddInt64(&current, 1)
+			panic("handle panic")
+		}).
+		MaxHandler(1).Capacity(1)
+	wf := RegisterFlow("TestEventHandlerDiscardPanic")
+	proc := wf.Process("TestEventHandlerDiscardPanic")
+	proc.NameStep(func(ctx Step) (any, error) {
+		atomic.AddInt64(&current, 1)
+		return nil, nil
+	}, "1")
+	for i := 0; i < 4; i++ {
+		t.Logf("TestEventHandlerDiscardPanic round %d", i)
+		ff := DoneFlow("TestEventHandlerDiscardPanic", nil)
+		if !ff.Success() {
+			t.Errorf("TestEventHandlerDiscardPanic failed")
+		}
+		t.Logf("TestEventHandler DiscardPanic round %d done", i)
+		t.Logf("Dispather capacity=%d, maxHandler=%d", dispatcher.capacity, dispatcher.maxHandler)
+		t.Logf("Dsipatcher handler num=%d, eventBus length=%d", dispatcher.handlerNum, len(dispatcher.eventBus))
+	}
+	waitCurrent(6)
+	atomic.AddInt64(&canOpen, 1)
+	waitCurrent(8)
+}
+
+func TestEventHandlerPanic(t *testing.T) {
+	defer resetEventEnv()
+	FlowPersist().OnInsert(func(flow WorkFlow) error {
+		return fmt.Errorf("persist error")
+	})
+	EventHandler().Handle(InPersist, func(event FlexEvent) (keepOn bool) {
+		atomic.AddInt64(&current, 1)
+		panic("handle panic")
+	}).MaxHandler(1).Capacity(1)
+	wf := RegisterFlow("TestEventHandlerPanic")
+	proc := wf.Process("TestEventHandlerPanic")
+	proc.NameStep(func(ctx Step) (any, error) {
+		atomic.AddInt64(&current, 1)
+		return nil, nil
+	}, "1")
+	ff := DoneFlow("TestEventHandlerPanic", nil)
+	waitCurrent(2)
+	CheckResult(t, 2, Success)(any(ff).(WorkFlow))
+
+	// test if handler will block when handle panic
+	for i := 0; i < 4; i++ {
+		resetCurrent()
+		ff = DoneFlow("TestEventHandlerPanic", nil)
+		waitCurrent(2)
+		CheckResult(t, 2, Success)(any(ff).(WorkFlow))
+	}
 }

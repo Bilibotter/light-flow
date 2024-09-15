@@ -253,7 +253,7 @@ func (chain *funcChain[T]) filter(runtime T) (runNext bool) {
 		if r != nil {
 			event := panicEvent(runtime, InCallback, r, stack())
 			event.extra = callbackExtra(chain.necessity(index), chain.Stage, chain.Scope, strconv.Itoa(index+1))
-			send(event)
+			dispatcher.send(event)
 			// non-must callback panic, ignore it
 			if index >= chain.Index {
 				return
@@ -295,7 +295,7 @@ func (chain *funcChain[T]) filter(runtime T) (runNext bool) {
 		if err != nil {
 			event := errorEvent(runtime, InCallback, err)
 			event.extra = callbackExtra(chain.necessity(index), chain.Stage, chain.Scope, strconv.Itoa(index+1))
-			send(event)
+			dispatcher.send(event)
 			if index < chain.Index {
 				runNext = false
 				if handler, ok := any(runtime).(errorHandler); ok {

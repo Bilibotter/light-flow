@@ -197,7 +197,7 @@ func RecoverFlow(flowId string) (ret FinishedWorkFlow, err error) {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("%v", r)
 			event = panicEvent(&runFlow{id: flowId, FlowMeta: &FlowMeta{name: "-"}}, InRecover, r, stack())
-			send(event)
+			dispatcher.send(event)
 			return
 		}
 		if queryError != nil {
@@ -205,7 +205,7 @@ func RecoverFlow(flowId string) (ret FinishedWorkFlow, err error) {
 			event.extra = recoverExtra("Persist")
 		}
 		if event != nil {
-			send(event)
+			dispatcher.send(event)
 		}
 	}()
 	record, queryError := persister.GetLatestRecord(flowId)
@@ -295,7 +295,7 @@ func loadStatus(workflow *runFlow, checkpoints []CheckPoint) (err error) {
 		if !ok {
 			err = fmt.Errorf("the process for [Step: %s] is not define", checkpoint.GetName())
 			event := errorEvent(workflow, InRecover, err)
-			send(event)
+			dispatcher.send(event)
 			return
 		}
 		// may recover version different from suspend version
@@ -303,7 +303,7 @@ func loadStatus(workflow *runFlow, checkpoints []CheckPoint) (err error) {
 		if !find {
 			err = fmt.Errorf("[Step: %s] not belong to [Process: %s]", name, proc.name)
 			event := errorEvent(workflow, InRecover, err)
-			send(event)
+			dispatcher.send(event)
 			return
 		}
 		current.append(Recovering)
@@ -322,7 +322,7 @@ func loadCheckpoints(workflow *runFlow, checkpoints []CheckPoint) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			event := panicEvent(workflow, InRecover, r, stack())
-			send(event)
+			dispatcher.send(event)
 		}
 	}()
 	for _, checkpoint := range checkpoints {
@@ -589,7 +589,7 @@ func (point *flowCheckpoint) buildSnapshot() (err error) {
 		if err != nil {
 			event := errorEvent(point.runFlow, InSuspend, err)
 			event.extra = suspendExtra("Encrypt")
-			send(event)
+			dispatcher.send(event)
 			return
 		}
 	}
@@ -604,7 +604,7 @@ func (point *flowCheckpoint) buildSnapshot() (err error) {
 	if err != nil {
 		event := errorEvent(point.runFlow, InSuspend, err)
 		event.extra = suspendExtra("Serialize")
-		send(event)
+		dispatcher.send(event)
 	}
 	return
 }
@@ -663,7 +663,7 @@ func (point *procCheckpoint) buildSnapshot() (err error) {
 			if err != nil {
 				event := errorEvent(point.runProcess, InSuspend, err)
 				event.extra = suspendExtra("Encrypt")
-				send(event)
+				dispatcher.send(event)
 				return
 			}
 			snapshot[k] = append(snapshot[k], *head)
@@ -673,7 +673,7 @@ func (point *procCheckpoint) buildSnapshot() (err error) {
 	if err != nil {
 		event := errorEvent(point.runProcess, InSuspend, err)
 		event.extra = suspendExtra("Serialize")
-		send(event)
+		dispatcher.send(event)
 	}
 	return
 }
@@ -731,7 +731,7 @@ func (rf *runFlow) loadCheckpoint(checkpoint CheckPoint) error {
 	if err != nil {
 		event := errorEvent(rf, InRecover, err)
 		event.extra = recoverExtra("Serialize")
-		send(event)
+		dispatcher.send(event)
 		return err
 	}
 	snapshot := combine[0]
@@ -741,7 +741,7 @@ func (rf *runFlow) loadCheckpoint(checkpoint CheckPoint) error {
 		if err != nil {
 			event := errorEvent(rf, InRecover, err)
 			event.extra = recoverExtra("Decrypt")
-			send(event)
+			dispatcher.send(event)
 			return err
 		}
 	}
@@ -760,7 +760,7 @@ func (rf *runFlow) saveCheckpoints() {
 	defer func() {
 		if r := recover(); r != nil {
 			event := panicEvent(rf, InSuspend, r, stack())
-			send(event)
+			dispatcher.send(event)
 		}
 	}()
 	checkpoints := make([]CheckPoint, 0)
@@ -793,7 +793,7 @@ func (rf *runFlow) saveCheckpoints() {
 	if err := persister.SaveCheckpointAndRecord(checkpoints, record); err != nil {
 		event := errorEvent(rf, InSuspend, err)
 		event.extra = suspendExtra("Persist")
-		send(event)
+		dispatcher.send(event)
 		return
 	}
 }
@@ -804,7 +804,7 @@ func (process *runProcess) loadCheckpoint(checkpoint CheckPoint) error {
 	if err != nil {
 		event := errorEvent(process, InRecover, err)
 		event.extra = recoverExtra("Serialize")
-		send(event)
+		dispatcher.send(event)
 		return err
 	}
 	if err = process.loadResource(snapshot); err != nil {
@@ -825,7 +825,7 @@ func (process *runProcess) loadCheckpoint(checkpoint CheckPoint) error {
 			if err != nil {
 				event := errorEvent(process, InRecover, err)
 				event.extra = recoverExtra("Decrypt")
-				send(event)
+				dispatcher.send(event)
 				return err
 			}
 			head = newNode

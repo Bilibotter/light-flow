@@ -283,7 +283,7 @@ func (process *runProcess) manageResources(action string) {
 			event := panicEvent(process, InResource, r, stack())
 			event.write("Action", action)
 			event.write("Resource", resName)
-			send(event)
+			dispatcher.send(event)
 		}
 	}()
 	var err error
@@ -301,7 +301,7 @@ func (process *runProcess) manageResources(action string) {
 			event := errorEvent(process, InResource, err)
 			event.write("Action", action)
 			event.write("Resource", name)
-			send(event)
+			dispatcher.send(event)
 		}
 	}
 	if action == suspendR {
@@ -428,7 +428,7 @@ func (process *runProcess) Attach(resName string, initParam any) (_ Resource, er
 			event := panicEvent(process, InResource, r, stack())
 			event.write("Action", attachR)
 			event.write("Resource", resName)
-			send(event)
+			dispatcher.send(event)
 			err = fmt.Errorf("panic=%v", r)
 		}
 	}()
@@ -446,7 +446,7 @@ func (process *runProcess) Attach(resName string, initParam any) (_ Resource, er
 		event := errorEvent(process, InResource, err)
 		event.write("Action", initializeR)
 		event.write("Resource", resName)
-		send(event)
+		dispatcher.send(event)
 		return nil, err
 	}
 	res.entity = instance

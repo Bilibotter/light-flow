@@ -205,18 +205,6 @@ func onFlowRecover(flow flow.WorkFlow) error {
 	return db.Model(&Flows{}).Where("id = ?", flow.ID()).Updates(entity).Error
 }
 
-func emptyStepFunc(_ flow.Step) error { return nil }
-
-func emptyProcFunc(_ flow.Process) error { return nil }
-
-func emptyFlowFunc(_ flow.WorkFlow) error { return nil }
-
-func resetPersist() {
-	flow.StepPersist().OnInsert(emptyStepFunc).OnUpdate(emptyStepFunc)
-	flow.ProcPersist().OnInsert(emptyProcFunc).OnUpdate(emptyProcFunc)
-	flow.FlowPersist().OnInsert(emptyFlowFunc).OnUpdate(emptyFlowFunc)
-}
-
 func setPersist() {
 	flow.StepPersist().OnInsert(onStepBegin).OnUpdate(onStepComplete)
 	flow.ProcPersist().OnInsert(onProcessBegin).OnUpdate(onProcessComplete)
