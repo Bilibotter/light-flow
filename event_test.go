@@ -271,12 +271,16 @@ func TestDiscardHandlerReuse(t *testing.T) {
 	pass := false
 	for time.Since(start) < 1000*time.Millisecond {
 		if atomic.LoadInt64(&dispatcher.handlerNum) == 0 {
+			var goOn bool
 			for _, info := range dispatcher.handlers {
-				if atomic.LoadInt64(&info.status) != unattachedH {
-					t.Errorf("handler status should be unattachedH, but got %d", atomic.LoadInt64(&info.status))
+				if atomic.LoadInt64(&info.status) != unattachedH && atomic.LoadInt64(&info.status) != runningH {
+					goOn = true
+					break
 				}
 			}
-			t.Logf("Discard all event handlers")
+			if goOn {
+				continue
+			}
 			pass = true
 			break
 		}
@@ -325,14 +329,24 @@ func TestHandlerDiscard(t *testing.T) {
 	t.Logf("Handler num=%d", atomic.LoadInt64(&dispatcher.handlerNum))
 	start := time.Now()
 	for time.Since(start) < 1000*time.Millisecond {
-		if atomic.LoadInt64(&dispatcher.handlerNum) == 0 {
+		if atomic.LoadInt64(&dispatcher.handlerNum) == 1 {
+			var goOn bool
 			for _, info := range dispatcher.handlers {
-				if atomic.LoadInt64(&info.status) != unattachedH {
-					t.Errorf("handler status should be unattachedH, but got %d", atomic.LoadInt64(&info.status))
+				if atomic.LoadInt64(&info.status) != unattachedH && atomic.LoadInt64(&info.status) != runningH {
+					goOn = true
+					break
 				}
+			}
+			if goOn {
+				continue
 			}
 			t.Logf("Discard all event handlers")
 			return
+		}
+	}
+	for _, info := range dispatcher.handlers {
+		if atomic.LoadInt64(&info.status) != unattachedH && atomic.LoadInt64(&info.status) != runningH {
+			t.Errorf("handler status should be unattachedH, but got %d", atomic.LoadInt64(&info.status))
 		}
 	}
 	t.Errorf("handler num should be 0, but got %d, capacity=%d, length=%d", atomic.LoadInt64(&dispatcher.handlerNum), len(dispatcher.eventBus), len(dispatcher.handlers))

@@ -162,6 +162,9 @@ func (ed *eventDispatcher) send(event FlexEvent) {
 	ed.init.Do(ed.start)
 	select {
 	case ed.eventBus <- event:
+		if len(ed.eventBus)/4 > int(atomic.LoadInt64(&ed.handlerNum)) {
+			ed.addHandler(nil)
+		}
 		return
 	default:
 	}
@@ -290,8 +293,14 @@ func (el *handlerLifecycle) tryUnattached() bool {
 	if time.Now().Unix()-discarding >= discardDelay {
 		if atomic.CompareAndSwapInt64(&el.discarding, discarding, time.Now().Unix()) {
 			atomic.StoreInt64(&el.status, unattachedH)
-			atomic.AddInt64(&el.handlerNum, -1)
-			return true
+			current := atomic.AddInt64(&el.handlerNum, -1)
+			if current != 0 {
+				return true
+			}
+			// Need to ensure that at least one handler is preserved
+			atomic.StoreInt64(&el.status, runningH)
+			atomic.AddInt64(&el.handlerNum, 1)
+			return false
 		}
 	}
 	atomic.CompareAndSwapInt64(&el.status, discardH, runningH)
