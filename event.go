@@ -51,10 +51,10 @@ type basicEventI interface {
 	Level() EventLevel
 	Layer() EventLayer
 	Timestamp() time.Time
-	ExtraInfo() map[string]string
-	// Extra fetches the value of a key from the event's extra map.
+	DetailsMap() map[string]string
+	// Details fetches the value of a key from the event's details map.
 	// If the key does not exist, an empty string is returned.
-	Extra(key string) string
+	Details(key string) string
 }
 
 type errorResult interface {
@@ -94,7 +94,7 @@ type flexEvent struct {
 	timestamp time.Time
 	object    any // panic object
 	stack     []byte
-	extra     map[string]string
+	details   map[string]string
 }
 
 type handlerRegister struct {
@@ -418,12 +418,12 @@ func (f *flexEvent) Timestamp() time.Time {
 	return f.timestamp
 }
 
-func (f *flexEvent) ExtraInfo() map[string]string {
-	return f.extra
+func (f *flexEvent) DetailsMap() map[string]string {
+	return f.details
 }
 
-func (f *flexEvent) Extra(key string) string {
-	return f.extra[key]
+func (f *flexEvent) Details(key string) string {
+	return f.details[key]
 }
 
 func (f *flexEvent) FlowID() string {
@@ -486,8 +486,8 @@ func (f *flexEvent) Get(key string) (any, bool) {
 }
 
 func (f *flexEvent) write(key, value string) {
-	if f.extra == nil {
-		f.extra = make(map[string]string, 1)
+	if f.details == nil {
+		f.details = make(map[string]string, 1)
 	}
-	f.extra[key] = value
+	f.details[key] = value
 }

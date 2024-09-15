@@ -80,11 +80,6 @@ func AddResource(name string) ResourceManager {
 	return foo
 }
 
-func getResourceManager(name string) (foo *resourceManager, exist bool) {
-	foo, exist = resourceManagers[name]
-	return
-}
-
 func emptyHandler(_ Resource) error {
 	return nil
 }

@@ -176,7 +176,7 @@ func eventCheck(t *testing.T) func(event flow.FlexEvent) {
 func flexErrorCheck(t *testing.T, stage flow.EventStage, location string, checks ...map[string]string) func(event flow.FlexEvent) bool {
 	f := eventCheck(t)
 	return func(event flow.FlexEvent) bool {
-		t.Logf("Event[ %s ] start, stage: %s, location: %s", event.Name(), event.Stage(), event.Extra("Location"))
+		t.Logf("Event[ %s ] start, stage: %s, location: %s", event.Name(), event.Stage(), event.Details("Location"))
 		f(event)
 		if event.Error() == "" {
 			t.Errorf("Expected error, got empty")
@@ -184,8 +184,8 @@ func flexErrorCheck(t *testing.T, stage flow.EventStage, location string, checks
 		if event.Level() != flow.ErrorLevel {
 			t.Errorf("Expected error event, got %s", event.Level())
 		}
-		if event.Extra("Location") != location {
-			t.Errorf("Expected location %s, got %s", location, event.Extra("Location"))
+		if event.Details("Location") != location {
+			t.Errorf("Expected location %s, got %s", location, event.Details("Location"))
 		}
 		if event.Stage() != stage {
 			t.Errorf("Expected stage %s, got %s", stage, event.Stage())
@@ -193,8 +193,8 @@ func flexErrorCheck(t *testing.T, stage flow.EventStage, location string, checks
 		if len(checks) > 0 {
 			check := checks[0]
 			for k, v := range check {
-				if event.Extra(k) != v {
-					t.Errorf("Expected extra %s=%s, got %s", k, v, event.Extra(k))
+				if event.Details(k) != v {
+					t.Errorf("Expected details %s=%s, got %s", k, v, event.Details(k))
 				}
 			}
 		}
@@ -215,8 +215,8 @@ func flexPanicCheck(t *testing.T, stage flow.EventStage, location string, checks
 		if event.StackTrace() == nil {
 			t.Errorf("Expected stack trace, got nil")
 		}
-		if event.Extra("Location") != location {
-			t.Errorf("Expected location %s, got %s", location, event.Extra("Location"))
+		if event.Details("Location") != location {
+			t.Errorf("Expected location %s, got %s", location, event.Details("Location"))
 		}
 		if event.Stage() != stage {
 			t.Errorf("Expected stage %s, got %s", stage, event.Stage())
@@ -224,8 +224,8 @@ func flexPanicCheck(t *testing.T, stage flow.EventStage, location string, checks
 		if len(checks) > 0 {
 			check := checks[0]
 			for k, v := range check {
-				if event.Extra(k) != v {
-					t.Errorf("Expected extra %s=%s, got %s", k, v, event.Extra(k))
+				if event.Details(k) != v {
+					t.Errorf("Expected details %s=%s, got %s", k, v, event.Details(k))
 				}
 			}
 		}
@@ -249,16 +249,16 @@ func callbackErrHandler(t *testing.T) func(event flow.FlexEvent) (keepOn bool) {
 		if event.Stage() != flow.InCallback {
 			t.Errorf("Expected stage, got %s", event.Stage())
 		}
-		if event.Extra("Location") == "" {
+		if event.Details("Location") == "" {
 			t.Errorf("Expected position, got empty string")
 		}
-		if event.Extra("Order") == "" {
+		if event.Details("Order") == "" {
 			t.Errorf("Expected order, got empty string")
 		}
-		if event.Extra("Necessity") == "" {
+		if event.Details("Necessity") == "" {
 			t.Errorf("Expected necessity, got empty string")
 		}
-		if event.Extra("Scope") == "" {
+		if event.Details("Scope") == "" {
 			t.Errorf("Expected scope, got empty string")
 		}
 		t.Logf("Event[ %s ] end", event.Name())
@@ -284,16 +284,16 @@ func callbackPanicHandler(t *testing.T) func(event flow.FlexEvent) (keepOn bool)
 		if event.Stage() != flow.InCallback {
 			t.Errorf("Expected stage, got %s", event.Stage())
 		}
-		if event.Extra("Location") == "" {
+		if event.Details("Location") == "" {
 			t.Errorf("Expected position, got empty string")
 		}
-		if event.Extra("Order") == "" {
+		if event.Details("Order") == "" {
 			t.Errorf("Expected order, got empty string")
 		}
-		if event.Extra("Necessity") == "" {
+		if event.Details("Necessity") == "" {
 			t.Errorf("Expected necessity, got empty string")
 		}
-		if event.Extra("Scope") == "" {
+		if event.Details("Scope") == "" {
 			t.Errorf("Expected scope, got empty string")
 		}
 		t.Logf("Event[ %s ] end", event.Name())
@@ -316,8 +316,8 @@ func encryptErrorHandler(t *testing.T) func(event flow.FlexEvent) (keepOn bool) 
 		if event.Stage() != flow.InSuspend {
 			t.Errorf("Expected stage, got %s", event.Stage())
 		}
-		if event.Extra("Location") != "Encrypt" {
-			t.Errorf("Expected position, got %s", event.Extra("Location"))
+		if event.Details("Location") != "Encrypt" {
+			t.Errorf("Expected position, got %s", event.Details("Location"))
 		}
 		t.Logf("Event[ %s ] end", event.Name())
 		atomic.AddInt64(&current, 1)
@@ -339,8 +339,8 @@ func saveErrorHandler(t *testing.T) func(event flow.FlexEvent) (keepOn bool) {
 		if event.Stage() != flow.InSuspend {
 			t.Errorf("Expected stage, got %s", event.Stage())
 		}
-		if event.Extra("Location") != "Persist" {
-			t.Errorf("Expected position, got %s", event.Extra("Location"))
+		if event.Details("Location") != "Persist" {
+			t.Errorf("Expected position, got %s", event.Details("Location"))
 		}
 		t.Logf("Event[ %s ] end", event.Name())
 		atomic.AddInt64(&current, 1)
@@ -362,8 +362,8 @@ func serializeErrorHandler(t *testing.T) func(event flow.FlexEvent) (keepOn bool
 		if event.Stage() != flow.InSuspend {
 			t.Errorf("Expected stage, got %s", event.Stage())
 		}
-		if event.Extra("Location") != "Serialize" {
-			t.Errorf("Expected position, got %s", event.Extra("Location"))
+		if event.Details("Location") != "Serialize" {
+			t.Errorf("Expected position, got %s", event.Details("Location"))
 		}
 		t.Logf("Event[ %s ] end", event.Name())
 		atomic.AddInt64(&current, 1)

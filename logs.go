@@ -24,8 +24,8 @@ const (
 )
 
 const (
-	execStage     = "execute"
-	callbackStage = "callback"
+	execStage     = "Execute"
+	callbackStage = "Callback"
 )
 
 const (
@@ -55,12 +55,12 @@ type defaultLogger struct {
 func commonLog(order []string) func(event FlexEvent) {
 	return func(event FlexEvent) {
 		sb := strings.Builder{}
-		if event.ExtraInfo() != nil {
+		if event.DetailsMap() != nil {
 			for _, key := range order {
-				if event.Extra(key) == "" {
+				if event.Details(key) == "" {
 					continue
 				}
-				sb.WriteString(fmt.Sprintf("[%s: %s] ", key, event.Extra(key)))
+				sb.WriteString(fmt.Sprintf("[%s: %s] ", key, event.Details(key)))
 			}
 		}
 		if event.Level() == ErrorLevel {

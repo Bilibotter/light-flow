@@ -40,7 +40,7 @@ func emptyStep(ctx Step) (any, error) {
 }
 
 func errorStep(ctx Step) (any, error) {
-	fmt.Printf("Step[ %s ] execute error\n", ctx.Name())
+	fmt.Printf("[Step: %s ] execute error\n", ctx.Name())
 	atomic.AddInt64(&current, 1)
 	return nil, fmt.Errorf("error step")
 }
@@ -188,13 +188,13 @@ func FlowCurrentChecker(i int64, flag int) func(info WorkFlow) (bool, error) {
 
 func FlowConfigChecker(t *testing.T, config flowConfig) func(info WorkFlow) (bool, error) {
 	return func(info WorkFlow) (bool, error) {
-		t.Logf("start check WorkFlow[ %s ] config", info.Name())
+		t.Logf("start check [Flow: %s ] config", info.Name())
 		rf := info.(*runFlow)
 		if rf.recoverable != config.recoverable {
-			return false, fmt.Errorf("WorkFlow[ %s ] recoverable is %d not %d", info.Name(), rf.recoverable, config.recoverable)
+			return false, fmt.Errorf("[Flow: %s ] recoverable is %d not %d", info.Name(), rf.recoverable, config.recoverable)
 		}
 		atomic.AddInt64(&current, 1)
-		t.Logf("check WorkFlow[ %s ] config success", info.Name())
+		t.Logf("check [Flow: %s ] config success", info.Name())
 		println()
 		return true, nil
 	}
@@ -202,19 +202,19 @@ func FlowConfigChecker(t *testing.T, config flowConfig) func(info WorkFlow) (boo
 
 func ProcessConfigChecker(t *testing.T, config processConfig) func(info Process) (bool, error) {
 	return func(info Process) (bool, error) {
-		t.Logf("start check Process[ %s ] config", info.Name())
+		t.Logf("start check [Process: %s ] config", info.Name())
 		rp := info.(*runProcess)
 		if rp.procTimeout != config.procTimeout {
-			return false, fmt.Errorf("Process[ %s ] timeout is %d not %d", info.Name(), rp.procTimeout, config.procTimeout)
+			return false, fmt.Errorf("[Process: %s ] timeout is %d not %d", info.Name(), rp.procTimeout, config.procTimeout)
 		}
 		if rp.stepTimeout != config.stepTimeout {
-			return false, fmt.Errorf("Process[ %s ] step timeout is %d not %d", info.Name(), rp.stepTimeout, config.stepTimeout)
+			return false, fmt.Errorf("[Process: %s ] step timeout is %d not %d", info.Name(), rp.stepTimeout, config.stepTimeout)
 		}
 		if rp.stepRetry != config.stepRetry {
-			return false, fmt.Errorf("Process[ %s ] step retry is %d not %d", info.Name(), rp.stepRetry, config.stepRetry)
+			return false, fmt.Errorf("[Process: %s ] step retry is %d not %d", info.Name(), rp.stepRetry, config.stepRetry)
 		}
 		atomic.AddInt64(&current, 1)
-		t.Logf("check Process[ %s ] config success", info.Name())
+		t.Logf("check [Process: %s ] config success", info.Name())
 		println()
 		return true, nil
 	}
@@ -222,16 +222,16 @@ func ProcessConfigChecker(t *testing.T, config processConfig) func(info Process)
 
 func StepConfigChecker(t *testing.T, config stepConfig) func(info Step) (bool, error) {
 	return func(info Step) (bool, error) {
-		t.Logf("start check Step[ %s ] config", info.Name())
+		t.Logf("start check [Step: %s ] config", info.Name())
 		rs := info.(*runStep)
 		if rs.stepTimeout != config.stepTimeout {
-			return false, fmt.Errorf("Step[ %s ] timeout is %d not %d", info.Name(), rs.stepTimeout, config.stepTimeout)
+			return false, fmt.Errorf("[Step: %s ] timeout is %d not %d", info.Name(), rs.stepTimeout, config.stepTimeout)
 		}
 		if rs.stepRetry != config.stepRetry {
-			return false, fmt.Errorf("Step[ %s ] retry is %d not %d", info.Name(), rs.stepRetry, config.stepRetry)
+			return false, fmt.Errorf("[Step: %s ] retry is %d not %d", info.Name(), rs.stepRetry, config.stepRetry)
 		}
 		atomic.AddInt64(&current, 1)
-		t.Logf("check Step[ %s ] config success", info.Name())
+		t.Logf("check [Step: %s ] config success", info.Name())
 		println()
 		return true, nil
 	}

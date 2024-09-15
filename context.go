@@ -498,7 +498,7 @@ func (ctx *dependentContext) GetByStepName(stepName, key string) (value any, exi
 	defer ctx.RUnlock()
 	index, ok := ctx.getIndex(stepName)
 	if !ok {
-		panic(fmt.Sprintf("Step[ %s ] not found.", stepName))
+		panic(fmt.Sprintf("[Step: %s ] not found.", stepName))
 	}
 	return ctx.matchByIndex(index, key)
 }

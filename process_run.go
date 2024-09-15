@@ -363,7 +363,7 @@ func (process *runProcess) runStep(step *runStep) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Errorf("Step[ %s ] execute panic;\nID=%s;\nPanic=%v\n%s\n", step.name, step.id, r, stack())
+			logger.Errorf("[Step: %s ] execute panic;\nID=%s;\nPanic=%v\n%s\n", step.name, step.id, r, stack())
 			step.append(Panic)
 			step.composeError(execStage, fmt.Errorf("execute panic: %v", r))
 		}
@@ -435,7 +435,7 @@ func (process *runProcess) Attach(resName string, initParam any) (_ Resource, er
 	if foo, find := process.Acquire(resName); find {
 		return foo, nil
 	}
-	manager, exist := getResourceManager(resName)
+	manager, exist := resourceManagers[resName]
 	if !exist {
 		err = fmt.Errorf("[Resource: %s] not registered", resName)
 		return nil, err

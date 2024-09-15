@@ -156,11 +156,11 @@ func init() {
 	RegisterType[map[string]*resSerializable]()
 }
 
-func suspendExtra(location string) map[string]string {
+func suspendDetails(location string) map[string]string {
 	return map[string]string{"Location": location}
 }
 
-func recoverExtra(location string) map[string]string {
+func recoverDetails(location string) map[string]string {
 	return map[string]string{"Location": location}
 }
 
@@ -202,7 +202,7 @@ func RecoverFlow(flowId string) (ret FinishedWorkFlow, err error) {
 		}
 		if queryError != nil {
 			err = queryError
-			event.extra = recoverExtra("Persist")
+			event.details = recoverDetails("Persist")
 		}
 		if event != nil {
 			dispatcher.send(event)
@@ -588,7 +588,7 @@ func (point *flowCheckpoint) buildSnapshot() (err error) {
 		ctx[k], err = encryptIfNeed(k, v)
 		if err != nil {
 			event := errorEvent(point.runFlow, InSuspend, err)
-			event.extra = suspendExtra("Encrypt")
+			event.details = suspendDetails("Encrypt")
 			dispatcher.send(event)
 			return
 		}
@@ -603,7 +603,7 @@ func (point *flowCheckpoint) buildSnapshot() (err error) {
 	point.snapshot, err = serialize([]map[string]any{ctx, point.internal})
 	if err != nil {
 		event := errorEvent(point.runFlow, InSuspend, err)
-		event.extra = suspendExtra("Serialize")
+		event.details = suspendDetails("Serialize")
 		dispatcher.send(event)
 	}
 	return
@@ -662,7 +662,7 @@ func (point *procCheckpoint) buildSnapshot() (err error) {
 			head.Value, err = encryptIfNeed(k, head.Value)
 			if err != nil {
 				event := errorEvent(point.runProcess, InSuspend, err)
-				event.extra = suspendExtra("Encrypt")
+				event.details = suspendDetails("Encrypt")
 				dispatcher.send(event)
 				return
 			}
@@ -672,7 +672,7 @@ func (point *procCheckpoint) buildSnapshot() (err error) {
 	point.snapshot, err = serialize(snapshot)
 	if err != nil {
 		event := errorEvent(point.runProcess, InSuspend, err)
-		event.extra = suspendExtra("Serialize")
+		event.details = suspendDetails("Serialize")
 		dispatcher.send(event)
 	}
 	return
@@ -730,7 +730,7 @@ func (rf *runFlow) loadCheckpoint(checkpoint CheckPoint) error {
 	combine, err := deserialize[[]map[string]any](checkpoint.GetSnapshot())
 	if err != nil {
 		event := errorEvent(rf, InRecover, err)
-		event.extra = recoverExtra("Serialize")
+		event.details = recoverDetails("Serialize")
 		dispatcher.send(event)
 		return err
 	}
@@ -740,7 +740,7 @@ func (rf *runFlow) loadCheckpoint(checkpoint CheckPoint) error {
 		snapshot[k], err = decryptIfNeed(k, v, pwdEncryptor.GetSecret())
 		if err != nil {
 			event := errorEvent(rf, InRecover, err)
-			event.extra = recoverExtra("Decrypt")
+			event.details = recoverDetails("Decrypt")
 			dispatcher.send(event)
 			return err
 		}
@@ -792,7 +792,7 @@ func (rf *runFlow) saveCheckpoints() {
 	}
 	if err := persister.SaveCheckpointAndRecord(checkpoints, record); err != nil {
 		event := errorEvent(rf, InSuspend, err)
-		event.extra = suspendExtra("Persist")
+		event.details = suspendDetails("Persist")
 		dispatcher.send(event)
 		return
 	}
@@ -803,7 +803,7 @@ func (process *runProcess) loadCheckpoint(checkpoint CheckPoint) error {
 	snapshot, err := deserialize[map[string][]node](checkpoint.GetSnapshot())
 	if err != nil {
 		event := errorEvent(process, InRecover, err)
-		event.extra = recoverExtra("Serialize")
+		event.details = recoverDetails("Serialize")
 		dispatcher.send(event)
 		return err
 	}
@@ -824,7 +824,7 @@ func (process *runProcess) loadCheckpoint(checkpoint CheckPoint) error {
 			newNode.Value, err = decryptIfNeed(k, nodeList[i].Value, pwdEncryptor.GetSecret())
 			if err != nil {
 				event := errorEvent(process, InRecover, err)
-				event.extra = recoverExtra("Decrypt")
+				event.details = recoverDetails("Decrypt")
 				dispatcher.send(event)
 				return err
 			}

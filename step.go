@@ -94,7 +94,7 @@ func (meta *StepMeta) Restrict(restrict map[string]any) {
 	for key, stepName := range restrict {
 		step, exist := meta.belong.steps[toStepName(stepName)]
 		if !exist {
-			panic(fmt.Sprintf("Step[ %s ] can't matchByHighest ", stepName))
+			panic(fmt.Sprintf("[Step: %s] can't matchByHighest ", stepName))
 		}
 		meta.restrict[key] = step.index
 	}
@@ -136,7 +136,7 @@ func (meta *StepMeta) checkRestrict() {
 		if meta.backSearch(stepName) {
 			continue
 		}
-		panic(fmt.Sprintf("step [%s] can't be back tracking by the current step", stepName))
+		panic(fmt.Sprintf("[Step: %s] can't be back tracking by the current step", stepName))
 	}
 }
 
@@ -247,8 +247,8 @@ func (step *runStep) finalize() {
 
 func (step *runStep) composeError(stage string, err error) {
 	if step.exception == nil {
-		step.exception = fmt.Errorf("Step[ Name: %s, ID: %s ] %s exception: %s", step.name, step.id, stage, err.Error())
+		step.exception = fmt.Errorf("[Step: %s] [Stage: %s] [ID: %s ] - Failed | Error: %s", step.name, stage, step.id, err.Error())
 		return
 	}
-	step.exception = fmt.Errorf("%s; %s error: %s", step.exception.Error(), stage, err.Error())
+	step.exception = fmt.Errorf("%s; Additionally, [Stage: %s] - Error: %s", step.exception.Error(), stage, err.Error())
 }

@@ -18,7 +18,7 @@ type InputB struct {
 
 func ErrorResultPrinter(info flow.Step) (bool, error) {
 	if !info.Success() {
-		fmt.Printf("Step[ %s ] error, explain=%v, err=%v\n", info.Name(), info.ExplainStatus(), info.Err())
+		fmt.Printf("[Step: %s ] error, explain=%v, err=%v\n", info.Name(), info.ExplainStatus(), info.Err())
 	}
 	return true, nil
 }
@@ -74,7 +74,7 @@ func AfterProcProcessor(info flow.Process) (bool, error) {
 		panic("process flow id is empty")
 	}
 	atomic.AddInt64(&current, 1)
-	fmt.Printf("..Process[ %s ] AfterProcProcessor execute \n", info.Name())
+	fmt.Printf("..[Process: %s ] AfterProcProcessor execute \n", info.Name())
 	return true, nil
 }
 

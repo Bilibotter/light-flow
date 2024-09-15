@@ -57,12 +57,12 @@ type StepCallback interface {
 	AfterStep(must bool, callback func(Step) (keepOn bool, err error)) *decorator[Step]
 }
 
-type Decorator interface {
-	If(condition func() bool) Decorator
-	When(status ...*StatusEnum) Decorator
-	Exclude(status ...*StatusEnum) Decorator
-	OnlyFor(name ...string) Decorator
-	NotFor(name ...string) Decorator
+type Constraint interface {
+	If(condition func() bool) Constraint
+	When(status ...*StatusEnum) Constraint
+	Exclude(status ...*StatusEnum) Constraint
+	OnlyFor(name ...string) Constraint
+	NotFor(name ...string) Constraint
 }
 
 type breakPoint struct {
@@ -111,14 +111,14 @@ func ResetDefaultCallback() {
 	defaultCallback = buildFlowCallback(defaultScope)
 }
 
-func callbackExtra(necessity, location, scope, order string) map[string]string {
-	extra := map[string]string{
+func callbackDetails(necessity, location, scope, order string) map[string]string {
+	details := map[string]string{
 		"Necessity": necessity,
 		"Location":  location,
 		"Scope":     scope,
 		"Order":     order,
 	}
-	return extra
+	return details
 }
 
 func buildFlowCallback(scope string) flowCallback {
@@ -252,7 +252,7 @@ func (chain *funcChain[T]) filter(runtime T) (runNext bool) {
 		r := recover()
 		if r != nil {
 			event := panicEvent(runtime, InCallback, r, stack())
-			event.extra = callbackExtra(chain.necessity(index), chain.Stage, chain.Scope, strconv.Itoa(index+1))
+			event.details = callbackDetails(chain.necessity(index), chain.Stage, chain.Scope, strconv.Itoa(index+1))
 			dispatcher.send(event)
 			// non-must callback panic, ignore it
 			if index >= chain.Index {
@@ -294,7 +294,7 @@ func (chain *funcChain[T]) filter(runtime T) (runNext bool) {
 		}
 		if err != nil {
 			event := errorEvent(runtime, InCallback, err)
-			event.extra = callbackExtra(chain.necessity(index), chain.Stage, chain.Scope, strconv.Itoa(index+1))
+			event.details = callbackDetails(chain.necessity(index), chain.Stage, chain.Scope, strconv.Itoa(index+1))
 			dispatcher.send(event)
 			if index < chain.Index {
 				runNext = false
@@ -364,7 +364,7 @@ func (chain *funcChain[T]) buildStage0() {
 	}
 }
 
-func (dec *decorator[T]) If(condition func() bool) Decorator {
+func (dec *decorator[T]) If(condition func() bool) Constraint {
 	old := dec.call
 	f := func(runtime T) (bool, error) {
 		if !condition() {
@@ -376,7 +376,7 @@ func (dec *decorator[T]) If(condition func() bool) Decorator {
 	return dec
 }
 
-func (dec *decorator[T]) NotFor(name ...string) Decorator {
+func (dec *decorator[T]) NotFor(name ...string) Constraint {
 	s := createSetBySliceFunc(name, func(value string) string { return value })
 	old := dec.call
 	f := func(runtime T) (bool, error) {
@@ -390,7 +390,7 @@ func (dec *decorator[T]) NotFor(name ...string) Decorator {
 	return dec
 }
 
-func (dec *decorator[T]) OnlyFor(name ...string) Decorator {
+func (dec *decorator[T]) OnlyFor(name ...string) Constraint {
 	s := createSetBySliceFunc(name, func(value string) string { return value })
 	old := dec.call
 	f := func(runtime T) (bool, error) {
@@ -404,7 +404,7 @@ func (dec *decorator[T]) OnlyFor(name ...string) Decorator {
 	return dec
 }
 
-func (dec *decorator[T]) When(status ...*StatusEnum) Decorator {
+func (dec *decorator[T]) When(status ...*StatusEnum) Constraint {
 	old := dec.call
 	f := func(runtime T) (bool, error) {
 		for _, match := range status {
@@ -418,7 +418,7 @@ func (dec *decorator[T]) When(status ...*StatusEnum) Decorator {
 	return dec
 }
 
-func (dec *decorator[T]) Exclude(status ...*StatusEnum) Decorator {
+func (dec *decorator[T]) Exclude(status ...*StatusEnum) Constraint {
 	old := dec.call
 	f := func(runtime T) (bool, error) {
 		for _, match := range status {

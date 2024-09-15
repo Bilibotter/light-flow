@@ -295,7 +295,7 @@ func CheckFlowPersist(t *testing.T, ff flow.FinishedWorkFlow, expect int) {
 		} else if !proc.Success() && p.Status != Fail {
 			t.Errorf("Process %s should be Fail but is %s", proc.Name(), stringStatus(p.Status))
 		}
-		t.Logf("Check Process[ %s ] complete", proc.Name())
+		t.Logf("Check [Process: %s ] complete", proc.Name())
 		for _, step := range proc.Steps() {
 			if !step.Has(flow.Pending) {
 				continue
@@ -336,7 +336,7 @@ func CheckFlowPersist(t *testing.T, ff flow.FinishedWorkFlow, expect int) {
 			} else if !step.Success() && s.Status != Fail {
 				t.Errorf("Step %s should be Fail but is %s", step.Name(), stringStatus(s.Status))
 			}
-			t.Logf("Check Step[ %s ] complete", step.Name())
+			t.Logf("Check [Step: %s ] complete", step.Name())
 		}
 	}
 	if count != expect {

@@ -57,12 +57,12 @@ type eventImpl struct {
 	name string
 }
 
-func (e *eventImpl) ExtraInfo() map[string]string {
+func (e *eventImpl) DetailsMap() map[string]string {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (e *eventImpl) Extra(key string) string {
+func (e *eventImpl) Details(key string) string {
 	//TODO implement me
 	panic("implement me")
 }

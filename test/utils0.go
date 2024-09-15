@@ -300,7 +300,7 @@ func (fx *FlexibleBuilder[T]) Cond(suffixes ...string) *FlexibleBuilder[T] {
 		suffix = suffixes[0]
 	}
 	fx.doing = append(fx.doing, func(s flow.Step) (any, error) {
-		fx.Logf("Step[ %s ] set condition", s.Name())
+		fx.Logf("[Step: %s ] set condition", s.Name())
 		s.Set(suffix+"int", int(1))
 		s.Set(suffix+"int8", int8(2))
 		s.Set(suffix+"int16", int16(3))
@@ -326,7 +326,7 @@ func (fx *FlexibleBuilder[T]) Cond(suffixes ...string) *FlexibleBuilder[T] {
 		s.Set(suffix+"*Comparable", &ComparableImpl{Age: 16})
 		s.Set(suffix+"PanicComparable", &PanicComparableImpl{Content: "panic"})
 		atomic.AddInt64(&current, 1)
-		fx.Logf("Step[ %s ] set condition succeed", s.Name())
+		fx.Logf("[Step: %s ] set condition succeed", s.Name())
 		return s.Name(), nil
 	})
 	return fx
@@ -368,7 +368,7 @@ func (fx *FlexibleBuilder[T]) Recover(incs ...int64) *FlexibleBuilder[T] {
 		}
 		if s.Has(flow.Recovering) {
 			atomic.AddInt64(&current, inc)
-			fx.Logf("Step[ %s ] recovering", s.Name())
+			fx.Logf("[Step: %s ] recovering", s.Name())
 			return s.Name(), nil
 		}
 		atomic.AddInt64(&current, inc)
@@ -380,7 +380,7 @@ func (fx *FlexibleBuilder[T]) Recover(incs ...int64) *FlexibleBuilder[T] {
 func (fx *FlexibleBuilder[T]) Step() func(flow.Step) (any, error) {
 	return func(s flow.Step) (_ any, errs error) {
 		defer println()
-		fx.Logf("Step[ %s ] start running", s.Name())
+		fx.Logf("[Step: %s ] start running", s.Name())
 		for i, f := range fx.doing {
 			if i == fx.index {
 				switch atomic.LoadInt64(fx.fxRet) {
@@ -394,25 +394,25 @@ func (fx *FlexibleBuilder[T]) Step() func(flow.Step) (any, error) {
 			case func(flow.Step) (any, error):
 				_, err := fn(s)
 				if err != nil {
-					fx.Logf("Step[ %s ] failed: %s", s.Name(), err)
+					fx.Logf("[Step: %s ] failed: %s", s.Name(), err)
 					return s.Name(), err
 				}
 			case func(flow.Step) (bool, error):
 				_, err := fn(s)
 				if err != nil {
-					fx.Logf("Step[ %s ] failed: %s", s.Name(), err)
+					fx.Logf("[Step: %s ] failed: %s", s.Name(), err)
 					return s.Name(), err
 				}
 			case func(proto Proto) (any, error):
 				_, err := fn(s)
 				if err != nil {
-					fx.Logf("Step[ %s ] failed: %s", s.Name(), err)
+					fx.Logf("[Step: %s ] failed: %s", s.Name(), err)
 					return s.Name(), err
 				}
 			case func(ctx Ctx) (any, error):
 				_, err := fn(s)
 				if err != nil {
-					fx.Logf("Step[ %s ] failed: %s", s.Name(), err)
+					fx.Logf("[Step: %s ] failed: %s", s.Name(), err)
 					return s.Name(), err
 				}
 			default:
@@ -425,7 +425,7 @@ func (fx *FlexibleBuilder[T]) Step() func(flow.Step) (any, error) {
 		case panicRet:
 			panic("panic")
 		}
-		fx.Logf("Step[ %s ] succeed", s.Name())
+		fx.Logf("[Step: %s ] succeed", s.Name())
 		return s.Name(), nil
 	}
 }
@@ -441,13 +441,13 @@ func (fx *FlexibleBuilder[T]) Callback(hints ...string) func(T) (bool, error) {
 		switch v := any(arg).(type) {
 		case flow.Step:
 			flag = 1
-			fx.Logf("%sStep[ %s ] invoke callback", hint, v.Name())
+			fx.Logf("%s[Step: %s ] invoke callback", hint, v.Name())
 		case flow.Process:
 			flag = 2
-			fx.Logf("%sProcess[ %s ] invoke callback", hint, v.Name())
+			fx.Logf("%s[Process: %s ] invoke callback", hint, v.Name())
 		case flow.WorkFlow:
 			flag = 3
-			fx.Logf("%sWorkFlow[ %s ] invoke callback", hint, v.Name())
+			fx.Logf("%s[Flow: %s ] invoke callback", hint, v.Name())
 		default:
 			panic(fmt.Sprintf("unsupported type: %T", v))
 		}
@@ -484,11 +484,11 @@ func (fx *FlexibleBuilder[T]) Callback(hints ...string) func(T) (bool, error) {
 			if err != nil {
 				switch flag {
 				case 1:
-					fx.Logf("%sStep[ %s ] failed: %s", hint, arg.Name(), err)
+					fx.Logf("%s[Step: %s ] failed: %s", hint, arg.Name(), err)
 				case 2:
-					fx.Logf("%sProcess[ %s ] failed: %s", hint, arg.Name(), err)
+					fx.Logf("%s[Process: %s ] failed: %s", hint, arg.Name(), err)
 				case 3:
-					fx.Logf("%sWorkFlow[ %s ] failed: %s", hint, arg.Name(), err)
+					fx.Logf("%s[Flow: %s ] failed: %s", hint, arg.Name(), err)
 				}
 				return true, err
 			}
@@ -501,11 +501,11 @@ func (fx *FlexibleBuilder[T]) Callback(hints ...string) func(T) (bool, error) {
 		}
 		switch flag {
 		case 1:
-			fx.Logf("%sStep[ %s ] callback succeed", hint, arg.Name())
+			fx.Logf("%s[Step: %s ] callback succeed", hint, arg.Name())
 		case 2:
-			fx.Logf("%sProcess[ %s ] callback succeed", hint, arg.Name())
+			fx.Logf("%s[Process: %s ] callback succeed", hint, arg.Name())
 		case 3:
-			fx.Logf("%sWorkFlow[ %s ] callback succeed", hint, arg.Name())
+			fx.Logf("%s[Flow: %s ] callback succeed", hint, arg.Name())
 		}
 		return true, nil
 	}
