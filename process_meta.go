@@ -207,7 +207,7 @@ func (pm *ProcessMeta) NameStep(run func(ctx Step) (any, error), name string, de
 
 func (pm *ProcessMeta) addRouterInfo(step *StepMeta) {
 	if pm.nodeNum == 62 {
-		panic(fmt.Sprintf("[Process: %s ] exceeds max nodes num, max node num is 62", pm.name))
+		panic(fmt.Sprintf("[Process: %s] exceeds max nodes num, max node num is 62", pm.name))
 	}
 	step.nodeRouter = nodeRouter{
 		nodePath: 1 << pm.nodeNum,

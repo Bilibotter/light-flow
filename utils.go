@@ -27,7 +27,6 @@ type set[T comparable] struct {
 }
 
 func isValidIdentifier(identifier string) bool {
-	// 正则表达式匹配大小写英文字母及数字
 	var validIdentifier = regexp.MustCompile(pattern)
 	return validIdentifier.MatchString(identifier)
 }
@@ -222,19 +221,4 @@ func copyProperties(src, dst interface{}, skipNotEmpty bool) {
 			}
 		}
 	}
-}
-
-func createStruct[T any](src any) (target T) {
-	srcValue := reflect.ValueOf(src)
-	if srcValue.Kind() != reflect.Ptr {
-		panic("src must be a pointer")
-	}
-
-	if reflect.TypeOf(target).Kind() != reflect.Struct {
-		panic("The generic type is not a struct")
-	}
-
-	copyPropertiesWithMerge(src, &target)
-
-	return target
 }

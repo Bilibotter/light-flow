@@ -48,7 +48,7 @@ type proto interface {
 
 type Persist interface {
 	GetLatestRecord(rootUid string) (RecoverRecord, error)
-	ListCheckpoints(recoveryId string) ([]CheckPoint, error)
+	ListCheckpoints(recoverId string) ([]CheckPoint, error)
 	UpdateRecordStatus(record RecoverRecord) error
 	// save checkpoint and update workflow latest recordId
 	SaveCheckpointAndRecord(checkpoint []CheckPoint, record RecoverRecord) error

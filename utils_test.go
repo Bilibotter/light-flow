@@ -315,33 +315,6 @@ func TestExplainStatus2(t *testing.T) {
 	}
 }
 
-func TestCreateStruct(t *testing.T) {
-	src := Src{
-		Internal: Internal{Name: 12},
-		Name:     "src",
-		Id:       12,
-		Start:    time.Now(),
-		SameName: "same",
-		Exist:    true,
-	}
-	dst := createStruct[Dst](&src)
-	if dst.Name != src.Name {
-		t.Errorf("dst.GetCtxName != src.GetCtxName")
-	}
-	if dst.Id != src.Id {
-		t.Errorf("dst.Id != src.Id")
-	}
-	if dst.Start != src.Start {
-		t.Errorf("dst.Start != src.Start")
-	}
-	if dst.Internal != src.Internal {
-		t.Errorf("dst.Internal != src.Internal")
-	}
-	if dst.SameName != 0 || dst.UnExist != false {
-		t.Errorf("dst.SameName != 0 || dst.UnExist != false")
-	}
-}
-
 func TestCopyProperties(t *testing.T) {
 	src := Src{
 		Internal: Internal{Name: 12},

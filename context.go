@@ -48,7 +48,7 @@ var (
 	CallbackFail = &StatusEnum{0b1<<31 | 0b1<<21, "CallbackFail"}
 	Failed       = &StatusEnum{0b1 << 31, "Failed"}
 	// An abnormal step state will cause the cancellation of dependent unexecuted steps.
-	AbnormalMask = &StatusEnum{NormalMask.flag << 16, "AbnormalMask"}
+	abnormalMask = &StatusEnum{NormalMask.flag << 16, "AbnormalMask"}
 )
 
 type state int64
@@ -202,7 +202,6 @@ type routing interface {
 type nodeInfo interface {
 	getIndex(name string) (uint64, bool)
 	getName(index uint64) string
-	nodeName() string
 }
 
 type errorHandler interface {
@@ -277,7 +276,7 @@ func (s *state) Success() bool {
 
 // Normal return true if not exception occur
 func (s *state) Normal() bool {
-	return s.load()&AbnormalMask.flag == 0
+	return s.load()&abnormalMask.flag == 0
 }
 
 func (s *state) Has(enum ...*StatusEnum) bool {
@@ -536,9 +535,6 @@ func (t *linkedTable) matchByIndex(index uint64, key string) (any, bool) {
 	if !exist {
 		return nil, false
 	}
-	if index == resultMark {
-		return head.matchByHighest(0)
-	}
 	return head.matchByHighest(1 << index)
 }
 
@@ -589,8 +585,4 @@ func (router *nodeRouter) getIndex(name string) (index uint64, exist bool) {
 
 func (router *nodeRouter) getName(index uint64) string {
 	return router.toName[index]
-}
-
-func (router *nodeRouter) nodeName() string {
-	return router.getName(router.index)
 }
