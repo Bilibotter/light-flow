@@ -2,6 +2,7 @@ package light_flow
 
 import (
 	"bytes"
+	"compress/gzip"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
@@ -426,8 +427,12 @@ func unwrapInterfaceMap(listMap []map[string]any) {
 func serialize[T any](value T) ([]byte, error) {
 	wrapIfNeed(value)
 	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
+	writer := gzip.NewWriter(&buf)
+	enc := gob.NewEncoder(writer)
 	if err := enc.Encode(value); err != nil {
+		return nil, err
+	}
+	if err := writer.Close(); err != nil {
 		return nil, err
 	}
 	if buf.Len() > maxSize {
@@ -443,7 +448,12 @@ func deserialize[T any](data []byte) (result T, err error) {
 	}
 
 	buf := bytes.NewBuffer(data)
-	dec := gob.NewDecoder(buf)
+	reader, err := gzip.NewReader(buf)
+	if err != nil {
+		return
+	}
+	defer reader.Close()
+	dec := gob.NewDecoder(reader)
 	if err = dec.Decode(&result); err != nil {
 		return
 	}
@@ -464,10 +474,11 @@ func encryptIfNeed(key string, value any) (any, error) {
 	return value, nil
 }
 
-func decryptIfNeed(key string, value any, secret []byte) (any, error) {
+func decryptIfNeed(key string, value any) (any, error) {
 	if !enableEncrypt {
 		return value, nil
 	}
+	secret := pwdEncryptor.GetSecret()
 	if !pwdEncryptor.NeedEncrypt(key) {
 		return value, nil
 	}
@@ -737,7 +748,7 @@ func (rf *runFlow) loadCheckpoint(checkpoint CheckPoint) error {
 	snapshot := combine[0]
 	for k := range snapshot {
 		v := snapshot[k]
-		snapshot[k], err = decryptIfNeed(k, v, pwdEncryptor.GetSecret())
+		snapshot[k], err = decryptIfNeed(k, v)
 		if err != nil {
 			event := errorEvent(rf, InRecover, err)
 			event.details = recoverDetails("Decrypt")
@@ -821,7 +832,7 @@ func (process *runProcess) loadCheckpoint(checkpoint CheckPoint) error {
 			if point, ok := nodeList[i].Value.(*breakPoint); ok {
 				point.Used = true
 			}
-			newNode.Value, err = decryptIfNeed(k, nodeList[i].Value, pwdEncryptor.GetSecret())
+			newNode.Value, err = decryptIfNeed(k, nodeList[i].Value)
 			if err != nil {
 				event := errorEvent(process, InRecover, err)
 				event.details = recoverDetails("Decrypt")

@@ -121,7 +121,6 @@ type Step interface {
 
 type FinishedStep interface {
 	stepRuntime
-	GetResult() any
 }
 
 type StepController interface {

@@ -111,13 +111,13 @@ func (p persisitImpl) GetLatestRecord(rootUid string) (flow.RecoverRecord, error
 	return record, nil
 }
 
-func (p persisitImpl) ListCheckpoints(recoveryId string) ([]flow.CheckPoint, error) {
+func (p persisitImpl) ListCheckpoints(recoverId string) ([]flow.CheckPoint, error) {
 	db := <-pool
 	defer func() {
 		pool <- db
 	}()
 	var checkpoints []Checkpoints
-	result := db.Where("recover_id = ?", recoveryId).Find(&checkpoints)
+	result := db.Where("recover_id = ?", recoverId).Find(&checkpoints)
 	if result.Error != nil {
 		panic(result.Error)
 	}
@@ -1650,6 +1650,22 @@ func TestDuplicateBreakPointRecover(t *testing.T) {
 	res, _ = res.Recover()
 	CheckResult(t, 2, flow.Error, flow.CallbackFail)(any(res).(flow.WorkFlow))
 	Recover("TestDuplicateBreakPointRecover")
+}
+
+func TestNilPwdEncryptRecover(t *testing.T) {
+	defer resetCurrent()
+	executeSuc = false
+	flow.SetEncryptor(nil)
+	flow.DisableEncrypt()
+	wf := flow.RegisterFlow("TestNilPwdEncryptRecover")
+	wf.EnableRecover()
+	proc := wf.Process("TestNilPwdEncryptRecover")
+	proc.NameStep(Fn(t).Suc(CheckCtx0("1", "", 1)).Fail(SetCtx()).ErrStep(), "1")
+	ff := flow.DoneFlow("TestNilPwdEncryptRecover", nil)
+	CheckResult(t, 1, flow.Error)(any(ff).(flow.WorkFlow))
+	executeSuc = true
+	ff = Recover0(t, ff)
+	CheckResult(t, 1, flow.Success)(any(ff).(flow.WorkFlow))
 }
 
 func TestPool(t *testing.T) {

@@ -319,3 +319,31 @@ func TestPanicStepLook(t *testing.T) {
 	workflow.AfterStep(false, ErrorResultPrinter)
 	flow.DoneFlow("TestPanicStepLook", nil)
 }
+
+func TestStop(t *testing.T) {
+	defer resetCurrent()
+	workflow := flow.RegisterFlow("TestStop")
+	process := workflow.Process("TestStop")
+	process.NameStep(Fn(t).WaitLetGO(), "1")
+	process.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	process.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "2")
+	af := flow.AsyncFlow("TestStop", nil)
+	waitCurrent(1)
+	atomic.StoreInt64(&letGo, 1)
+	af.Stop()
+	ff := af.Done()
+	CheckResult(t, 1, flow.Stop)(any(ff).(flow.WorkFlow))
+
+	resetCurrent()
+	workflow = flow.RegisterFlow("TestStop0")
+	process = workflow.Process("TestStop0")
+	process.NameStep(Fn(t).WaitLetGO(), "1")
+	process.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	process.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "2")
+	af = flow.AsyncFlow("TestStop0", nil)
+	waitCurrent(1)
+	fp, _ := af.Process("TestStop0")
+	fp.Stop()
+	ff = af.Done()
+	CheckResult(t, 1, flow.Stop)(any(ff).(flow.WorkFlow))
+}

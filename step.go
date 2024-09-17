@@ -46,19 +46,6 @@ type runStep struct {
 	exception error
 }
 
-func (ss sliceSet[T]) Find(element any) bool {
-	convert, ok := element.(T)
-	if !ok {
-		return false
-	}
-	for _, t := range ss {
-		if t == convert {
-			return true
-		}
-	}
-	return false
-}
-
 func (seg *segment) addWaiting(i int64) int64 {
 	current := atomic.AddInt64((*int64)(seg), i<<waitingOffset)
 	return (current >> waitingOffset) & segMask
@@ -172,14 +159,6 @@ func (step *runStep) Err() error {
 
 func (step *runStep) ID() string {
 	return step.id
-}
-
-func (step *runStep) GetResult() any {
-	res, exist := step.Result(step.name)
-	if !exist {
-		return nil
-	}
-	return res
 }
 
 func (step *runStep) FlowID() string {
