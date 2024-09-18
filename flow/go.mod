@@ -1,4 +1,4 @@
-module github.com/Bilibotter/light-flow
+module github.com/Bilibotter/light-flow/flow
 
 go 1.18
 

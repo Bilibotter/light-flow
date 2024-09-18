@@ -2,7 +2,7 @@ package test
 
 import (
 	"fmt"
-	flow "github.com/Bilibotter/light-flow"
+	"github.com/Bilibotter/light-flow/flow"
 	"strings"
 	"sync/atomic"
 	"testing"

@@ -3,7 +3,7 @@ package test
 import (
 	"errors"
 	"fmt"
-	flow "github.com/Bilibotter/light-flow"
+	"github.com/Bilibotter/light-flow/flow"
 	"strconv"
 	"sync/atomic"
 	"testing"

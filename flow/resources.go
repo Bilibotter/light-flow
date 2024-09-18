@@ -1,4 +1,4 @@
-package light_flow
+package flow
 
 import (
 	"sync"

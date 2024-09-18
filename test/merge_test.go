@@ -1,7 +1,7 @@
 package test
 
 import (
-	flow "github.com/Bilibotter/light-flow"
+	"github.com/Bilibotter/light-flow/flow"
 	"strings"
 	"testing"
 )
