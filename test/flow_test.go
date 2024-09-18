@@ -74,7 +74,7 @@ func AfterProcProcessor(info flow.Process) (bool, error) {
 		panic("process flow id is empty")
 	}
 	atomic.AddInt64(&current, 1)
-	fmt.Printf("..[Process: %s ] AfterProcProcessor execute \n", info.Name())
+	fmt.Printf("..[Process: %s] AfterProcProcessor execute \n", info.Name())
 	return true, nil
 }
 

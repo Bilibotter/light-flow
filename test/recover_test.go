@@ -633,13 +633,13 @@ func TestPreFlowCallbackFailRecover(t *testing.T) {
 	wf.AfterFlow(false, CheckResult(t, 5, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
 	wf.BeforeFlow(true, func(workFlow flow.WorkFlow) (keepOn bool, err error) {
-		t.Logf("start [Flow: %s ] pre-callback", workFlow.Name())
+		t.Logf("start [Flow: %s] pre-callback", workFlow.Name())
 		atomic.AddInt64(&current, 1)
 		if executeSuc {
-			t.Logf("finish [Flow: %s ] pre-callback", workFlow.Name())
+			t.Logf("finish [Flow: %s] pre-callback", workFlow.Name())
 			return true, nil
 		}
-		t.Logf("excute [Flow: %s ] pre-callback failed", workFlow.Name())
+		t.Logf("excute [Flow: %s] pre-callback failed", workFlow.Name())
 		return false, fmt.Errorf("execute failed")
 	})
 	m := simpleContext{
@@ -673,13 +673,13 @@ func TestPreFlowCallbackPanicRecover(t *testing.T) {
 	wf.AfterFlow(false, CheckResult(t, 5, flow.Success)).If(execSuc)
 	wf.AfterStep(false, ErrorResultPrinter).If(execSuc)
 	wf.BeforeFlow(true, func(workFlow flow.WorkFlow) (keepOn bool, err error) {
-		t.Logf("start [Flow: %s ] pre-callback", workFlow.Name())
+		t.Logf("start [Flow: %s] pre-callback", workFlow.Name())
 		atomic.AddInt64(&current, 1)
 		if executeSuc {
-			t.Logf("finish [Flow: %s ] pre-callback", workFlow.Name())
+			t.Logf("finish [Flow: %s] pre-callback", workFlow.Name())
 			return true, nil
 		}
-		t.Logf("excute [Flow: %s ] pre-callback panic", workFlow.Name())
+		t.Logf("excute [Flow: %s] pre-callback panic", workFlow.Name())
 		panic("panic")
 	})
 	m := simpleContext{

@@ -103,12 +103,12 @@ func ProcCheckFunc(check ...string) func(info flow.Process) (keepOn bool, err er
 		for _, s := range check {
 			if value, exist := info.Get(s); exist {
 				if value.(string) != s {
-					fmt.Printf("[Process: %s ] key[%s] is %#v, expected get %s\n\n", info.Name(), s, value, s)
-					panic(fmt.Sprintf("[Process: %s ] key[%s] is %#v, expected get %s", info.Name(), s, value, s))
+					fmt.Printf("[Process: %s] key[%s] is %#v, expected get %s\n\n", info.Name(), s, value, s)
+					panic(fmt.Sprintf("[Process: %s] key[%s] is %#v, expected get %s", info.Name(), s, value, s))
 				}
 			} else {
-				fmt.Printf("[Process: %s ] has no key[%s]\n\n", info.Name(), s)
-				panic(fmt.Sprintf("[Process: %s ] has no key[%s]", info.Name(), s))
+				fmt.Printf("[Process: %s] has no key[%s]\n\n", info.Name(), s)
+				panic(fmt.Sprintf("[Process: %s] has no key[%s]", info.Name(), s))
 			}
 		}
 		atomic.AddInt64(&current, 1)

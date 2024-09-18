@@ -32,7 +32,7 @@ func (pm *ProcessMeta) Name() string {
 func (pm *ProcessMeta) register() {
 	_, load := allProcess.LoadOrStore(pm.name, pm)
 	if load {
-		panic(fmt.Sprintf("[Process: %s ] has exist", pm.name))
+		panic(fmt.Sprintf("[Process: %s] has exist", pm.name))
 	}
 }
 
@@ -65,7 +65,7 @@ func (pm *ProcessMeta) constructVisible() {
 func (pm *ProcessMeta) Merge(name string) {
 	wrap, find := allProcess.Load(name)
 	if !find {
-		panic(fmt.Sprintf("can't merge not exist [Process: %s ]", name))
+		panic(fmt.Sprintf("can't merge not exist [Process: %s]", name))
 	}
 	mergedProcess := wrap.(*ProcessMeta)
 	for _, merged := range mergedProcess.sortedSteps() {

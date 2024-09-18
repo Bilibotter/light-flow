@@ -78,7 +78,7 @@ func ProcProcessor(info flow.Process) (bool, error) {
 		panic("process start time is zero")
 	}
 	atomic.AddInt64(&current, 1)
-	fmt.Printf("..[Process: %s ] ProcProcessor execute \n", info.Name())
+	fmt.Printf("..[Process: %s] ProcProcessor execute \n", info.Name())
 	return true, nil
 }
 

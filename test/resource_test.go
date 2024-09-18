@@ -11,7 +11,7 @@ import (
 
 func suspendResource(t *testing.T, check, update any, kv map[string]any) func(res flow.Resource) error {
 	return func(res flow.Resource) error {
-		t.Logf("[Process: %s ] start suspend Resource[ %s ]", res.ProcessName(), res.Name())
+		t.Logf("[Process: %s] start suspend Resource[ %s ]", res.ProcessName(), res.Name())
 		if res.Entity() != check {
 			t.Errorf("Resource[ %s ] entity expect %v, but got %v", res.Name(), check, res.Entity())
 			return fmt.Errorf("Resource[ %s ] entity expect %v, but got %v", res.Name(), check, res.Entity())
@@ -25,14 +25,14 @@ func suspendResource(t *testing.T, check, update any, kv map[string]any) func(re
 			res.Put(k, v)
 		}
 		atomic.AddInt64(&current, 1)
-		t.Logf("[Process: %s ] finish suspend Resource[ %s ]", res.ProcessName(), res.Name())
+		t.Logf("[Process: %s] finish suspend Resource[ %s ]", res.ProcessName(), res.Name())
 		return nil
 	}
 }
 
 func recoverResource(t *testing.T, check, update any, kv map[string]any) func(res flow.Resource) error {
 	return func(res flow.Resource) error {
-		t.Logf("[Process: %s ] start recover Resource[ %s ]", res.ProcessName(), res.Name())
+		t.Logf("[Process: %s] start recover Resource[ %s ]", res.ProcessName(), res.Name())
 		if res.Entity() != check {
 			t.Errorf("Resource[ %s ] entity expect %v, but got %v", res.Name(), check, res.Entity())
 			return fmt.Errorf("Resource[ %s ] entity expect %v, but got %v", res.Name(), check, res.Entity())
@@ -49,14 +49,14 @@ func recoverResource(t *testing.T, check, update any, kv map[string]any) func(re
 			}
 		}
 		atomic.AddInt64(&current, 1)
-		t.Logf("[Process: %s ] finish recover Resource[ %s ]", res.ProcessName(), res.Name())
+		t.Logf("[Process: %s] finish recover Resource[ %s ]", res.ProcessName(), res.Name())
 		return nil
 	}
 }
 
 func recoverResource0(t *testing.T, check, update any, kv map[string]any) func(res flow.Resource) error {
 	return func(res flow.Resource) error {
-		t.Logf("[Process: %s ] start recover Resource[ %s ]", res.ProcessName(), res.Name())
+		t.Logf("[Process: %s] start recover Resource[ %s ]", res.ProcessName(), res.Name())
 		if res.Entity() != check {
 			t.Errorf("Resource[ %s ] entity expect %v, but got %v", res.Name(), check, res.Entity())
 			return fmt.Errorf("Resource[ %s ] entity expect %v, but got %v", res.Name(), check, res.Entity())
@@ -70,7 +70,7 @@ func recoverResource0(t *testing.T, check, update any, kv map[string]any) func(r
 			res.Put(k, v)
 		}
 		atomic.AddInt64(&current, 1)
-		t.Logf("[Process: %s ] finish recover Resource[ %s ]", res.ProcessName(), res.Name())
+		t.Logf("[Process: %s] finish recover Resource[ %s ]", res.ProcessName(), res.Name())
 		return nil
 	}
 }

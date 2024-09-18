@@ -30,17 +30,17 @@ func ProcCallback(flag bool, visible []string, notVisible []string, keys ...stri
 				panic(fmt.Sprintf("%s not found %s", info.Name(), k))
 			}
 		}
-		fmt.Printf("[Process: %s ] can get all keys = %s\n", info.Name(), strings.Join(visible, ", "))
+		fmt.Printf("[Process: %s] can get all keys = %s\n", info.Name(), strings.Join(visible, ", "))
 		for _, k := range notVisible {
 			if _, ok := info.Get(k); ok {
 				panic(fmt.Sprintf("%s found %s", info.Name(), k))
 			}
 		}
-		fmt.Printf("[Process: %s ] can't get all keys = %s\n", info.Name(), strings.Join(notVisible, ", "))
+		fmt.Printf("[Process: %s] can't get all keys = %s\n", info.Name(), strings.Join(notVisible, ", "))
 		for _, k := range keys {
 			info.Set(k, k)
 		}
-		fmt.Printf("[Process: %s ] set all keys = %s\n", info.Name(), strings.Join(keys, ", "))
+		fmt.Printf("[Process: %s] set all keys = %s\n", info.Name(), strings.Join(keys, ", "))
 		atomic.AddInt64(&current, 1)
 		return true, nil
 	}

@@ -444,10 +444,10 @@ func (fx *FlexibleBuilder[T]) Callback(hints ...string) func(T) (bool, error) {
 			fx.Logf("%s[Step: %s ] invoke callback", hint, v.Name())
 		case flow.Process:
 			flag = 2
-			fx.Logf("%s[Process: %s ] invoke callback", hint, v.Name())
+			fx.Logf("%s[Process: %s] invoke callback", hint, v.Name())
 		case flow.WorkFlow:
 			flag = 3
-			fx.Logf("%s[Flow: %s ] invoke callback", hint, v.Name())
+			fx.Logf("%s[Flow: %s] invoke callback", hint, v.Name())
 		default:
 			panic(fmt.Sprintf("unsupported type: %T", v))
 		}
@@ -486,9 +486,9 @@ func (fx *FlexibleBuilder[T]) Callback(hints ...string) func(T) (bool, error) {
 				case 1:
 					fx.Logf("%s[Step: %s ] failed: %s", hint, arg.Name(), err)
 				case 2:
-					fx.Logf("%s[Process: %s ] failed: %s", hint, arg.Name(), err)
+					fx.Logf("%s[Process: %s] failed: %s", hint, arg.Name(), err)
 				case 3:
-					fx.Logf("%s[Flow: %s ] failed: %s", hint, arg.Name(), err)
+					fx.Logf("%s[Flow: %s] failed: %s", hint, arg.Name(), err)
 				}
 				return true, err
 			}
@@ -503,9 +503,9 @@ func (fx *FlexibleBuilder[T]) Callback(hints ...string) func(T) (bool, error) {
 		case 1:
 			fx.Logf("%s[Step: %s ] callback succeed", hint, arg.Name())
 		case 2:
-			fx.Logf("%s[Process: %s ] callback succeed", hint, arg.Name())
+			fx.Logf("%s[Process: %s] callback succeed", hint, arg.Name())
 		case 3:
-			fx.Logf("%s[Flow: %s ] callback succeed", hint, arg.Name())
+			fx.Logf("%s[Flow: %s] callback succeed", hint, arg.Name())
 		}
 		return true, nil
 	}
