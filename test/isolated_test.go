@@ -155,8 +155,8 @@ func TestCollectGetEndValues(t *testing.T) {
 	process.NameStep(SetCtxStepFunc(map[string]any{"Step": "Error"}), "Step1", "Step0")
 	process.NameStep(SetCtxStepFunc(map[string]any{"Step": "Error"}), "Step2", "Step0")
 	process.NameStep(SetCtxStepFunc(map[string]any{"Step": "Error"}), "Step3", "Step0")
-	process.Tail(SetCtxStepFunc(map[string]any{"Step": "Step4"}), "Step4")
-	process.Tail(CheckGetEndValues("Step4"), "check")
+	process.Then(SetCtxStepFunc(map[string]any{"Step": "Step4"}), "Step4")
+	process.Then(CheckGetEndValues("Step4"), "check")
 	workflow.AfterFlow(false, CheckResult(t, 6, flow.Success))
 	flow.DoneFlow("TestCollectGetEndValues", nil)
 }
@@ -169,7 +169,7 @@ func TestMultipleGetEndValues(t *testing.T) {
 	process.NameStep(SetCtxStepFunc(map[string]any{"Step": "Step1"}), "Step1", "Step0")
 	process.NameStep(SetCtxStepFunc(map[string]any{"Step": "Step2"}), "Step2", "Step0")
 	process.NameStep(SetCtxStepFunc(map[string]any{"Step": "Step3"}), "Step3", "Step0")
-	process.Tail(CheckGetEndValues("Step1", "Step2", "Step3"), "check")
+	process.Then(CheckGetEndValues("Step1", "Step2", "Step3"), "check")
 	workflow.AfterFlow(false, CheckResult(t, 5, flow.Success))
 	flow.DoneFlow("TestMultipleGetEndValues", nil)
 }

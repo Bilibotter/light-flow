@@ -741,7 +741,7 @@ func (rf *runFlow) loadCheckpoint(checkpoint CheckPoint) error {
 	combine, err := deserialize[[]map[string]any](checkpoint.GetSnapshot())
 	if err != nil {
 		event := errorEvent(rf, InRecover, err)
-		event.details = recoverDetails("Serialize")
+		event.details = recoverDetails("Deserialize")
 		dispatcher.send(event)
 		return err
 	}
@@ -814,7 +814,7 @@ func (process *runProcess) loadCheckpoint(checkpoint CheckPoint) error {
 	snapshot, err := deserialize[map[string][]node](checkpoint.GetSnapshot())
 	if err != nil {
 		event := errorEvent(process, InRecover, err)
-		event.details = recoverDetails("Serialize")
+		event.details = recoverDetails("Deserialize")
 		dispatcher.send(event)
 		return err
 	}

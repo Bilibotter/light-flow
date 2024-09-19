@@ -154,7 +154,7 @@ func (pm *ProcessMeta) Step(run func(ctx Step) (any, error), depends ...any) *St
 	return pm.NameStep(run, getFuncName(run), depends...)
 }
 
-func (pm *ProcessMeta) Tail(run func(ctx Step) (any, error), alias ...string) *StepMeta {
+func (pm *ProcessMeta) Then(run func(ctx Step) (any, error), alias ...string) *StepMeta {
 	depends := make([]any, 0)
 	for name, step := range pm.steps {
 		if step.position.Has(endE) {

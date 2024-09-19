@@ -322,6 +322,6 @@ func TestAddWaitAllAfterMergeWithCircle(t *testing.T) {
 			t.Errorf("circle detect fail")
 		}
 	}()
-	process2.Tail(GenerateStep(2), "2")
+	process2.Then(GenerateStep(2), "2")
 	return
 }

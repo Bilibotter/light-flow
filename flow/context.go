@@ -306,7 +306,7 @@ func (s *state) ExplainStatus() []string {
 
 	for _, enum := range abnormal {
 		if s.Has(enum) {
-			compress = append(compress, enum.Message())
+			compress = append(compress, enum.String())
 		}
 	}
 	if len(compress) > 0 {
@@ -314,12 +314,12 @@ func (s *state) ExplainStatus() []string {
 	}
 
 	if s.Has(Success) {
-		return []string{Success.Message()}
+		return []string{Success.String()}
 	}
 
 	for _, enum := range normal {
 		if s.Has(enum) {
-			compress = append(compress, enum.Message())
+			compress = append(compress, enum.String())
 		}
 	}
 
@@ -360,7 +360,7 @@ func (s *state) cas(old, new state) bool {
 	return atomic.CompareAndSwapInt64((*int64)(s), int64(old), int64(new))
 }
 
-func (s *StatusEnum) Message() string {
+func (s *StatusEnum) String() string {
 	return s.msg
 }
 

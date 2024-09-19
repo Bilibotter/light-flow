@@ -32,7 +32,7 @@ func CheckCtxResult(t *testing.T, check int64, statuses ...*flow.StatusEnum) fun
 	return func(workFlow flow.WorkFlow) (keepOn bool, err error) {
 		ss := make([]string, len(statuses))
 		for i, status := range statuses {
-			ss[i] = status.Message()
+			ss[i] = status.String()
 		}
 		t.Logf("start check, expected current=%d, status include %s", check, strings.Join(ss, ","))
 		if ctx1 != check {
@@ -43,7 +43,7 @@ func CheckCtxResult(t *testing.T, check int64, statuses ...*flow.StatusEnum) fun
 				t.Errorf("WorkFlow executed failed\n")
 			}
 			if !workFlow.HasAny(status) {
-				t.Errorf("workFlow has not %s status\n", status.Message())
+				t.Errorf("workFlow has not %s status\n", status.String())
 			}
 		}
 		t.Logf("status expalin=%s", strings.Join(workFlow.ExplainStatus(), ","))

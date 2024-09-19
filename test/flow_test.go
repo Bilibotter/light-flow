@@ -3,6 +3,7 @@ package test
 import (
 	"fmt"
 	"github.com/Bilibotter/light-flow/flow"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -109,10 +110,22 @@ func TestMultipleExceptionStatus(t *testing.T) {
 		return true, nil
 	})
 	workflow.AfterFlow(false, CheckResult(t, 6, flow.Timeout, flow.Error, flow.Panic))
-	flow.DoneFlow("TestMultipleExceptionStatus", nil)
+	ff := flow.DoneFlow("TestMultipleExceptionStatus", nil)
 	// DoneFlow return due to timeout, but process not complete
 	atomic.StoreInt64(&letGo, 1)
 	waitCurrent(7)
+	if len(ff.Exceptions()) != 1 {
+		t.Errorf("flow should have 1 exception, but %d", len(ff.Exceptions()))
+	}
+	for _, ps := range ff.Processes() {
+		atomic.AddInt64(&current, 1)
+		if len(ps.Exceptions()) != 3 {
+			t.Errorf("process %s should have 3 exceptions, but %d", ps.Name(), len(ps.Exceptions()))
+		}
+	}
+	if atomic.LoadInt64(&current) != 8 {
+		t.Errorf("current should be 8, but %d", atomic.LoadInt64(&current))
+	}
 }
 
 func TestSinglePanicStep(t *testing.T) {
@@ -194,7 +207,7 @@ func TestMultipleNormalStepWithMultipleBranches(t *testing.T) {
 	process.NameStep(GenerateStep(3), "3", "2")
 	process.NameStep(GenerateStep(4), "4", "2")
 	process.NameStep(GenerateStep(5), "5", "2")
-	process.Tail(GenerateStep(6), "6")
+	process.Then(GenerateStep(6), "6")
 	workflow.AfterFlow(false, CheckResult(t, 6, flow.Success))
 	flow.DoneFlow("TestMultipleNormalStepWithMultipleBranches", nil)
 }
@@ -248,6 +261,9 @@ func TestWorkFlowPause(t *testing.T) {
 	}
 	if !rp.Has(flow.Pause) {
 		t.Errorf("process[TestWorkFlowPause] pause fail")
+	}
+	if !strings.Contains(strings.Join(rp.ExplainStatus(), ""), flow.Pause.String()) {
+		t.Errorf("pause status explain error")
 	}
 	wf.Resume()
 	atomic.StoreInt64(&letGo, 1)

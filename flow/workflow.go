@@ -302,14 +302,6 @@ func (rf *runFlow) finalize() {
 	flowPersist.onUpdate(rf)
 }
 
-func (rf *runFlow) ListProcess() []string {
-	processes := make([]string, 0, len(rf.runProcesses))
-	for _, process := range rf.runProcesses {
-		processes = append(processes, process.name)
-	}
-	return processes
-}
-
 func (rf *runFlow) Pause() FlowController {
 	rf.append(Pause)
 	for _, process := range rf.runProcesses {

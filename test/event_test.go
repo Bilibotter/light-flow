@@ -23,6 +23,7 @@ type errorSave struct {
 	updateRecordPanic            bool
 	saveCheckpointAndRecordError bool
 	saveCheckpointAndRecordPanic bool
+	readError                    bool
 }
 
 func errorResource(_ flow.Resource) error {
@@ -50,7 +51,19 @@ func (e *errorSave) ListCheckpoints(recoveryId string) ([]flow.CheckPoint, error
 	if e.listPointsPanic {
 		panic("save panic")
 	}
-	return e.persist.ListCheckpoints(recoveryId)
+	if !e.readError {
+		return e.persist.ListCheckpoints(recoveryId)
+	}
+	cps, err := e.persist.ListCheckpoints(recoveryId)
+	if err != nil {
+		return nil, err
+	}
+	for i, wrap := range cps {
+		cp := wrap.(Checkpoints)
+		cp.Snapshot = []byte("error")
+		cps[i] = cp
+	}
+	return cps, err
 }
 
 func (e *errorSave) UpdateRecordStatus(record flow.RecoverRecord) error {
@@ -198,7 +211,7 @@ func flexErrorCheck(t *testing.T, stage flow.EventStage, location string, checks
 				}
 			}
 		}
-		t.Logf("Event[ %s ] end", event.Name())
+		t.Logf("Event[ %s ] [Level: %s] end", event.Name(), event.Level())
 		atomic.AddInt64(&current, 1)
 		return true
 	}
@@ -484,6 +497,17 @@ func TestSuspendEncryptErrorEvent(t *testing.T) {
 	ff = flow.DoneFlow("TestEncryptPanicEvent", nil)
 	waitCurrent(3)
 	CheckResult(t, 3, flow.Error)(any(ff).(flow.WorkFlow))
+
+	resetEventEnv()
+	flow.SetEncryptor(&errorEncryptor{encryptFailed: true})
+	flow.EventHandler().Handle(flow.InSuspend, flexErrorCheck(t, flow.InSuspend, "Encrypt"))
+	wf = flow.RegisterFlow("TestEncryptErrorEvent0")
+	wf.EnableRecover()
+	process = wf.Process("TestEncryptErrorEvent0")
+	process.NameStep(Fx[flow.Step](t).Inc().Recover().Step(), "1")
+	ff = flow.DoneFlow("TestEncryptErrorEvent0", map[string]any{"password": "hello world"})
+	waitCurrent(3)
+	CheckResult(t, 3, flow.Error)(any(ff).(flow.WorkFlow))
 }
 
 func TestSuspendSaveErrorEvent(t *testing.T) {
@@ -527,6 +551,18 @@ func TestSuspendSerializeErrorEvent(t *testing.T) {
 		return nil, fmt.Errorf("error")
 	}, "1")
 	ff := flow.DoneFlow("TestSuspendSerializeErrorEvent", nil)
+	waitCurrent(1)
+	CheckResult(t, 1, flow.Error)(any(ff).(flow.WorkFlow))
+
+	resetEventEnv()
+	flow.EventHandler().Handle(flow.InSuspend, serializeErrorHandler(t))
+	wf = flow.RegisterFlow("TestSuspendSerializeErrorEvent0")
+	wf.EnableRecover()
+	process = wf.Process("TestSuspendSerializeErrorEvent0")
+	process.NameStep(func(ctx flow.Step) (any, error) {
+		return nil, fmt.Errorf("error")
+	}, "1")
+	ff = flow.DoneFlow("TestSuspendSerializeErrorEvent0", map[string]any{"foo": noSerializable{"1", "2"}})
 	waitCurrent(1)
 	CheckResult(t, 1, flow.Error)(any(ff).(flow.WorkFlow))
 }
@@ -625,6 +661,23 @@ func TestRecoverPersistErrorEvent(t *testing.T) {
 	proc = wf.Process("TestRecoverPersistPanicEvent1")
 	proc.NameStep(Fx[flow.Step](t).SetCtx().Recover().Step(), "1")
 	ff = flow.DoneFlow("TestRecoverPersistPanicEvent1", nil)
+	CheckResult(t, 2, flow.Error)(any(ff).(flow.WorkFlow))
+	_, err = ff.Recover()
+	if err == nil {
+		t.Errorf("Expected error, got nil")
+	} else {
+		t.Logf("Got error: %v", err)
+	}
+	waitCurrent(3)
+
+	resetEventEnv()
+	flow.SuspendPersist(&errorSave{persist: &persisitImpl{}, readError: true})
+	flow.EventHandler().Handle(flow.InRecover, flexErrorCheck(t, flow.InRecover, "Deserialize"))
+	wf = flow.RegisterFlow("TestRecoverPersistErrorEvent2")
+	wf.EnableRecover()
+	proc = wf.Process("TestRecoverPersistErrorEvent2")
+	proc.NameStep(Fx[flow.Step](t).SetCtx().Recover().Step(), "1")
+	ff = flow.DoneFlow("TestRecoverPersistErrorEvent2", nil)
 	CheckResult(t, 2, flow.Error)(any(ff).(flow.WorkFlow))
 	_, err = ff.Recover()
 	if err == nil {
