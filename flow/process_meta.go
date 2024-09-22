@@ -13,6 +13,16 @@ const (
 	afterS         = "After"
 )
 
+type BuildChain interface {
+	After(depends ...any)
+}
+
+type buildChain struct {
+	*ProcessMeta
+	isSerial bool
+	group    []*StepMeta
+}
+
 type ProcessMeta struct {
 	processConfig
 	procCallback
@@ -23,6 +33,54 @@ type ProcessMeta struct {
 	steps    map[string]*StepMeta
 	tailStep string
 	nodeNum  uint
+}
+
+func (bc *buildChain) After(depends ...any) {
+	if bc.isSerial {
+		bc.buildSerial(bc.findSteps(depends...))
+		return
+	}
+	bc.buildParallel(bc.findSteps(depends...))
+}
+
+func (bc *buildChain) buildParallel(depends []*StepMeta) {
+	for _, step := range bc.group {
+		bc.addDepends(step, depends)
+	}
+}
+
+func (bc *buildChain) buildSerial(depends []*StepMeta) {
+	bc.addDepends(bc.group[0], depends)
+}
+
+func (bc *buildChain) addDepends(step *StepMeta, depends []*StepMeta) {
+	current := createSetBySliceFunc[*StepMeta, string](step.depends, func(t *StepMeta) string {
+		return t.name
+	})
+	for _, depend := range depends {
+		if !current.Contains(depend.name) {
+			step.depends = append(step.depends, depend)
+		}
+	}
+	step.wireDepends()
+}
+
+func (bc *buildChain) findSteps(depends ...any) []*StepMeta {
+	ds := make([]*StepMeta, 0)
+	exist := newRoutineUnsafeSet[string]()
+	for _, depend := range depends {
+		name := toStepName(depend)
+		if exist.Contains(name) {
+			continue
+		}
+		if meta, ok := bc.steps[name]; !ok {
+			panic(fmt.Sprintf("[Step: %s] not found in process [Process: %s]", name, bc.name))
+		} else {
+			ds = append(ds, meta)
+			exist.Add(name)
+		}
+	}
+	return ds
 }
 
 func (pm *ProcessMeta) Name() string {
@@ -126,7 +184,7 @@ func (pm *ProcessMeta) mergeStep(merge *StepMeta) {
 		}
 		depend := pm.steps[name]
 		if depend.layer > target.layer && target.forwardSearch(name) {
-			panic(fmt.Sprintf("merge failed, a circle is formed between [Step: %s ] and [Step: %s ].",
+			panic(fmt.Sprintf("merge failed, a circle is formed between [Step: %s] and [Step: %s].",
 				depend.name, target.name))
 		}
 		if depend.layer+1 > target.layer {
@@ -154,6 +212,46 @@ func (pm *ProcessMeta) Step(run func(ctx Step) (any, error), depends ...any) *St
 	return pm.NameStep(run, getFuncName(run), depends...)
 }
 
+// This function was inspired by the liteflow project (https://github.com/dromara/liteflow),
+// which implements similar functionality in Java. The implementation here is independently
+// developed in Go, with a different approach and code structure.
+func (pm *ProcessMeta) Serial(steps ...func(ctx Step) (any, error)) BuildChain {
+	if len(steps) == 0 {
+		panic(fmt.Sprintf("serial steps can't be empty"))
+	}
+	group := make([]*StepMeta, len(steps))
+	group[0] = pm.Step(steps[0])
+	prev := group[0].name
+	for i := 1; i < len(steps); i++ {
+		group[i] = pm.Step(steps[i], prev)
+		prev = group[i].name
+	}
+	chain := &buildChain{
+		ProcessMeta: pm,
+		group:       group,
+		isSerial:    true,
+	}
+	return chain
+}
+
+// This function was inspired by the liteflow project (https://github.com/dromara/liteflow),
+// which implements similar functionality in Java. The implementation here is independently
+// developed in Go, with a different approach and code structure.
+func (pm *ProcessMeta) Parallel(steps ...func(ctx Step) (any, error)) BuildChain {
+	if len(steps) == 0 {
+		panic(fmt.Sprintf("[Process: %s] parallel steps is empty", pm.name))
+	}
+	group := make([]*StepMeta, len(steps))
+	for i, step := range steps {
+		group[i] = pm.Step(step)
+	}
+	chain := &buildChain{
+		ProcessMeta: pm,
+		group:       group,
+	}
+	return chain
+}
+
 func (pm *ProcessMeta) Then(run func(ctx Step) (any, error), alias ...string) *StepMeta {
 	depends := make([]any, 0)
 	for name, step := range pm.steps {
@@ -178,14 +276,14 @@ func (pm *ProcessMeta) NameStep(run func(ctx Step) (any, error), name string, de
 		dependName := toStepName(wrap)
 		depend, exist := pm.steps[dependName]
 		if !exist {
-			panic(fmt.Sprintf("[Step: %s ]'s depend[%s] not found.", name, dependName))
+			panic(fmt.Sprintf("[Step: %s]'s depend[%s] not found.", name, dependName))
 		}
 		meta.depends = append(meta.depends, depend)
 	}
 
 	if old, exist := pm.steps[name]; exist {
 		if !old.position.Has(mergedE) {
-			panic(fmt.Sprintf("[Step: %s ] already exist, can used %s to avoid name duplicate",
+			panic(fmt.Sprintf("[Step: %s] already exist, can used %s to avoid name duplicate",
 				name, getFuncName(pm.NameStep)))
 		}
 		pm.mergeStep(meta)

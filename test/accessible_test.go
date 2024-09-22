@@ -51,23 +51,23 @@ func StepCallback(flag bool, visible []string, notVisible []string, keys ...stri
 		if flag {
 			time.Sleep(10 * time.Millisecond)
 		}
-		fmt.Printf("invoke [Step: %s ] callback, current=%d\n", info.Name(), atomic.LoadInt64(&current))
+		fmt.Printf("invoke [Step: %s] callback, current=%d\n", info.Name(), atomic.LoadInt64(&current))
 		for _, k := range visible {
 			if _, ok := info.Get(k); !ok {
 				panic(fmt.Sprintf("%s not found %s", info.Name(), k))
 			}
 		}
-		fmt.Printf("[Step: %s ] can get all keys = %s\n", info.Name(), strings.Join(visible, ", "))
+		fmt.Printf("[Step: %s] can get all keys = %s\n", info.Name(), strings.Join(visible, ", "))
 		for _, k := range notVisible {
 			if _, ok := info.Get(k); ok {
 				panic(fmt.Sprintf("%s found %s", info.Name(), k))
 			}
 		}
-		fmt.Printf("[Step: %s ] can't get all keys = %s\n", info.Name(), strings.Join(notVisible, ", "))
+		fmt.Printf("[Step: %s] can't get all keys = %s\n", info.Name(), strings.Join(notVisible, ", "))
 		for _, k := range keys {
 			info.Set(k, k)
 		}
-		fmt.Printf("[Step: %s ] set all keys = %s\n", info.Name(), strings.Join(keys, ", "))
+		fmt.Printf("[Step: %s] set all keys = %s\n", info.Name(), strings.Join(keys, ", "))
 		atomic.AddInt64(&current, 1)
 		println()
 		return true, nil

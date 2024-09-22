@@ -363,7 +363,7 @@ func (process *runProcess) runStep(step *runStep) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Errorf("[Step: %s ] execute panic;\nID=%s;\nPanic=%v\n%s\n", step.name, step.id, r, stack())
+			logger.Errorf("[Step: %s] execute panic;\nID=%s;\nPanic=%v\n%s\n", step.name, step.id, r, stack())
 			step.append(Panic)
 			step.composeError(execStage, fmt.Errorf("execute panic: %v", r))
 		}

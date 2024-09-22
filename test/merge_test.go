@@ -325,3 +325,73 @@ func TestAddWaitAllAfterMergeWithCircle(t *testing.T) {
 	process2.Then(GenerateStep(2), "2")
 	return
 }
+
+func TestSerialMerge(t *testing.T) {
+	defer resetCurrent()
+	workflow := flow.RegisterFlow("TestSerialMerge1")
+	process := workflow.Process("TestSerialMerge1")
+	process.NameStep(Fx[flow.Step](t).Inc().Step(), "1")
+	process.NameStep(Fx[flow.Step](t).Inc().Step(), "2")
+	process.NameStep(Fx[flow.Step](t).Inc().Step(), "3")
+	process.Step(NormalStep1, "1", "2", "3")
+
+	workflow = flow.RegisterFlow("TestSerialMerge2")
+	process = workflow.Process("TestSerialMerge2")
+	process.NameStep(Fx[flow.Step](t).Inc().Step(), "1")
+	process.Merge("TestSerialMerge1")
+	process.Serial(NormalStep1, NormalStep2, NormalStep3).After("1")
+	workflow.AfterStep(true, CheckCurrent(t, 4)).OnlyFor("NormalStep1")
+	workflow.AfterStep(true, CheckCurrent(t, 5)).OnlyFor("NormalStep2")
+	workflow.AfterStep(true, CheckCurrent(t, 6)).OnlyFor("NormalStep3")
+	workflow.AfterFlow(true, CheckResult(t, 6, flow.Success))
+	flow.DoneFlow("TestSerialMerge2", nil)
+
+	resetCurrent()
+	workflow = flow.RegisterFlow("TestSerialMerge3")
+	process = workflow.Process("TestSerialMerge3")
+	process.NameStep(Fx[flow.Step](t).Inc().Step(), "1")
+	process.Serial(NormalStep1, NormalStep2, NormalStep3).After("1")
+	process.Merge("TestSerialMerge1")
+	workflow.AfterStep(true, CheckCurrent(t, 4)).OnlyFor("NormalStep1")
+	workflow.AfterStep(true, CheckCurrent(t, 5)).OnlyFor("NormalStep2")
+	workflow.AfterStep(true, CheckCurrent(t, 6)).OnlyFor("NormalStep3")
+	workflow.AfterFlow(true, CheckResult(t, 6, flow.Success))
+	flow.DoneFlow("TestSerialMerge3", nil)
+
+	resetCurrent()
+	ff := flow.DoneFlow("TestSerialMerge1", nil)
+	CheckResult(t, 4, flow.Success)(any(ff).(flow.WorkFlow))
+}
+
+func TestParallelMerge(t *testing.T) {
+	defer resetCurrent()
+	workflow := flow.RegisterFlow("TestParallelMerge1")
+	process := workflow.Process("TestParallelMerge1")
+	process.NameStep(Fx[flow.Step](t).Inc().Step(), "1")
+	process.NameStep(Fx[flow.Step](t).Inc().Step(), "2")
+	process.NameStep(Fx[flow.Step](t).Inc().Step(), "3")
+	process.Step(NormalStep1, "1", "2", "3")
+
+	workflow = flow.RegisterFlow("TestParallelMerge2")
+	process = workflow.Process("TestParallelMerge2")
+	process.NameStep(Fx[flow.Step](t).Inc().Step(), "1")
+	process.Merge("TestParallelMerge1")
+	process.Parallel(NormalStep1).After("1")
+	workflow.AfterStep(true, CheckCurrent(t, 4)).OnlyFor("NormalStep1")
+	workflow.AfterFlow(true, CheckResult(t, 4, flow.Success))
+	flow.DoneFlow("TestParallelMerge2", nil)
+
+	resetCurrent()
+	workflow = flow.RegisterFlow("TestParallelMerge3")
+	process = workflow.Process("TestParallelMerge3")
+	process.NameStep(Fx[flow.Step](t).Inc().Step(), "1")
+	process.Parallel(NormalStep1).After("1")
+	process.Merge("TestParallelMerge1")
+	workflow.AfterStep(true, CheckCurrent(t, 4)).OnlyFor("NormalStep1")
+	workflow.AfterFlow(true, CheckResult(t, 4, flow.Success))
+	flow.DoneFlow("TestParallelMerge3", nil)
+
+	resetCurrent()
+	ff := flow.DoneFlow("TestParallelMerge1", nil)
+	CheckResult(t, 4, flow.Success)(any(ff).(flow.WorkFlow))
+}

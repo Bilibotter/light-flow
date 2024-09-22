@@ -16,12 +16,12 @@ func CheckGetEndValues(check ...string) func(info flow.Step) (result any, err er
 		for _, k := range check {
 			if value, exist := values[k]; exist {
 				if value.(string) != k {
-					fmt.Printf("[Step: %s ] key[%s] is %#v, expected get %s\n\n", info.Name(), k, value, k)
-					panic(fmt.Sprintf("[Step: %s ] key[%s] is %#v, expected get %s", info.Name(), k, value, k))
+					fmt.Printf("[Step: %s] key[%s] is %#v, expected get %s\n\n", info.Name(), k, value, k)
+					panic(fmt.Sprintf("[Step: %s] key[%s] is %#v, expected get %s", info.Name(), k, value, k))
 				}
 			} else {
-				fmt.Printf("[Step: %s ] has no key[%s]\n\n", info.Name(), k)
-				panic(fmt.Sprintf("[Step: %s ] has no key[%s]", info.Name(), k))
+				fmt.Printf("[Step: %s] has no key[%s]\n\n", info.Name(), k)
+				panic(fmt.Sprintf("[Step: %s] has no key[%s]", info.Name(), k))
 			}
 		}
 		atomic.AddInt64(&current, 1)
@@ -34,12 +34,12 @@ func CheckGetByStep(check ...string) func(info flow.Process) (keepOn bool, err e
 		for _, k := range check {
 			if value, exist := info.GetByStepName(k, k); exist {
 				if value.(string) != k {
-					fmt.Printf("[Step: %s ] key[%s] is %#v, expected get %s\n\n", info.Name(), k, value, k)
-					panic(fmt.Sprintf("[Step: %s ] key[%s] is %#v, expected get %s", info.Name(), k, value, k))
+					fmt.Printf("[Step: %s] key[%s] is %#v, expected get %s\n\n", info.Name(), k, value, k)
+					panic(fmt.Sprintf("[Step: %s] key[%s] is %#v, expected get %s", info.Name(), k, value, k))
 				}
 			} else {
-				fmt.Printf("[Step: %s ] has no key[%s]\n\n", info.Name(), k)
-				panic(fmt.Sprintf("[Step: %s ] has no key[%s]", info.Name(), k))
+				fmt.Printf("[Step: %s] has no key[%s]\n\n", info.Name(), k)
+				panic(fmt.Sprintf("[Step: %s] has no key[%s]", info.Name(), k))
 			}
 		}
 		atomic.AddInt64(&current, 1)
@@ -52,12 +52,12 @@ func StepCallbackCheck(check ...string) func(info flow.Step) (keepOn bool, err e
 		for _, s := range check {
 			if value, exist := info.Get(s); exist {
 				if value.(string) != s {
-					fmt.Printf("[Step: %s ] key[%s] is %#v, expected get %s\n\n", info.Name(), s, value, s)
-					panic(fmt.Sprintf("[Step: %s ] key[%s] is %#v, expected get %s", info.Name(), s, value, s))
+					fmt.Printf("[Step: %s] key[%s] is %#v, expected get %s\n\n", info.Name(), s, value, s)
+					panic(fmt.Sprintf("[Step: %s] key[%s] is %#v, expected get %s", info.Name(), s, value, s))
 				}
 			} else {
-				fmt.Printf("[Step: %s ] has no key[%s]\n\n", info.Name(), s)
-				panic(fmt.Sprintf("[Step: %s ] has no key[%s]", info.Name(), s))
+				fmt.Printf("[Step: %s] has no key[%s]\n\n", info.Name(), s)
+				panic(fmt.Sprintf("[Step: %s] has no key[%s]", info.Name(), s))
 			}
 		}
 		atomic.AddInt64(&current, 1)
@@ -67,12 +67,12 @@ func StepCallbackCheck(check ...string) func(info flow.Step) (keepOn bool, err e
 func StepResultCheck(info flow.Step) (keepOn bool, err error) {
 	result, exist := info.Result(info.Name())
 	if !exist {
-		panic(fmt.Sprintf("[Step: %s ] reuslt is missing.", info.Name()))
+		panic(fmt.Sprintf("[Step: %s] reuslt is missing.", info.Name()))
 	}
 	if result.(string) != "result" {
-		panic(fmt.Sprintf("[Step: %s ] reuslt not equal to \"result\"", info.Name()))
+		panic(fmt.Sprintf("[Step: %s] reuslt not equal to \"result\"", info.Name()))
 	} else {
-		fmt.Printf("[Step: %s ] reuslt = %#v\n\n", info.Name(), result)
+		fmt.Printf("[Step: %s] reuslt = %#v\n\n", info.Name(), result)
 	}
 	atomic.AddInt64(&current, 1)
 	return true, nil
@@ -80,14 +80,14 @@ func StepResultCheck(info flow.Step) (keepOn bool, err error) {
 
 func StepCtxFunc(input map[string]any, check ...string) func(ctx flow.Step) (any, error) {
 	return func(ctx flow.Step) (any, error) {
-		fmt.Printf("[Step: %s ] runnning \n", ctx.Name())
+		fmt.Printf("[Step: %s] runnning \n", ctx.Name())
 		for _, s := range check {
 			if value, exist := ctx.Get(s); exist {
 				if value.(string) != s {
-					panic(fmt.Sprintf("[Step: %s ] key[%s] is %#v, expected get %s", ctx.Name(), s, value, s))
+					panic(fmt.Sprintf("[Step: %s] key[%s] is %#v, expected get %s", ctx.Name(), s, value, s))
 				}
 			} else {
-				panic(fmt.Sprintf("[Step: %s ] has no key[%s]", ctx.Name(), s))
+				panic(fmt.Sprintf("[Step: %s] has no key[%s]", ctx.Name(), s))
 			}
 		}
 		for k, v := range input {

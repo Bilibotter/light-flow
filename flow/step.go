@@ -55,23 +55,16 @@ func (meta *StepMeta) Name() string {
 	return meta.name
 }
 
-func (meta *StepMeta) Next(run func(ctx Step) (any, error), alias ...string) *StepMeta {
-	if len(alias) == 1 {
-		return meta.belong.NameStep(run, alias[0], meta.name)
-
-	}
-	return meta.belong.Step(run, meta.name)
+func (meta *StepMeta) Next(run func(ctx Step) (any, error), name string) *StepMeta {
+	return meta.belong.NameStep(run, name, meta.name)
 }
 
-func (meta *StepMeta) Same(run func(ctx Step) (any, error), alias ...string) *StepMeta {
+func (meta *StepMeta) Same(run func(ctx Step) (any, error), name string) *StepMeta {
 	depends := make([]any, 0, len(meta.depends))
 	for i := 0; i < len(meta.depends); i++ {
 		depends = append(depends, meta.depends[i].name)
 	}
-	if len(alias) == 1 {
-		return meta.belong.NameStep(run, alias[0], depends...)
-	}
-	return meta.belong.Step(run, depends)
+	return meta.belong.NameStep(run, name, depends...)
 }
 
 func (meta *StepMeta) Restrict(restrict map[string]any) {

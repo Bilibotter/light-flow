@@ -336,7 +336,7 @@ func CheckFlowPersist(t *testing.T, ff flow.FinishedWorkFlow, expect int) {
 			} else if !step.Success() && s.Status != Fail {
 				t.Errorf("Step %s should be Fail but is %s", step.Name(), stringStatus(s.Status))
 			}
-			t.Logf("Check [Step: %s ] complete", step.Name())
+			t.Logf("Check [Step: %s] complete", step.Name())
 		}
 	}
 	if count != expect {

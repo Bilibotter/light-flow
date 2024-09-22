@@ -9,34 +9,35 @@ import (
 	"time"
 )
 
-type InputA struct {
-	Name string
-}
-
-type InputB struct {
-	Name string
+func CheckCurrent(t *testing.T, expect int64) func(ctx flow.Step) (bool, error) {
+	return func(ctx flow.Step) (bool, error) {
+		if atomic.LoadInt64(&current) != expect {
+			t.Errorf("[Step: %s] check failed, current should be %d, but %d", ctx.Name(), expect, atomic.LoadInt64(&current))
+		}
+		return true, nil
+	}
 }
 
 func ErrorResultPrinter(info flow.Step) (bool, error) {
 	if !info.Success() {
-		fmt.Printf("[Step: %s ] error, explain=%v, err=%v\n", info.Name(), info.ExplainStatus(), info.Err())
+		fmt.Printf("[Step: %s] error, explain=%v, err=%v\n", info.Name(), info.ExplainStatus(), info.Err())
 	}
 	return true, nil
 }
 
-func NormalStep3(ctx flow.Step) (any, error) {
+func NormalStep3(_ flow.Step) (any, error) {
 	atomic.AddInt64(&current, 1)
 	fmt.Printf("3.normal step finish\n")
 	return 3, nil
 }
 
-func NormalStep2(ctx flow.Step) (any, error) {
+func NormalStep2(_ flow.Step) (any, error) {
 	atomic.AddInt64(&current, 1)
 	fmt.Printf("2.normal step finish\n")
 	return 2, nil
 }
 
-func NormalStep1(ctx flow.Step) (any, error) {
+func NormalStep1(_ flow.Step) (any, error) {
 	atomic.AddInt64(&current, 1)
 	fmt.Printf("1.normal step finish\n")
 	return 1, nil
@@ -362,4 +363,86 @@ func TestStop(t *testing.T) {
 	fp.Stop()
 	ff = af.Done()
 	CheckResult(t, 1, flow.Stop)(any(ff).(flow.WorkFlow))
+}
+
+func TestSerial(t *testing.T) {
+	defer resetCurrent()
+	workflow := flow.RegisterFlow("TestSerial0")
+	process := workflow.Process("TestSerial0")
+	process.Serial(NormalStep1, NormalStep2, NormalStep3)
+	process.AfterStep(true, CheckCurrent(t, 1)).OnlyFor("NormalStep1")
+	process.AfterStep(true, CheckCurrent(t, 2)).OnlyFor("NormalStep2")
+	process.AfterStep(true, CheckCurrent(t, 3)).OnlyFor("NormalStep3")
+	workflow.AfterFlow(true, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestSerial0", nil)
+
+	resetCurrent()
+	workflow = flow.RegisterFlow("TestSerial1")
+	process = workflow.Process("TestSerial1")
+	process.NameStep(Fx[flow.Step](t).Inc().Step(), "01")
+	process.NameStep(Fx[flow.Step](t).Inc().Step(), "02")
+	process.Step(NormalStep1)
+	process.Serial(NormalStep2, NormalStep3).After("01", "02", NormalStep1)
+	process.AfterStep(true, CheckCurrent(t, 4)).OnlyFor("NormalStep2")
+	process.AfterStep(true, CheckCurrent(t, 5)).OnlyFor("NormalStep3")
+	workflow.AfterFlow(true, CheckResult(t, 5, flow.Success))
+	flow.DoneFlow("TestSerial1", nil)
+
+	resetCurrent()
+	workflow = flow.RegisterFlow("TestSerial2")
+	process = workflow.Process("TestSerial2")
+	process.NameStep(Fx[flow.Step](t).Inc().Step(), "01")
+	process.NameStep(Fx[flow.Step](t).Inc().Step(), "02")
+	process.Step(NormalStep1)
+	process.Serial(NormalStep2, NormalStep3).After("01", "02", NormalStep1)
+	process.Then(Fx[flow.Step](t).Inc().Step(), "6")
+	workflow.AfterFlow(true, CheckResult(t, 6, flow.Success))
+
+	workflow = flow.RegisterFlow("TestSerial3")
+	process = workflow.Process("TestSerial3")
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("TestSerial3 should panic")
+		}
+	}()
+	process.Serial()
+}
+
+func TestParallel(t *testing.T) {
+	defer resetCurrent()
+	workflow := flow.RegisterFlow("TestParallel0")
+	process := workflow.Process("TestParallel0")
+	process.Parallel(NormalStep1, NormalStep2, NormalStep3)
+	workflow.AfterFlow(true, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestParallel0", nil)
+
+	resetCurrent()
+	workflow = flow.RegisterFlow("TestParallel1")
+	process = workflow.Process("TestParallel1")
+	process.NameStep(Fx[flow.Step](t).Inc().Step(), "01")
+	process.NameStep(Fx[flow.Step](t).Inc().Step(), "02")
+	process.Step(NormalStep1)
+	process.Parallel(NormalStep2, NormalStep3).After("01", "02", NormalStep1)
+	workflow.AfterFlow(true, CheckResult(t, 5, flow.Success))
+	flow.DoneFlow("TestParallel1", nil)
+
+	resetCurrent()
+	workflow = flow.RegisterFlow("TestParallel2")
+	process = workflow.Process("TestParallel2")
+	process.NameStep(Fx[flow.Step](t).Inc().Step(), "01")
+	process.NameStep(Fx[flow.Step](t).Inc().Step(), "02")
+	process.Step(NormalStep1)
+	process.Parallel(NormalStep2, NormalStep3).After("01", "02", NormalStep1)
+	process.Then(Fx[flow.Step](t).Inc().Step(), "6")
+	workflow.AfterFlow(true, CheckResult(t, 6, flow.Success))
+	flow.DoneFlow("TestParallel2", nil)
+
+	workflow = flow.RegisterFlow("TestParallel3")
+	process = workflow.Process("TestParallel3")
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("TestParallel3 should panic")
+		}
+	}()
+	process.Parallel()
 }
