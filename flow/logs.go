@@ -52,6 +52,10 @@ type defaultLogger struct {
 	*log.Logger
 }
 
+func SetLogger(l LoggerI) {
+	logger = l
+}
+
 func commonLog(order []string) func(event FlexEvent) {
 	return func(event FlexEvent) {
 		sb := strings.Builder{}
