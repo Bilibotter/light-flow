@@ -420,7 +420,7 @@ func (ctx *dependentContext) EndValues(key string) map[string]any {
 	}
 	m := make(map[string]any)
 	exist := uint64(0)
-	for current.Next != nil {
+	for current != nil {
 		if ctx.visible()&current.Path != current.Path || exist|current.Path == exist {
 			current = current.Next
 			continue

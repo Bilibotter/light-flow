@@ -147,6 +147,18 @@ func TestGetEndIgnoreProc(t *testing.T) {
 	flow.DoneFlow("TestGetEndIgnoreProc", nil)
 }
 
+func TestGetEndValues(t *testing.T) {
+	defer resetCurrent()
+	workflow := flow.RegisterFlow("TestGetEndValues")
+	process := workflow.Process("TestGetEndValues")
+	process.CustomStep(SetCtxStepFunc(map[string]any{"Step": "Step1"}), "Step1")
+	process.CustomStep(SetCtxStepFunc(map[string]any{"Step": "Step2"}), "Step2")
+	process.CustomStep(SetCtxStepFunc(map[string]any{"Step": "Step3"}), "Step3")
+	process.SyncAll(CheckGetEndValues("Step1", "Step2", "Step3"), "check")
+	workflow.AfterFlow(false, CheckResult(t, 4, flow.Success))
+	flow.DoneFlow("TestGetEndValues", nil)
+}
+
 func TestCollectGetEndValues(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestCollectGetEndValues")
