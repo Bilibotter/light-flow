@@ -208,10 +208,6 @@ func (pm *ProcessMeta) updateWaitersLayer(step *StepMeta) {
 	}
 }
 
-func (pm *ProcessMeta) Step(run func(ctx Step) (any, error), depends ...any) *StepMeta {
-	return pm.NameStep(run, getFuncName(run), depends...)
-}
-
 // This function was inspired by the liteflow project (https://github.com/dromara/liteflow),
 // which implements similar functionality in Java. The implementation here is independently
 // developed in Go, with a different approach and code structure.
@@ -220,10 +216,10 @@ func (pm *ProcessMeta) Serial(steps ...func(ctx Step) (any, error)) BuildChain {
 		panic(fmt.Sprintf("serial steps can't be empty"))
 	}
 	group := make([]*StepMeta, len(steps))
-	group[0] = pm.Step(steps[0])
+	group[0] = pm.NameStep(steps[0], getFuncName(steps[0]))
 	prev := group[0].name
 	for i := 1; i < len(steps); i++ {
-		group[i] = pm.Step(steps[i], prev)
+		group[i] = pm.NameStep(steps[i], getFuncName(steps[i]), prev)
 		prev = group[i].name
 	}
 	chain := &buildChain{
@@ -243,7 +239,7 @@ func (pm *ProcessMeta) Parallel(steps ...func(ctx Step) (any, error)) BuildChain
 	}
 	group := make([]*StepMeta, len(steps))
 	for i, step := range steps {
-		group[i] = pm.Step(step)
+		group[i] = pm.NameStep(step, getFuncName(step))
 	}
 	chain := &buildChain{
 		ProcessMeta: pm,
@@ -252,17 +248,14 @@ func (pm *ProcessMeta) Parallel(steps ...func(ctx Step) (any, error)) BuildChain
 	return chain
 }
 
-func (pm *ProcessMeta) Then(run func(ctx Step) (any, error), alias ...string) *StepMeta {
+func (pm *ProcessMeta) Then(run func(ctx Step) (any, error), alias string) *StepMeta {
 	depends := make([]any, 0)
 	for name, step := range pm.steps {
 		if step.position.Has(endE) {
 			depends = append(depends, name)
 		}
 	}
-	if len(alias) == 1 {
-		return pm.NameStep(run, alias[0], depends...)
-	}
-	return pm.Step(run, depends...)
+	return pm.NameStep(run, alias, depends...)
 }
 
 func (pm *ProcessMeta) NameStep(run func(ctx Step) (any, error), name string, depends ...any) *StepMeta {

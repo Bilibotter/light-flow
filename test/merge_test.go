@@ -333,7 +333,7 @@ func TestSerialMerge(t *testing.T) {
 	process.NameStep(Fx[flow.Step](t).Inc().Step(), "1")
 	process.NameStep(Fx[flow.Step](t).Inc().Step(), "2")
 	process.NameStep(Fx[flow.Step](t).Inc().Step(), "3")
-	process.Step(NormalStep1, "1", "2", "3")
+	process.Serial(NormalStep1).After("1", "2", "3")
 
 	workflow = flow.RegisterFlow("TestSerialMerge2")
 	process = workflow.Process("TestSerialMerge2")
@@ -370,7 +370,7 @@ func TestParallelMerge(t *testing.T) {
 	process.NameStep(Fx[flow.Step](t).Inc().Step(), "1")
 	process.NameStep(Fx[flow.Step](t).Inc().Step(), "2")
 	process.NameStep(Fx[flow.Step](t).Inc().Step(), "3")
-	process.Step(NormalStep1, "1", "2", "3")
+	process.Serial(NormalStep1).After("1", "2", "3")
 
 	workflow = flow.RegisterFlow("TestParallelMerge2")
 	process = workflow.Process("TestParallelMerge2")
