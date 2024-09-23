@@ -485,7 +485,7 @@ func TestResourceKeyDuplicate(t *testing.T) {
 		atomic.AddInt64(&current, 1)
 		return true, nil
 	})
-	proc.NamedStep(func(ctx Step) (any, error) {
+	proc.CustomStep(func(ctx Step) (any, error) {
 		t.Logf("start step1")
 		if _, err := ctx.Attach("TestResourceKeyDuplicate", "1"); err != nil {
 			return nil, err
@@ -500,7 +500,7 @@ func TestResourceKeyDuplicate(t *testing.T) {
 			return nil, errors.New("can not pass")
 		}
 	}, "1")
-	proc.NamedStep(func(ctx Step) (any, error) {
+	proc.CustomStep(func(ctx Step) (any, error) {
 		t.Logf("start step2")
 		if match, exist := ctx.Get(resSerializableKey); !exist {
 			panic("resSerializableKey not exist")

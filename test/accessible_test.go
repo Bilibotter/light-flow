@@ -107,7 +107,7 @@ func TestDependConnectAndIsolated(t *testing.T) {
 	workflow := flow.RegisterFlow("TestDependConnectAndIsolated")
 	process := workflow.Process("TestDependConnectAndIsolated")
 	process.AfterStep(true, ErrorResultPrinter)
-	process.NamedStep(CtxChecker(false, []string{"1", "2", "3"}, []string{}, "a", "b", "c"), "1").
+	process.CustomStep(CtxChecker(false, []string{"1", "2", "3"}, []string{}, "a", "b", "c"), "1").
 		Next(CtxChecker(false, []string{"a", "b", "c"}, []string{}, "d", "e", "f"), "2").
 		Same(CtxChecker(true, []string{"a", "b", "c"}, []string{"d", "e", "f"}, "g", "h", "i"), "3")
 	workflow.AfterFlow(false, CheckResult(t, 3, flow.Success))
@@ -120,7 +120,7 @@ func TestFlowCallbackValid(t *testing.T) {
 	workflow.BeforeFlow(true, FlowCallback(false, []string{"4", "5", "6"}, []string{}, "1", "2", "3"))
 	workflow.AfterFlow(true, FlowCallback(false, []string{"1", "2", "3"}, []string{}))
 	process := workflow.Process("TestFlowCallbackValid")
-	process.NamedStep(CtxChecker(false, []string{}, []string{}, "a", "b", "c"), "1").
+	process.CustomStep(CtxChecker(false, []string{}, []string{}, "a", "b", "c"), "1").
 		Next(CtxChecker(false, []string{"a", "b", "c"}, []string{}, "d", "e", "f"), "2").
 		Same(CtxChecker(true, []string{"a", "b", "c"}, []string{"d", "e", "f"}, "g", "h", "i"), "3")
 	workflow.AfterFlow(false, CheckResult(t, 5, flow.Success))
@@ -133,7 +133,7 @@ func TestProcCallbackValid(t *testing.T) {
 	process := workflow.Process("TestProcCallbackValid")
 	process.BeforeProcess(true, ProcCallback(false, []string{"4", "5", "6"}, []string{}, "1", "2", "3"))
 	process.AfterProcess(true, ProcCallback(false, []string{"1", "2", "3"}, []string{}))
-	process.NamedStep(CtxChecker(false, []string{"1", "2", "3"}, []string{}, "a", "b", "c"), "1").
+	process.CustomStep(CtxChecker(false, []string{"1", "2", "3"}, []string{}, "a", "b", "c"), "1").
 		Next(CtxChecker(false, []string{"a", "b", "c"}, []string{}, "d", "e", "f"), "2").
 		Same(CtxChecker(true, []string{"a", "b", "c"}, []string{"d", "e", "f"}, "g", "h", "i"), "3")
 	workflow.AfterFlow(false, CheckResult(t, 5, flow.Success))
@@ -147,7 +147,7 @@ func TestStepCallbackValid(t *testing.T) {
 	process.AfterStep(true, ErrorResultPrinter)
 	process.BeforeStep(true, StepCallback(false, []string{"4", "5", "6"}, []string{}, "1", "2", "3"))
 	process.AfterStep(true, StepCallback(false, []string{"1", "2", "3"}, []string{}))
-	process.NamedStep(CtxChecker(false, []string{"1", "2", "3"}, []string{}, "a", "b", "c"), "1").
+	process.CustomStep(CtxChecker(false, []string{"1", "2", "3"}, []string{}, "a", "b", "c"), "1").
 		Next(CtxChecker(false, []string{"a", "b", "c"}, []string{}, "d", "e", "f"), "2").
 		Same(CtxChecker(true, []string{"a", "b", "c"}, []string{"d", "e", "f"}, "g", "h", "i"), "3")
 	workflow.AfterFlow(false, CheckResult(t, 9, flow.Success))
@@ -163,7 +163,7 @@ func TestAllCallbackConnect(t *testing.T) {
 	process.AfterProcess(true, ProcCallback(false, []string{"1", "3", "4", "6"}, []string{}))
 	process.BeforeStep(true, StepCallback(false, []string{"3"}, []string{}, "4"))
 	process.AfterStep(true, StepCallback(false, []string{"1", "3", "4", "6"}, []string{}))
-	process.NamedStep(CtxChecker(false, []string{"1", "3", "4"}, []string{}, "6"), "1")
+	process.CustomStep(CtxChecker(false, []string{"1", "3", "4"}, []string{}, "6"), "1")
 	workflow.AfterFlow(false, CheckResult(t, 5, flow.Success))
 	flow.DoneFlow("TestAllCallbackConnect", map[string]any{"1": "1"})
 }

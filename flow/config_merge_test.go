@@ -249,7 +249,7 @@ func TestExecuteDefaultOrder(t *testing.T) {
 	config.AfterFlow(true, FlowCurrentChecker(6, 1))
 	workflow := RegisterFlow("TestExecuteDefaultOrder")
 	process := workflow.Process("TestExecuteDefaultOrder")
-	process.NamedStep(GenerateStep(1), "1")
+	process.CustomStep(GenerateStep(1), "1")
 	workflow.AfterFlow(false, CheckResult(t, 7, Success))
 	DoneFlow("TestExecuteDefaultOrder", nil)
 }
@@ -264,7 +264,7 @@ func TestExecuteOwnOrder(t *testing.T) {
 	workflow.AfterProcess(true, ProcessCurrentChecker(5, 1))
 	workflow.AfterFlow(true, FlowCurrentChecker(6, 1))
 	process := workflow.Process("TestExecuteOwnOrder")
-	process.NamedStep(GenerateStep(1), "1")
+	process.CustomStep(GenerateStep(1), "1")
 	workflow.AfterFlow(false, CheckResult(t, 7, Success))
 	DoneFlow("TestExecuteOwnOrder", nil)
 }
@@ -287,7 +287,7 @@ func TestExecuteMixOrder(t *testing.T) {
 	workflow.AfterProcess(true, ProcessCurrentChecker(10, 1))
 	workflow.AfterFlow(true, FlowCurrentChecker(12, 1))
 	process := workflow.Process("TestExecuteMixOrder")
-	process.NamedStep(GenerateStep(1), "1")
+	process.CustomStep(GenerateStep(1), "1")
 	workflow.AfterFlow(false, CheckResult(t, 13, Success))
 	DoneFlow("TestExecuteMixOrder", nil)
 }
@@ -310,7 +310,7 @@ func TestExecuteDeepMixOrder(t *testing.T) {
 	workflow.AfterProcess(true, ProcessCurrentChecker(13, 1))
 	workflow.AfterFlow(true, FlowCurrentChecker(16, 1))
 	process := workflow.Process("TestExecuteDeepMixOrder")
-	process.NamedStep(GenerateStep(1), "1")
+	process.CustomStep(GenerateStep(1), "1")
 	process.BeforeProcess(true, ProcessCurrentChecker(4, 0))
 	process.AfterProcess(true, ProcessCurrentChecker(14, 1))
 	process.BeforeStep(true, StepCurrentChecker(7, 0))
@@ -340,7 +340,7 @@ func TestBreakWhileFlowError(t *testing.T) {
 	workflow.AfterProcess(true, ProcIncr)
 	workflow.AfterFlow(true, FlowIncr("own config after flow"))
 	process := workflow.Process("TestBreakWhileFlowError")
-	process.NamedStep(GenerateStep(1), "1")
+	process.CustomStep(GenerateStep(1), "1")
 	process.BeforeProcess(true, ProcIncr)
 	process.AfterProcess(true, ProcIncr)
 	process.BeforeStep(true, StepIncr)
@@ -684,7 +684,7 @@ func TestDefaultProcessConfigValid(t *testing.T) {
 	proc1.AfterProcess(true, ProcessConfigChecker(t, copy1))
 	proc1.BeforeStep(true, StepConfigChecker(t, copy1.stepConfig))
 	proc1.AfterStep(true, StepConfigChecker(t, copy1.stepConfig))
-	proc1.NamedStep(emptyStep, "Step1")
+	proc1.CustomStep(emptyStep, "Step1")
 
 	proc2 := wf.Process("ProcConfigEmpty1")
 	copy2 := processConfig{procTimeout: 1 * time.Minute}
@@ -692,7 +692,7 @@ func TestDefaultProcessConfigValid(t *testing.T) {
 	proc2.AfterProcess(true, ProcessConfigChecker(t, copy2))
 	proc2.BeforeStep(true, StepConfigChecker(t, stepConfig{}))
 	proc2.AfterStep(true, StepConfigChecker(t, stepConfig{}))
-	proc2.NamedStep(emptyStep, "Step2")
+	proc2.CustomStep(emptyStep, "Step2")
 	wf.AfterFlow(true, CheckResult(t, 8, Success))
 	DoneFlow("TestDefaultProcessConfigValid", nil)
 }
@@ -720,7 +720,7 @@ func TestFlowProcessConfigValid(t *testing.T) {
 	proc1.AfterProcess(true, ProcessConfigChecker(t, copy1))
 	proc1.BeforeStep(true, StepConfigChecker(t, copy1.stepConfig))
 	proc1.AfterStep(true, StepConfigChecker(t, copy1.stepConfig))
-	proc1.NamedStep(emptyStep, "Step1")
+	proc1.CustomStep(emptyStep, "Step1")
 
 	proc2 := wf.Process("ProcConfigEmpty2")
 	copy2 := processConfig{procTimeout: 2 * time.Minute, stepConfig: stepConfig{stepTimeout: 2 * time.Hour, stepRetry: 2}}
@@ -729,7 +729,7 @@ func TestFlowProcessConfigValid(t *testing.T) {
 	fc := stepConfig{stepTimeout: 2 * time.Hour, stepRetry: 2, stepCfgInit: true}
 	proc2.BeforeStep(true, StepConfigChecker(t, fc))
 	proc2.AfterStep(true, StepConfigChecker(t, fc))
-	proc2.NamedStep(emptyStep, "Step2")
+	proc2.CustomStep(emptyStep, "Step2")
 	wf.AfterFlow(true, CheckResult(t, 8, Success))
 	DoneFlow("TestFlowProcessConfigValid", nil)
 }
@@ -739,12 +739,12 @@ func TestConfigMergeValid(t *testing.T) {
 	defer resetCurrent()
 	wf1 := RegisterFlow("TestConfigMergeValid1")
 	proc1 := wf1.Process("TestConfigMergeValid1")
-	proc1.NamedStep(errorStep, "Step1").StepRetry(2)
-	proc1.NamedStep(errorStep, "Step2").StepRetry(5)
+	proc1.CustomStep(errorStep, "Step1").StepRetry(2)
+	proc1.CustomStep(errorStep, "Step2").StepRetry(5)
 	wf1.AfterFlow(false, CheckResult(t, 9, Error))
 	wf2 := RegisterFlow("TestConfigMergeValid2")
 	proc2 := wf2.Process("TestConfigMergeValid2")
-	proc2.NamedStep(errorStep, "Step1")
+	proc2.CustomStep(errorStep, "Step1")
 	proc2.Merge("TestConfigMergeValid1")
 	wf2.AfterFlow(false, CheckResult(t, 9, Error))
 	DoneFlow("TestConfigMergeValid2", nil)
@@ -770,7 +770,7 @@ func TestStepStepConfigValid(t *testing.T) {
 	proc1.StepTimeout(3 * time.Hour)
 	proc1.ProcessTimeout(3 * time.Minute)
 	copy1 := stepConfig{stepTimeout: 4 * time.Hour, stepRetry: 4, stepCfgInit: true}
-	proc1.NamedStep(emptyStep, "Step1").StepRetry(4).StepTimeout(4 * time.Hour)
+	proc1.CustomStep(emptyStep, "Step1").StepRetry(4).StepTimeout(4 * time.Hour)
 	proc1.BeforeStep(true, StepConfigChecker(t, copy1))
 	proc1.AfterStep(true, StepConfigChecker(t, copy1))
 	wf.AfterFlow(true, CheckResult(t, 2, Success))

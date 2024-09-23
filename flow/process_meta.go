@@ -150,7 +150,7 @@ func (pm *ProcessMeta) Merge(name string) {
 		for _, depend := range merged.depends {
 			depends = append(depends, depend.name)
 		}
-		step := pm.NamedStep(merged.run, merged.name, depends...)
+		step := pm.CustomStep(merged.run, merged.name, depends...)
 		step.condition = merged.condition
 		step.position.append(mergedE)
 		if merged.stepCfgInit {
@@ -228,10 +228,10 @@ func (pm *ProcessMeta) Follow(steps ...func(ctx Step) (any, error)) BuildChain {
 		panic(fmt.Sprintf("serial steps can't be empty"))
 	}
 	group := make([]*StepMeta, len(steps))
-	group[0] = pm.NamedStep(steps[0], getFuncName(steps[0]))
+	group[0] = pm.CustomStep(steps[0], getFuncName(steps[0]))
 	prev := group[0].name
 	for i := 1; i < len(steps); i++ {
-		group[i] = pm.NamedStep(steps[i], getFuncName(steps[i]), prev)
+		group[i] = pm.CustomStep(steps[i], getFuncName(steps[i]), prev)
 		prev = group[i].name
 	}
 	chain := &buildChain{
@@ -251,7 +251,7 @@ func (pm *ProcessMeta) Parallel(steps ...func(ctx Step) (any, error)) BuildChain
 	}
 	group := make([]*StepMeta, len(steps))
 	for i, step := range steps {
-		group[i] = pm.NamedStep(step, getFuncName(step))
+		group[i] = pm.CustomStep(step, getFuncName(step))
 	}
 	chain := &buildChain{
 		ProcessMeta: pm,
@@ -267,10 +267,10 @@ func (pm *ProcessMeta) SyncAll(run func(ctx Step) (any, error), alias string) *S
 			depends = append(depends, name)
 		}
 	}
-	return pm.NamedStep(run, alias, depends...)
+	return pm.CustomStep(run, alias, depends...)
 }
 
-func (pm *ProcessMeta) NamedStep(run func(ctx Step) (any, error), name string, depends ...any) *StepMeta {
+func (pm *ProcessMeta) CustomStep(run func(ctx Step) (any, error), name string, depends ...any) *StepMeta {
 	if !isValidIdentifier(name) {
 		panic(patternHint)
 	}
@@ -289,7 +289,7 @@ func (pm *ProcessMeta) NamedStep(run func(ctx Step) (any, error), name string, d
 	if old, exist := pm.steps[name]; exist {
 		if !old.position.Has(mergedE) {
 			panic(fmt.Sprintf("[Step: %s] already exist, can used %s to avoid name duplicate",
-				name, getFuncName(pm.NamedStep)))
+				name, getFuncName(pm.CustomStep)))
 		}
 		pm.mergeStep(meta)
 		old.run = run
