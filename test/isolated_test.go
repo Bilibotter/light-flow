@@ -142,7 +142,7 @@ func TestGetEndIgnoreProc(t *testing.T) {
 	workflow := flow.RegisterFlow("TestGetEndIgnoreProc")
 	process := workflow.Process("TestGetEndIgnoreProc")
 	process.BeforeProcess(true, ProcCtxFunc(map[string]any{"Step": "TestGetEndIgnoreProc"}))
-	process.NameStep(CheckGetEndValues(), "check")
+	process.NamedStep(CheckGetEndValues(), "check")
 	workflow.AfterFlow(false, CheckResult(t, 2, flow.Success))
 	flow.DoneFlow("TestGetEndIgnoreProc", nil)
 }
@@ -151,12 +151,12 @@ func TestCollectGetEndValues(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestCollectGetEndValues")
 	process := workflow.Process("TestCollectGetEndValues")
-	process.NameStep(SetCtxStepFunc(map[string]any{"Step": "Error"}), "Step0")
-	process.NameStep(SetCtxStepFunc(map[string]any{"Step": "Error"}), "Step1", "Step0")
-	process.NameStep(SetCtxStepFunc(map[string]any{"Step": "Error"}), "Step2", "Step0")
-	process.NameStep(SetCtxStepFunc(map[string]any{"Step": "Error"}), "Step3", "Step0")
-	process.Then(SetCtxStepFunc(map[string]any{"Step": "Step4"}), "Step4")
-	process.Then(CheckGetEndValues("Step4"), "check")
+	process.NamedStep(SetCtxStepFunc(map[string]any{"Step": "Error"}), "Step0")
+	process.NamedStep(SetCtxStepFunc(map[string]any{"Step": "Error"}), "Step1", "Step0")
+	process.NamedStep(SetCtxStepFunc(map[string]any{"Step": "Error"}), "Step2", "Step0")
+	process.NamedStep(SetCtxStepFunc(map[string]any{"Step": "Error"}), "Step3", "Step0")
+	process.SyncAll(SetCtxStepFunc(map[string]any{"Step": "Step4"}), "Step4")
+	process.SyncAll(CheckGetEndValues("Step4"), "check")
 	workflow.AfterFlow(false, CheckResult(t, 6, flow.Success))
 	flow.DoneFlow("TestCollectGetEndValues", nil)
 }
@@ -165,11 +165,11 @@ func TestMultipleGetEndValues(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestMultipleGetEndValues")
 	process := workflow.Process("TestMultipleGetEndValues")
-	process.NameStep(SetCtxStepFunc(map[string]any{"Step": "Error"}), "Step0")
-	process.NameStep(SetCtxStepFunc(map[string]any{"Step": "Step1"}), "Step1", "Step0")
-	process.NameStep(SetCtxStepFunc(map[string]any{"Step": "Step2"}), "Step2", "Step0")
-	process.NameStep(SetCtxStepFunc(map[string]any{"Step": "Step3"}), "Step3", "Step0")
-	process.Then(CheckGetEndValues("Step1", "Step2", "Step3"), "check")
+	process.NamedStep(SetCtxStepFunc(map[string]any{"Step": "Error"}), "Step0")
+	process.NamedStep(SetCtxStepFunc(map[string]any{"Step": "Step1"}), "Step1", "Step0")
+	process.NamedStep(SetCtxStepFunc(map[string]any{"Step": "Step2"}), "Step2", "Step0")
+	process.NamedStep(SetCtxStepFunc(map[string]any{"Step": "Step3"}), "Step3", "Step0")
+	process.SyncAll(CheckGetEndValues("Step1", "Step2", "Step3"), "check")
 	workflow.AfterFlow(false, CheckResult(t, 5, flow.Success))
 	flow.DoneFlow("TestMultipleGetEndValues", nil)
 }
@@ -179,7 +179,7 @@ func TestGetByStepName(t *testing.T) {
 	workflow := flow.RegisterFlow("TestGetByStepName")
 	process := workflow.Process("TestGetByStepName")
 	process.AfterProcess(true, CheckGetByStep("Step0", "Step1", "Step2"))
-	step := process.NameStep(SetCtxStepFunc(map[string]any{"Step0": "Step0"}), "Step0")
+	step := process.NamedStep(SetCtxStepFunc(map[string]any{"Step0": "Step0"}), "Step0")
 	step.
 		Next(SetCtxStepFunc(map[string]any{"Step1": "Step1"}), "Step1").
 		Next(SetCtxStepFunc(map[string]any{"Step2": "Step2"}), "Step2")
@@ -195,7 +195,7 @@ func TestInputVisibleToStepAndProc(t *testing.T) {
 	process.AfterProcess(true, ProcCheckFunc("Step0"))
 	process.BeforeStep(true, StepCallbackCheck("Step0"))
 	process.AfterStep(true, StepCallbackCheck("Step0"))
-	process.NameStep(StepCtxFunc(map[string]any{}, "Step0"), "Step1")
+	process.NamedStep(StepCtxFunc(map[string]any{}, "Step0"), "Step1")
 	workflow.AfterFlow(false, CheckResult(t, 5, flow.Success))
 	flow.DoneFlow("TestInputVisibleToStepAndProc", map[string]any{"Step0": "Step0"})
 }
@@ -206,7 +206,7 @@ func TestAfterProcAndStepCtxConnected(t *testing.T) {
 	process := workflow.Process("TestAfterProcAndStepCtxConnected")
 	process.AfterProcess(true, ProcCheckFunc("Step0", "Step1", "Step2", "Step3"))
 	process.AfterStep(true, StepResultCheck)
-	step := process.NameStep(SetCtxStepFunc(map[string]any{"Step0": "Step0", "Step1": "Error", "Step2": "Error", "Step3": "Error"}), "Step1")
+	step := process.NamedStep(SetCtxStepFunc(map[string]any{"Step0": "Step0", "Step1": "Error", "Step2": "Error", "Step3": "Error"}), "Step1")
 	step.
 		Next(SetCtxStepFunc(map[string]any{"Step1": "Step1", "Step2": "Step2"}), "Step2").
 		Same(SetCtxStepFunc(map[string]any{"Step3": "Step3"}), "Step3")
@@ -222,7 +222,7 @@ func TestProcAndStepCtxConnected(t *testing.T) {
 		"Step0": "Step0", "Step1": "Step1", "Step2": "Step2", "Step3": "Step3",
 	}))
 	process.AfterStep(true, StepResultCheck)
-	step := process.NameStep(StepCtxFunc(map[string]any{"Step1": "Step1"}, "Step0", "Step1"), "Step1")
+	step := process.NamedStep(StepCtxFunc(map[string]any{"Step1": "Step1"}, "Step0", "Step1"), "Step1")
 	step.
 		Next(StepCtxFunc(map[string]any{"Step2": "Step2"}, "Step0", "Step1", "Step2"), "Step2").
 		Next(StepCtxFunc(map[string]any{"Step3": "Step3"}, "Step0", "Step1", "Step2", "Step3"), "Step3")
@@ -236,7 +236,7 @@ func TestProcContextAndResultIsolated(t *testing.T) {
 	process := workflow.Process("TestProcContextAndResultIsolated")
 	process.BeforeProcess(false, ProcCtxFunc(map[string]any{"Step1": "Step1"}))
 	process.AfterStep(true, StepResultCheck)
-	step := process.NameStep(SetCtxStepFunc(map[string]any{"Step2": "Step2"}), "Step1")
+	step := process.NamedStep(SetCtxStepFunc(map[string]any{"Step2": "Step2"}), "Step1")
 	step.
 		Next(SetCtxStepFunc(map[string]any{"Step3": "Step3"}), "Step2").
 		Next(SetCtxStepFunc(map[string]any{"Step4": "Step4"}), "Step3")
@@ -249,7 +249,7 @@ func TestResultAndStepCtxIsolated(t *testing.T) {
 	workflow := flow.RegisterFlow("TestResultAndStepCtxIsolated")
 	process := workflow.Process("TestResultAndStepCtxIsolated")
 	process.AfterStep(true, StepResultCheck)
-	step := process.NameStep(SetCtxStepFunc(map[string]any{"Step2": "Step2"}), "Step1")
+	step := process.NamedStep(SetCtxStepFunc(map[string]any{"Step2": "Step2"}), "Step1")
 	step.
 		Next(SetCtxStepFunc(map[string]any{"Step3": "Step3"}), "Step2").
 		Next(SetCtxStepFunc(map[string]any{"Step4": "Step4"}), "Step3")
@@ -261,12 +261,12 @@ func TestResultAndStepCtxIsolatedAfterMerge(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestResultAndStepCtxIsolatedAfterMerge1")
 	process := workflow.Process("TestResultAndStepCtxIsolatedAfterMerge1")
-	step := process.NameStep(SetCtxStepFunc(map[string]any{"Step2": "Step2"}), "Step1")
+	step := process.NamedStep(SetCtxStepFunc(map[string]any{"Step2": "Step2"}), "Step1")
 	workflow = flow.RegisterFlow("TestResultAndStepCtxIsolatedAfterMerge2")
 	process = workflow.Process("TestResultAndStepCtxIsolatedAfterMerge2")
 	process.AfterStep(true, StepResultCheck)
 	process.Merge("TestResultAndStepCtxIsolatedAfterMerge1")
-	step = process.NameStep(SetCtxStepFunc(map[string]any{"Step3": "Step3"}), "Step2", "Step1")
+	step = process.NamedStep(SetCtxStepFunc(map[string]any{"Step3": "Step3"}), "Step2", "Step1")
 	step.
 		Next(SetCtxStepFunc(map[string]any{"Step4": "Step4"}), "Step3")
 	workflow.AfterFlow(false, CheckResult(t, 6, flow.Success))
@@ -277,15 +277,15 @@ func TestConnectionWhileMergeBreakOrder(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestConnectionWhileMergeBreakOrder1")
 	process := workflow.Process("TestConnectionWhileMergeBreakOrder1")
-	step := process.NameStep(StepCtxFunc(map[string]any{"Step1": "Step1", "Step3": "Error", "Step4": "Error"}), "Step1")
+	step := process.NamedStep(StepCtxFunc(map[string]any{"Step1": "Step1", "Step3": "Error", "Step4": "Error"}), "Step1")
 	step.Next(StepCtxFunc(map[string]any{"Step2": "Step2"}, "Step1", "Step3", "Step4"), "Step2")
-	process.NameStep(StepCtxFunc(map[string]any{"Step3": "Step3"}), "Step3").
+	process.NamedStep(StepCtxFunc(map[string]any{"Step3": "Step3"}), "Step3").
 		Next(StepCtxFunc(map[string]any{"Step4": "Step4"}), "Step4")
 	workflow = flow.RegisterFlow("TestConnectionWhileMergeBreakOrder2")
 	process = workflow.Process("TestConnectionWhileMergeBreakOrder2")
 	process.Merge("TestConnectionWhileMergeBreakOrder1")
-	process.NameStep(StepCtxFunc(map[string]any{"Step3": "Step3"}), "Step3", "Step1")
-	process.NameStep(StepCtxFunc(map[string]any{"Step2": "Step2"}), "Step2", "Step4")
+	process.NamedStep(StepCtxFunc(map[string]any{"Step3": "Step3"}), "Step3", "Step1")
+	process.NamedStep(StepCtxFunc(map[string]any{"Step2": "Step2"}), "Step2", "Step4")
 	workflow.AfterFlow(false, CheckResult(t, 4, flow.Success))
 	flow.DoneFlow("TestConnectionWhileMergeBreakOrder2", nil)
 }

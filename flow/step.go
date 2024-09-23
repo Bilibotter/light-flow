@@ -56,7 +56,7 @@ func (meta *StepMeta) Name() string {
 }
 
 func (meta *StepMeta) Next(run func(ctx Step) (any, error), name string) *StepMeta {
-	return meta.belong.NameStep(run, name, meta.name)
+	return meta.belong.NamedStep(run, name, meta.name)
 }
 
 func (meta *StepMeta) Same(run func(ctx Step) (any, error), name string) *StepMeta {
@@ -64,7 +64,7 @@ func (meta *StepMeta) Same(run func(ctx Step) (any, error), name string) *StepMe
 	for i := 0; i < len(meta.depends); i++ {
 		depends = append(depends, meta.depends[i].name)
 	}
-	return meta.belong.NameStep(run, name, depends...)
+	return meta.belong.NamedStep(run, name, depends...)
 }
 
 func (meta *StepMeta) Restrict(restrict map[string]any) {
