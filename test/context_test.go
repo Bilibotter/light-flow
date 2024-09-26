@@ -395,3 +395,41 @@ func TestContextNameCorrect(t *testing.T) {
 	flow.DoneFlow("TestContextNameCorrect", nil)
 	flow.DoneFlow("TestContextNameCorrect", nil)
 }
+
+func TestWorkFlowContext(t *testing.T) {
+	defer resetCurrent()
+	// Test Connect
+	workflow := flow.RegisterFlow("TestWorkFlowContext1")
+	process := workflow.Process("TestWorkFlowContext1")
+	process.CustomStep(Fx[flow.Step](t).SetCtx().Step(), "1")
+	process.BeforeProcess(true, Fx[flow.Process](t).SetCtx().Callback())
+	workflow.BeforeFlow(true, func(info flow.WorkFlow) (keepOn bool, err error) {
+		t.Logf("Enter BeforeFlow\n")
+		if wrap, exist := info.Get("int"); !exist {
+			panic("int not exist")
+		} else if target, ok := wrap.(int); !ok {
+			panic("int type error")
+		} else if target != 123456 {
+			panic("int value error")
+		}
+		info.Set("int", 789)
+		atomic.AddInt64(&current, 1)
+		t.Logf("Finish BeforeFlow\n")
+		return true, nil
+	})
+	workflow.AfterFlow(true, func(info flow.WorkFlow) (keepOn bool, err error) {
+		t.Logf("Execute AfterFlow\n")
+		if wrap, exist := info.Get("int"); !exist {
+			panic("int not exist")
+		} else if target, ok := wrap.(int); !ok {
+			panic("int type error")
+		} else if target != 789 {
+			panic("int value error")
+		}
+		atomic.AddInt64(&current, 1)
+		t.Logf("Finish AfterFlow\n")
+		return true, nil
+	})
+	ff := flow.DoneFlow("TestWorkFlowContext1", map[string]any{"int": 123456})
+	CheckResult(t, 4, flow.Success)(any(ff).(flow.WorkFlow))
+}

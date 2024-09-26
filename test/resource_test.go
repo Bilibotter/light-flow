@@ -100,14 +100,17 @@ func resourceReleasePanic(t *testing.T) func(res flow.Resource) error {
 }
 
 func resourceInit(res flow.Resource, initParam any) (entity any, err error) {
+	res.Put("light-flow", "test")
 	return initParam.(string) + res.Name(), nil
 }
 
 func resourceInitError(res flow.Resource, initParam any) (entity any, err error) {
+	res.Put("light-flow", "test")
 	return initParam.(string) + res.Name(), fmt.Errorf("Resource[ %s ] init error", res.Name())
 }
 
 func resourceInitPanic(res flow.Resource, _ any) (entity any, err error) {
+	res.Put("light-flow", "test")
 	panic("Resource[" + res.Name() + "] init panic")
 }
 

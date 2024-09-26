@@ -64,6 +64,7 @@ type FlowController interface {
 
 type WorkFlow interface {
 	flowRuntime
+	context
 	proto
 }
 

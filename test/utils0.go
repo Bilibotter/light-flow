@@ -478,6 +478,8 @@ func (fx *FlexibleBuilder[T]) Callback(hints ...string) func(T) (bool, error) {
 				_, err = fn(any(arg).(flow.WorkFlow))
 			case func(Ctx) (bool, error):
 				_, err = fn(any(arg).(Ctx))
+			case func(Ctx) (interface{}, error):
+				_, err = fn(any(arg).(Ctx))
 			default:
 				panic(fmt.Sprintf("unsupported function type: %T", fn))
 			}

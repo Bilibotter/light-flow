@@ -19,8 +19,8 @@ var (
 const (
 	handlePanicLog  = "Handle event failed | [Stage: %s] [%s: %s] [ID: %s] | Panic: %v\n%s"
 	discardPanicLog = "Discard event failed | [Stage: %s] [%s: %s] [ID: %s] | Panic: %v\n%s"
-	errorLog        = "[Stage: %s] [%s: %s] %s[ID: %s] - Failed | Error: %s"
-	panicLog        = "[Stage: %s] [%s: %s] %s[ID: %s] - Failed | Panic: %v\n%s"
+	errorLog        = "[Stage: %s] [%s: %s] %s[ID: %s] - Failed | Error: %s\n"
+	panicLog        = "[Stage: %s] [%s: %s] %s[ID: %s] - Failed | Panic: %v\n%s\n"
 )
 
 const (
