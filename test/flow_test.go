@@ -482,4 +482,13 @@ func TestSyncPoint(t *testing.T) {
 	process.AfterStep(true, CheckCurrent(t, 6)).OnlyFor("NormalStep6")
 	process.Flow().AfterFlow(true, CheckResult(t, 6, flow.Success))
 	flow.DoneFlow("TestSyncPoint2", nil)
+
+	resetCurrent()
+	process = flow.FlowWithProcess("TestSyncPoint3")
+	point = process.Parallel(NormalStep1, NormalStep2)
+	point = process.Parallel(NormalStep3, NormalStep4).After(point, NormalStep1, NormalStep2)
+	process.CustomStep(Fx[flow.Step](t).Inc().Step(), "NormalStep5", point, NormalStep3, NormalStep4)
+	process.AfterStep(true, CheckCurrent(t, 5)).OnlyFor("NormalStep6")
+	process.Flow().AfterFlow(true, CheckResult(t, 5, flow.Success))
+	flow.DoneFlow("TestSyncPoint3", nil)
 }

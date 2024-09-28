@@ -14,11 +14,12 @@ const (
 )
 
 type BuildChain interface {
-	After(depends ...any) SyncPoint
+	SyncPoint
+	After(depends ...any) BuildChain
 }
 
 type SyncPoint interface {
-	Points() []string
+	points() []string
 }
 
 type buildChain struct {
@@ -39,7 +40,7 @@ type ProcessMeta struct {
 	nodeNum  uint
 }
 
-func (bc *buildChain) After(depends ...any) SyncPoint {
+func (bc *buildChain) After(depends ...any) BuildChain {
 	if bc.isSerial {
 		bc.buildSerial(bc.findSteps(depends...))
 		return bc
@@ -83,7 +84,7 @@ func (bc *buildChain) findSteps(depends ...any) []*StepMeta {
 	return ds
 }
 
-func (bc *buildChain) Points() []string {
+func (bc *buildChain) points() []string {
 	points := make([]string, len(bc.group))
 	for i, step := range bc.group {
 		points[i] = step.name
@@ -314,7 +315,7 @@ func (pm *ProcessMeta) normalize(depends ...any) []string {
 	for _, depend := range depends {
 		candidates := make([]string, 1)
 		if point, ok := depend.(SyncPoint); ok {
-			candidates = point.Points()
+			candidates = point.points()
 		} else {
 			candidates[0] = toStepName(depend)
 		}
