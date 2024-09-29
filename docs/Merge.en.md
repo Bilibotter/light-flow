@@ -21,24 +21,27 @@ Light-Flow supports merging registered `Processes` into the currently orchestrat
       A["Step 1"]-->B["Step 2"];
       B --> C["Step 3"];
       C --> D["Step 5"];
+  classDef default fill:#98FF98,stroke:#333,stroke-width:2px;
   ```
-
+  
   The execution flow of the currently orchestrated `Process B` is as follows:
-
+  
   ```mermaid
   flowchart LR;
       A["Step 2"]-->B["Step 3"];
       C["Step 4"] --> D["Step 5"]
+  classDef default fill:#98FF98,stroke:#333,stroke-width:2px;
   ```
 
   After merging `Process A` into `Process B`, the execution flow becomes:
-
+  
   ```mermaid
   flowchart LR;
       A["Step 1"]-->B["Step 2"];
       B --> C["Step 3"];
       C --> D["Step 5"];
       E["Step 4"] --> D
+  classDef default fill:#98FF98,stroke:#333,stroke-width:2px;
   ```
 
 **Example**:
@@ -125,6 +128,8 @@ flowchart LR;
     C --> D["Step 4"]
     D --> A
 %% Mark Step1 and Step4 in red to indicate the cycle
+	style B fill:#98FF98,stroke:#333,stroke-width:2px;
+	style C fill:#98FF98,stroke:#333,stroke-width:2px;
     style A fill:#ff6666,stroke:#333,stroke-width:2px;
     style D fill:#ff6666,stroke:#333,stroke-width:2px;
 ```

@@ -21,24 +21,27 @@ Light-Flow支持将已注册的 `Process` **合并**到正在编排的 `Process`
       A["Step 1"]-->B["Step 2"];
       B --> C["Step 3"];
       C --> D["Step 5"];
+  classDef default fill:#98FF98,stroke:#333,stroke-width:2px;
   ```
-
+  
   正在编排的 `Process B` 执行流程如下：
-
+  
   ```mermaid
   flowchart LR;
       A["Step 2"]-->B["Step 3"];
       C["Step 4"] --> D["Step 5"]
+  classDef default fill:#98FF98,stroke:#333,stroke-width:2px;
   ```
 
   `Process B` Merge `Process A` 后的执行流程如下：
-
+  
   ```mermaid
   flowchart LR;
       A["Step 1"]-->B["Step 2"];
       B --> C["Step 3"];
       C --> D["Step 5"];
       E["Step 4"] --> D
+  classDef default fill:#98FF98,stroke:#333,stroke-width:2px;
   ```
 
 **示例**：
@@ -125,6 +128,8 @@ flowchart LR;
     C --> D["Step 4"]
     D --> A
 %% Mark Step1 and Step4 in red to indicate the cycle
+	style B fill:#98FF98,stroke:#333,stroke-width:2px;
+	style C fill:#98FF98,stroke:#333,stroke-width:2px;
     style A fill:#ff6666,stroke:#333,stroke-width:2px;
     style D fill:#ff6666,stroke:#333,stroke-width:2px;
 ```
