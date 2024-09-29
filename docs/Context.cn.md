@@ -38,7 +38,7 @@ flowchart TD
    D:::stepStyle
    E:::methodStyle
    F:::methodStyle
-
+linkStyle default stroke:#888888
    classDef contextStyle fill:#f9f,stroke:#333,stroke-width:2px;
    classDef stepStyle fill:#9f9,stroke:#333,stroke-width:2px;
    classDef methodStyle fill:#ADD8E6,stroke:#333,stroke-width:2px;
@@ -59,6 +59,7 @@ graph LR
    Step2 --> Step3
    Step1 --> Step4
    Step4 --> Step5
+linkStyle default stroke:#888888
 classDef default fill:#98FF98,stroke:#333,stroke-width:2px;
 ```
 

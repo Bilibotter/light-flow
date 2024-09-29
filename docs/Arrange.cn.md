@@ -73,6 +73,7 @@ process.CustomStep(Step3, "Step3", point)
 graph LR;
 Step4 --> A[Step3]
 Step5 --> A
+linkStyle default stroke:#888888
 classDef default fill:#98FF98,stroke:#333,stroke-width:2px;
 ```
 
@@ -92,6 +93,7 @@ graph LR;
 Step1 --> Step3
 Step2 --> Step3
 Step3 --> Step4
+linkStyle default stroke:#888888
 classDef default fill:#98FF98,stroke:#333,stroke-width:2px;
 ```
 
@@ -108,6 +110,7 @@ process.Parallel(Step2, Step3).After(Step1)
 graph LR;
 A[Step1] --> Step2
 A --> Step3
+linkStyle default stroke:#888888
 classDef default fill:#98FF98,stroke:#333,stroke-width:2px;
 ```
 
@@ -127,6 +130,7 @@ graph LR;
 Step1 --> Step2
 Step2 --sync--> Step4
 Step3 --sync--> Step4
+linkStyle default stroke:#888888
 classDef default fill:#98FF98,stroke:#333,stroke-width:2px;
 ```
 

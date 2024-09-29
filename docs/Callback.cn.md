@@ -26,6 +26,7 @@ graph LR
     D --> E[Default AfterStep]
     E --> F[Flow AfterStep]
     F --> G[Process AfterStep]
+linkStyle default stroke:#888888
 classDef default fill:#98FF98,stroke:#333,stroke-width:2px;
 ```
 
@@ -184,6 +185,7 @@ flowchart TB
     B -->|must-callback failed| H
     B -->|success| C[Process BeforeStep]
     C --> |success| D[Execute Step] 
+linkStyle default stroke:#888888
 classDef default fill:#98FF98,stroke:#333,stroke-width:2px;
 ```
 
@@ -198,6 +200,7 @@ flowchart TB
     A[Default AfterStep] -->|success| B[Flow AfterStep]
     B -->|must-callback failed| H
     B -->|success| C[Process AfterStep]
+linkStyle default stroke:#888888
 classDef default fill:#98FF98,stroke:#333,stroke-width:2px;
 ```
 

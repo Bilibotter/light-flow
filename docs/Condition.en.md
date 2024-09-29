@@ -65,6 +65,7 @@ A --> C[Step 3]
 C[Step 3] --> D[Step 4]
 B --> D
 D --> E[Step 5]
+linkStyle default stroke:#888888
 classDef standard fill:#00ff00,stroke:#000000,stroke-width:2px;
 class A,B,C,D,E standard;
 ```
@@ -79,6 +80,7 @@ A --> C[Step 3]
 C[Step 3] --> D[Step 4]
 B --> D
 D --> E[Step 5]
+linkStyle default stroke:#888888
 classDef standard fill:#00ff00,stroke:#000000,stroke-width:2px;
 classDef cancel fill:#d3d3d3,stroke:#000000,stroke-width:2px;
 class A,C standard;

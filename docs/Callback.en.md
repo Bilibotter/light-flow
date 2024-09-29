@@ -18,6 +18,7 @@ Callbacks can be defined at three levelsâ€”**Flow**, **Process**, and **Step**â€
 **Step Callback Execution Order**:
 
 ```mermaid
+%%{init: {'theme': 'neutral', 'themeVariables': { 'primaryColor': '#333', 'lineColor': '#333', 'textColor': 'black' } } }%%
 graph LR
     A[Default BeforeStep] --> B[Flow BeforeStep]
     B --> C[Process BeforeStep]
@@ -25,6 +26,8 @@ graph LR
     D --> E[Default AfterStep]
     E --> F[Flow AfterStep]
     F --> G[Process AfterStep]
+linkStyle default stroke:#888888
+classDef default fill:#98FF98,stroke:#333,stroke-width:2px;
 ```
 
 Callbacks are executed in the order of their levels, ensuring that Default callbacks are executed first, followed by Flow and Process callbacks, maintaining a logical sequence.
@@ -174,18 +177,22 @@ df.AfterStep(false, StepCallback)
 **Impact of Failure in Necessary Callbacks on Pre-Execution Order**:
 
 ```mermaid
+%%{init: {'theme': 'neutral', 'themeVariables': { 'primaryColor': '#333', 'lineColor': '#333', 'textColor': 'black' } } }%%
 flowchart TB
     H[Cancel Step Execution]
     A -->|must-callback failed| H
     A[Default BeforeStep] -->|success| B[Flow BeforeStep]
     B -->|must-callback failed| H
     B -->|success| C[Process BeforeStep]
-    C --> |success| D[Execute Step]   
+    C --> |success| D[Execute Step] 
+linkStyle default stroke:#888888
+classDef default fill:#98FF98,stroke:#333,stroke-width:2px;
 ```
 
 **Impact of Failure in Necessary Callbacks on Post-Execution Order**:
 
 ```mermaid
+%%{init: {'theme': 'neutral', 'themeVariables': { 'primaryColor': '#333', 'lineColor': '#333', 'textColor': 'black' } } }%%
 flowchart TB
     H[Step Failed]
     I[Execute Step] --> A
@@ -193,6 +200,8 @@ flowchart TB
     A[Default AfterStep] -->|success| B[Flow AfterStep]
     B -->|must-callback failed| H
     B -->|success| C[Process AfterStep]
+linkStyle default stroke:#888888
+classDef default fill:#98FF98,stroke:#333,stroke-width:2px;
 ```
 
 ---

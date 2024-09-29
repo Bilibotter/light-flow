@@ -196,6 +196,7 @@ flowchart TD
     Y --> H[Release Resource]
 
     %% Style Definitions
+    linkStyle default stroke:#888888
     classDef startEnd fill:#00ff00,stroke:#000000,stroke-width:2px;
     classDef decision fill:#f4f4c3,stroke:#333,stroke-width:2px;
     classDef process fill:#cccccc,stroke:#000000,stroke-width:2px;
