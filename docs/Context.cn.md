@@ -24,6 +24,7 @@
    - 每个 `Step` 可以存储自己的数据，并访问与其相关的步骤设置的数据。`Step` 只能访问到自己和前置相关步骤的上下文，避免了不必要的数据传递。
 
 ```mermaid
+%%{init: {'theme': 'neutral', 'themeVariables': { 'primaryColor': '#333', 'lineColor': '#333', 'textColor': 'black' } } }%%
 flowchart TD
    A[InputContext] --> B[ProcessContext]
    B --> C[Step2Context]
@@ -35,9 +36,12 @@ flowchart TD
    B:::contextStyle
    C:::stepStyle
    D:::stepStyle
+   E:::methodStyle
+   F:::methodStyle
 
    classDef contextStyle fill:#f9f,stroke:#333,stroke-width:2px;
    classDef stepStyle fill:#9f9,stroke:#333,stroke-width:2px;
+   classDef methodStyle fill:#ADD8E6,stroke:#333,stroke-width:2px;
 ```
 
 ---
@@ -49,11 +53,13 @@ flowchart TD
 #### 示例执行路径
 
 ```mermaid
+%%{init: {'theme': 'neutral', 'themeVariables': { 'primaryColor': '#333', 'lineColor': '#333', 'textColor': 'black' } } }%%
 graph LR
    Step1 --> Step2
    Step2 --> Step3
    Step1 --> Step4
    Step4 --> Step5
+classDef default fill:#98FF98,stroke:#333,stroke-width:2px;
 ```
 
 在这个流程中：

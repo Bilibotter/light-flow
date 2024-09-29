@@ -25,6 +25,7 @@ In Light-Flow, `Context` is a key-value storage object used for passing informat
    - Each `Step` can store its own data and access data set by related preceding steps. A `Step` can only access its own context and that of its direct predecessors, avoiding unnecessary data transfer.
 
 ```mermaid
+%%{init: {'theme': 'neutral', 'themeVariables': { 'primaryColor': '#333', 'lineColor': '#333', 'textColor': 'black' } } }%%
 flowchart TD
    A[InputContext] --> B[ProcessContext]
    B --> C[Step2Context]
@@ -36,9 +37,12 @@ flowchart TD
    B:::contextStyle
    C:::stepStyle
    D:::stepStyle
+   E:::methodStyle
+   F:::methodStyle
 
    classDef contextStyle fill:#f9f,stroke:#333,stroke-width:2px;
    classDef stepStyle fill:#9f9,stroke:#333,stroke-width:2px;
+   classDef methodStyle fill:#ADD8E6,stroke:#333,stroke-width:2px;
 ```
 
 ---
@@ -50,11 +54,13 @@ To ensure orderly data transfer, `Context` implements a mechanism for connectivi
 #### Example Execution Path
 
 ```mermaid
+%%{init: {'theme': 'neutral', 'themeVariables': { 'primaryColor': '#333', 'lineColor': '#333', 'textColor': 'black' } } }%%
 graph LR
    Step1 --> Step2
    Step2 --> Step3
    Step1 --> Step4
    Step4 --> Step5
+classDef default fill:#98FF98,stroke:#333,stroke-width:2px;
 ```
 
 In this flow:

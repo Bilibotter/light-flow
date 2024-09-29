@@ -17,25 +17,28 @@ Light-Flow支持将已注册的 `Process` **合并**到正在编排的 `Process`
   已注册的 `Process A` 执行流程如下：
 
   ```mermaid
+  %%{init: {'theme': 'neutral', 'themeVariables': { 'primaryColor': '#333', 'lineColor': '#333', 'textColor': 'black' } } }%%
   flowchart LR;
       A["Step 1"]-->B["Step 2"];
       B --> C["Step 3"];
       C --> D["Step 5"];
   classDef default fill:#98FF98,stroke:#333,stroke-width:2px;
   ```
-  
+
   正在编排的 `Process B` 执行流程如下：
   
   ```mermaid
+  %%{init: {'theme': 'neutral', 'themeVariables': { 'primaryColor': '#333', 'lineColor': '#333', 'textColor': 'black' } } }%%
   flowchart LR;
       A["Step 2"]-->B["Step 3"];
       C["Step 4"] --> D["Step 5"]
   classDef default fill:#98FF98,stroke:#333,stroke-width:2px;
   ```
-
+  
   `Process B` Merge `Process A` 后的执行流程如下：
   
   ```mermaid
+  %%{init: {'theme': 'neutral', 'themeVariables': { 'primaryColor': '#333', 'lineColor': '#333', 'textColor': 'black' } } }%%
   flowchart LR;
       A["Step 1"]-->B["Step 2"];
       B --> C["Step 3"];
@@ -122,6 +125,7 @@ target.Follow(Step1)
 如果 `Step1 -> Step2 -> Step3 -> Step4 -> Step1` 构成了环，系统会抛出异常并指出 `Step4 -> Step1` 之间存在循环。
 
 ```mermaid
+%%{init: {'theme': 'neutral', 'themeVariables': { 'primaryColor': '#333', 'lineColor': '#333', 'textColor': 'black' } } }%%
 flowchart LR;
     A["Step 1"]-->B["Step 2"];
     B --> C["Step 3"];

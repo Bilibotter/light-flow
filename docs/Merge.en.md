@@ -17,25 +17,28 @@ Light-Flow supports merging registered `Processes` into the currently orchestrat
   The execution flow of registered `Process A` is as follows:
 
   ```mermaid
+  %%{init: {'theme': 'neutral', 'themeVariables': { 'primaryColor': '#333', 'lineColor': '#333', 'textColor': 'black' } } }%%
   flowchart LR;
       A["Step 1"]-->B["Step 2"];
       B --> C["Step 3"];
       C --> D["Step 5"];
   classDef default fill:#98FF98,stroke:#333,stroke-width:2px;
   ```
-  
+
   The execution flow of the currently orchestrated `Process B` is as follows:
   
   ```mermaid
+  %%{init: {'theme': 'neutral', 'themeVariables': { 'primaryColor': '#333', 'lineColor': '#333', 'textColor': 'black' } } }%%
   flowchart LR;
       A["Step 2"]-->B["Step 3"];
       C["Step 4"] --> D["Step 5"]
   classDef default fill:#98FF98,stroke:#333,stroke-width:2px;
   ```
-
+  
   After merging `Process A` into `Process B`, the execution flow becomes:
   
   ```mermaid
+  %%{init: {'theme': 'neutral', 'themeVariables': { 'primaryColor': '#333', 'lineColor': '#333', 'textColor': 'black' } } }%%
   flowchart LR;
       A["Step 1"]-->B["Step 2"];
       B --> C["Step 3"];
@@ -122,6 +125,7 @@ The framework automatically checks for cycles between `Steps` during the merge p
 If `Step1 -> Step2 -> Step3 -> Step4 -> Step1` forms a cycle, the system will throw an exception indicating that there is a loop between `Step4 -> Step1`.
 
 ```mermaid
+%%{init: {'theme': 'neutral', 'themeVariables': { 'primaryColor': '#333', 'lineColor': '#333', 'textColor': 'black' } } }%%
 flowchart LR;
     A["Step 1"]-->B["Step 2"];
     B --> C["Step 3"];

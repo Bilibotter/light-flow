@@ -58,6 +58,7 @@ proc.CustomStep(Step2, "Step2").
 **示例**： 假设流程如下：
 
 ```mermaid
+%%{init: {'theme': 'neutral', 'themeVariables': { 'primaryColor': '#333', 'lineColor': '#333', 'textColor': 'black' } } }%%
 flowchart LR
 A[Step 1] --> B[Step 2]
 A --> C[Step 3]
@@ -71,6 +72,7 @@ class A,B,C,D,E standard;
 如果 `Step 2` 设置了条件和 `SkipWithDependents()` 且条件未满足，则 `Step 2` 和依赖`Step 2`的 `Step 4`、`Step 5`都会被跳过：
 
 ```mermaid
+%%{init: {'theme': 'neutral', 'themeVariables': { 'primaryColor': '#333', 'lineColor': '#333', 'textColor': 'black' } } }%%
 flowchart LR
 A[Step 1] --> B[Step 2]
 A --> C[Step 3]
@@ -78,7 +80,7 @@ C[Step 3] --> D[Step 4]
 B --> D
 D --> E[Step 5]
 classDef standard fill:#00ff00,stroke:#000000,stroke-width:2px;
-classDef cancel fill:#cccccc,stroke:#000000,stroke-width:2px;
+classDef cancel fill:#d3d3d3,stroke:#000000,stroke-width:2px;
 class A,C standard;
 class B,D,E cancel;
 ```

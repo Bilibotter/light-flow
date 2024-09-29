@@ -183,6 +183,7 @@ func init() {
 资源的生命周期流程图如下：
 
 ```mermaid
+%%{init: {'theme': 'neutral', 'themeVariables': { 'primaryColor': '#333', 'lineColor': '#333', 'textColor': 'black' } } }%%
 flowchart TD
     Z[Process Start] --> A[Initialize Resource]
     A --> B[Process End]

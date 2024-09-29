@@ -18,6 +18,7 @@
 **Step 回调执行顺序**：
 
 ```mermaid
+%%{init: {'theme': 'neutral', 'themeVariables': { 'primaryColor': '#333', 'lineColor': '#333', 'textColor': 'black' } } }%%
 graph LR
     A[Default BeforeStep] --> B[Flow BeforeStep]
     B --> C[Process BeforeStep]
@@ -25,6 +26,7 @@ graph LR
     D --> E[Default AfterStep]
     E --> F[Flow AfterStep]
     F --> G[Process AfterStep]
+classDef default fill:#98FF98,stroke:#333,stroke-width:2px;
 ```
 
 - 回调的执行遵循层级顺序，即 Default 回调优先执行，接着是 Flow 和 Process，确保不同层级的回调以合理顺序被执行。
@@ -174,18 +176,21 @@ df.AfterStep(false, StepCallback)
 **前置回调执行顺序与必要回调失败的影响**：
 
 ```mermaid
+%%{init: {'theme': 'neutral', 'themeVariables': { 'primaryColor': '#333', 'lineColor': '#333', 'textColor': 'black' } } }%%
 flowchart TB
     H[Cancel Step Execution]
     A -->|must-callback failed| H
     A[Default BeforeStep] -->|success| B[Flow BeforeStep]
     B -->|must-callback failed| H
     B -->|success| C[Process BeforeStep]
-    C --> |success| D[Execute Step]   
+    C --> |success| D[Execute Step] 
+classDef default fill:#98FF98,stroke:#333,stroke-width:2px;
 ```
 
 **后置回调执行顺序与必要回调失败的影响**：
 
 ```mermaid
+%%{init: {'theme': 'neutral', 'themeVariables': { 'primaryColor': '#333', 'lineColor': '#333', 'textColor': 'black' } } }%%
 flowchart TB
     H[Step Failed]
     I[Execute Step] --> A
@@ -193,6 +198,7 @@ flowchart TB
     A[Default AfterStep] -->|success| B[Flow AfterStep]
     B -->|must-callback failed| H
     B -->|success| C[Process AfterStep]
+classDef default fill:#98FF98,stroke:#333,stroke-width:2px;
 ```
 
 ---

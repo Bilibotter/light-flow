@@ -58,6 +58,7 @@ If the conditions for a step are not met, the orchestration system provides two 
 **Example**: Suppose the workflow is as follows:
 
 ```mermaid
+%%{init: {'theme': 'neutral', 'themeVariables': { 'primaryColor': '#333', 'lineColor': '#333', 'textColor': 'black' } } }%%
 flowchart LR
 A[Step 1] --> B[Step 2]
 A --> C[Step 3]
@@ -71,6 +72,7 @@ class A,B,C,D,E standard;
 If `Step 2` has conditions set and uses `SkipWithDependents()`, and those conditions are not met, both `Step 2` and its dependent steps (`Step 4`, `Step 5`) will be skipped:
 
 ```mermaid
+%%{init: {'theme': 'neutral', 'themeVariables': { 'primaryColor': '#333', 'lineColor': '#333', 'textColor': 'black' } } }%%
 flowchart LR
 A[Step 1] --> B[Step 2]
 A --> C[Step 3]
@@ -78,7 +80,7 @@ C[Step 3] --> D[Step 4]
 B --> D
 D --> E[Step 5]
 classDef standard fill:#00ff00,stroke:#000000,stroke-width:2px;
-classDef cancel fill:#cccccc,stroke:#000000,stroke-width:2px;
+classDef cancel fill:#d3d3d3,stroke:#000000,stroke-width:2px;
 class A,C standard;
 class B,D,E cancel;
 ```

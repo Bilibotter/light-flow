@@ -69,9 +69,11 @@ process.CustomStep(Step3, "Step3", point)
 ```
 
 ```mermaid
+%%{init: {'theme': 'neutral', 'themeVariables': { 'primaryColor': '#333', 'lineColor': '#333', 'textColor': 'black' } } }%%
 graph LR;
 Step4 --> A[Step3]
 Step5 --> A
+classDef default fill:#98FF98,stroke:#333,stroke-width:2px;
 ```
 
 在此示例中，`point` 是并行编排后产生的执行点，`Step3` 将在 `Step4` 和 `Step5` 都执行完毕后再执行。
@@ -85,10 +87,12 @@ process.Follow(Step3, Step4).After(Step1, Step2)
 ```
 
 ```mermaid
+%%{init: {'theme': 'neutral', 'themeVariables': { 'primaryColor': '#333', 'lineColor': '#333', 'textColor': 'black' } } }%%
 graph LR;
 Step1 --> Step3
 Step2 --> Step3
 Step3 --> Step4
+classDef default fill:#98FF98,stroke:#333,stroke-width:2px;
 ```
 
 ### 任务的并行与依赖
@@ -100,9 +104,11 @@ process.Parallel(Step2, Step3).After(Step1)
 ```
 
 ```mermaid
+%%{init: {'theme': 'neutral', 'themeVariables': { 'primaryColor': '#333', 'lineColor': '#333', 'textColor': 'black' } } }%%
 graph LR;
 A[Step1] --> Step2
 A --> Step3
+classDef default fill:#98FF98,stroke:#333,stroke-width:2px;
 ```
 
 ### 任务等待所有任务完毕后执行
@@ -116,10 +122,12 @@ process.SyncAll(Step4, "Step4") // Step4将在Step1、Step2和Step3都执行完�
 ```
 
 ```mermaid
+%%{init: {'theme': 'neutral', 'themeVariables': { 'primaryColor': '#333', 'lineColor': '#333', 'textColor': 'black' } } }%%
 graph LR;
 Step1 --> Step2
 Step2 --sync--> Step4
 Step3 --sync--> Step4
+classDef default fill:#98FF98,stroke:#333,stroke-width:2px;
 ```
 
 ---

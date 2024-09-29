@@ -183,6 +183,7 @@ When checkpoint recovery is enabled, resources are restored in the following ord
 The lifecycle flowchart of resources is as follows:
 
 ```mermaid
+%%{init: {'theme': 'neutral', 'themeVariables': { 'primaryColor': '#333', 'lineColor': '#333', 'textColor': 'black' } } }%%
 flowchart TD
     Z[Process Start] --> A[Initialize Resource]
     A --> B[Process End]
