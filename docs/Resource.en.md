@@ -1,10 +1,10 @@
-# Resource
+# Resource Management
 
 #### Overview
 
-Light-Flow's resource management feature allows users to utilize external resources (such as database connections, API clients, etc.) within task `Steps`, ensuring these resources are correctly initialized, suspended, recovered, and released during task execution. Resource management supports automated lifecycle control, ensuring that resource states are properly saved and restored when tasks are interrupted or recovered.
+The resource management feature of Light-Flow allows users to utilize external resources (such as database connections, API clients, etc.) within task `Steps`, ensuring that these resources are correctly initialized, suspended, recovered, and released during task execution. Resource management supports automated lifecycle control, ensuring that the state of resources can be properly saved and restored during task interruptions or recoveries.
 
-> **Important Note**: **Resources do not need to have a  entity**; they can be used to abstract external systems. Any external system that requires specific recovery operations for checkpoint recovery can be treated as a resource and attached into the workflow.
+> **Important Note**: Resources do not necessarily have to be physical entities; they can also represent abstract external systems. Any external system that requires specific recovery operations for checkpoint restoration can be treated as a resource and integrated into the workflow.
 
 ---
 
@@ -14,15 +14,15 @@ Before using a resource, it must be registered with the resource manager. Once r
 
 - **Registering Resources**: Use the `AddResource` method to register a resource with the resource manager.
 
-  **Example**
+  **Example**:
 
   ```go
   flow.AddResource("Resource") // Register the resource
   ```
 
-- **Attaching Resources**: Use the `Attach` method to attach a resource to a `Process`. When attaching, you can pass `initParam` as input for the resource's `Initialize` method; the return value will be used as the resource entity for subsequent operations.
+- **Attaching Resources**: Use the `Attach` method to attach a resource to a `Process`. You can pass `initParam` as input for the resource's `Initialize` method, and the return value will be used as the resource entity in subsequent operations.
 
-  **Example**
+  **Example**:
 
   ```go
   func Step(step flow.Step) (any, error) {
@@ -39,16 +39,14 @@ Before using a resource, it must be registered with the resource manager. Once r
 
 The lifecycle of resources within a `Process` includes four key operations:
 
-- **Initialize**: After a resource is attached, the framework automatically calls the `Initialize` method to ensure that the resource is correctly initialized before task execution.
-- **Release**: Regardless of whether the task succeeds or fails, after the `Process` execution ends, the system automatically calls the `Release` method to free up resources and avoid leaks.
-- **Suspend**: When a task is interrupted or a checkpoint is saved, the framework calls the `Suspend` method to save the current state of resources. This operation is typically used to clear sensitive data and save information needed for recovery (such as user IDs or session IDs). Users do not need to handle persistence manually; the framework manages it automatically.
-- **Recover**: During task recovery, the system uses information saved during `Suspend` via the `Recover` method to restore resource states, ensuring that resources can be correctly loaded and support task continuation.
+- **Initialize**: After attaching a resource, the framework automatically calls the `Initialize` method to ensure proper initialization before task execution.
+- **Release**: Regardless of whether the task succeeds or fails, after the `Process` execution ends, the system will automatically call the `Release` method to free up resources and prevent leaks.
+- **Suspend**: When a task is interrupted or a checkpoint is saved, the framework calls the `Suspend` method to save the current state of resources. This operation is typically used to clear sensitive data and save necessary information for recovery (such as user IDs or session IDs). Users do not need to manually persist this data; the framework handles it automatically.
+- **Recover**: When resuming a task, the system uses information saved by `Suspend` through the `Recover` method to restore resource status, ensuring that resources are correctly loaded and can support task continuation. [See Recover Documentation](./Recover.en.md)
 
-[See Recover Documentation](./Recover.en.md)
+These operations are managed automatically by the framework without requiring manual calls from users.
 
-These operations are managed automatically by the framework without requiring manual invocation by users.
-
-**Example**
+**Example**:
 
 ```go
 flow.AddResource("Resource").
@@ -66,12 +64,12 @@ The parameters for `OnInitialize`, `OnSuspend`, `OnRelease`, and `OnRecover` met
 
 The `Resource` provides several main methods:
 
-- **Put**: Write key-value pairs into the `Resource`.
+- **Put**: Write key-value pairs to the `Resource`.
 - **Fetch**: Read key-value pairs from the `Resource`.
-- **Entity**: Retrieve the resource entity generated during `OnInitialize`.
+- **Entity**: Retrieve the resource entity generated by `OnInitialize`.
 - **Update**: Update the resource entity.
 - **Clear**: Clear both the resource entity and its key-value pairs.
-- **Has, Success**: Used to determine the status of a `Process`.
+- **Has**, **Success**: Used to determine the state of a `Process`.
 
 **Example 1: Connection Without Checkpoint Recovery**
 
@@ -115,19 +113,19 @@ func (r *RecoverConnect) OnRelease(res flow.Resource) error {
 
 ---
 
-#### Time-sensitive Resource Management
+#### Timely Resource Management
 
-Certain time-sensitive resources (like temporary tokens or sessions) may expire during task recovery. To ensure these resources are valid upon recovery, users need to save information required to regenerate these resources in the `Suspend` method and use that information in the `Recover` method.
+Certain time-sensitive resources (like temporary tokens or sessions) may expire during task recovery. To ensure these resources remain valid upon recovery, users need to save information required for regenerating these resources in the `Suspend` method and use this information in the `Recover` method.
 
 #### Clearing Sensitive Data
 
-In the `Suspend` method, use the `Clear` method to remove sensitive data to ensure it is not persisted. Then use the `Put` method to save critical information needed for recovery, such as user IDs or other credential data.
+In the `Suspend` method, use the `Clear` method to remove sensitive data to ensure it is not persisted. Then, use the `Put` method to save critical information needed for recovery, such as user IDs or other credential data.
 
 #### Regenerating Resources
 
-In the `Recover` method, use the `Fetch` method to retrieve critical information saved during `Suspend`. Based on this information, regenerate time-sensitive resources and call the `Update` method to inject new resources into the `Process`, allowing tasks to recover smoothly.
+In the `Recover` method, use the `Fetch` method to retrieve critical information saved during suspension. Based on this information, regenerate time-sensitive resources and call the `Update` method to inject new resources into the process for normal task recovery.
 
-**Example**
+**Example**:
 
 ```go
 func PasswordInit(res flow.Resource, initParam any) (any, error) {
@@ -158,10 +156,10 @@ func PasswordRecover(res flow.Resource) error {
 }
 
 func init() {
-	flow.AddResource("Password").
+	flow.AddResource(PasswordR).
 		OnInitialize(PasswordInit).
 		OnSuspend(PasswordSuspend).
-		OnRelease(PasswordRecover)
+		OnRelease(PasswordRecover);
 }
 ```
 
@@ -169,18 +167,18 @@ func init() {
 
 #### Order of Resource Checkpoint Recovery
 
-When checkpoint recovery is enabled, resources are restored in the following order:
+When checkpoint recovery is enabled, resource recovery follows this order:
 
-1. **Initialize Res**: Initialize resources before task execution begins.
-2. **Process Error**: Errors or exceptions occur during task execution.
-3. **Suspend Res**: Suspend resources and save necessary information for recovery.
-4. **Release Res**: Release resources after task failure.
-5. **Recover Process**: Recover task workflow.
-6. **Recover Res**: Restore resource states after task recovery.
-7. **Process Success**: Continue executing tasks after successful recovery.
-8. **Release Res**: Release all resources after task completion.
+1. **Initialize Resource**: Initialize resources before task execution begins.
+2. **Process Error**: An error or exception occurs during task execution.
+3. **Suspend Resource**: Suspend current state and save necessary information.
+4. **Release Resource**: Release all related resources after task failure.
+5. **Recover Process**: Call `Recover` to restore task workflow.
+6. **Recover Resources**: Restore resource status before tasks begin recovering from checkpoints.
+7. **Continue Executing Tasks**: Continue executing tasks.
+8. **Release All Resources**: Release all related resources after task completion.
 
-The lifecycle flowchart of resources is as follows:
+The lifecycle flowchart for resources is as follows:
 
 ```mermaid
 %%{init: {'theme': 'neutral', 'themeVariables': { 'primaryColor': '#333', 'lineColor': '#333', 'textColor': 'black' } } }%%
@@ -195,7 +193,7 @@ flowchart TD
     G --> Y[Recover Resource]
     Y --> H[Release Resource]
 
-    %% Style Definitions
+    %% Style Definitions %%
     linkStyle default stroke:#888888
     classDef startEnd fill:#00ff00,stroke:#000000,stroke-width:2px;
     classDef decision fill:#f4f4c3,stroke:#333,stroke-width:2px;
@@ -207,6 +205,6 @@ flowchart TD
 
 ---
 
-#### Implementing Resource Methods
+#### Implementation of Resource Methods
 
 Depending on actual needs, users can selectively implement methods like `Initialize`, `Suspend`, `Recover`, and `Release`. For resources that do not require suspension or recovery, these methods can be omitted; the framework will automatically handle other lifecycle operations.

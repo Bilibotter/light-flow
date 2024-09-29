@@ -166,4 +166,4 @@ func GetKey(step flow.Step) (any, error) {
 ```
 
 - **End Values**: In an execution path, key values not overwritten by subsequent steps are considered end values.
-- **Support for Multiple Values**: In merged paths, if multiple steps set the same key, `EndValues` will return all end values from those steps.
+- **Support for Multiple Values**: In an execution path, if multiple steps set the same key, `EndValues` will return all end values from those steps.

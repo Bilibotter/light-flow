@@ -8,9 +8,9 @@ LightFlow 是一个基于 Go 语言的任务编排框架，旨在通过函数式
 
 ## 编排流程
 
-### 创建和注册 Flow 与 Process
+### 创建`Flow` 与`Process`
 
-通过使用 `flow.FlowWithProcess(name)`，可以同时创建并注册一个名为 `name` 的 Flow 和 Process。Flow 和 Process 的名称相同，以便于管理。
+通过使用 `flow.FlowWithProcess(name)`，可以同时创建并注册一个名为 `name` 的 Flow 和 Process。Flow 和 Process 的名称相同，便于管理。
 
 ```go
 process := flow.FlowWithProcess("ExampleFlow")
@@ -114,7 +114,7 @@ linkStyle default stroke:#888888
 classDef default fill:#98FF98,stroke:#333,stroke-width:2px;
 ```
 
-### 任务等待所有任务完毕后执行
+### 确保所有任务完毕后再执行
 
 使用 `process.SyncAll(func, name)` 方法确保当前已加入的所有步骤执行完毕后再执行特定的步骤。
 

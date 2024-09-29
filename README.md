@@ -19,7 +19,8 @@ LightFlow is a task orchestration framework built in Go, designed to make managi
 - [**Checkpoint Recovery**](./docs/Recover.en.md): Supports resuming tasks from where they failed, avoiding repeated runs.
 - [**Conditional Execution**](./docs/Condition.en.md): Control task execution based on specific conditions.
 - [**Multi-Level Callbacks**](./docs/Callback.en.md): Set callbacks at various levels to manage task status flexibly.
-- [**Event Handling**](./docs/Event.en.md): Handle errors outside of task execution, allowing for event handlers to be set for each phase.
+- [**Event Handling**](./docs/Event.en.md): Handle errors outside of task execution, allowing for event handlers to be set for each stage.
+- [**Custom Persistence Plugins**](https://github.com/Bilibotter/light-flow-plugins/blob/main/README.md): Users can create custom persistence plugins, and LightFlow is not coupled with any ORM framework.
 
 ---
 

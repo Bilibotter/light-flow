@@ -21,7 +21,7 @@
    - `Process` 的 `Context` 存储数据，并可以访问 `InputContext` 中的数据。每个 `Step` 也能访问所属 `Process` 的 `Context`。
    
 3. **Step 的 Context**：
-   - 每个 `Step` 可以存储自己的数据，并访问与其相关的步骤设置的数据。`Step` 只能访问到自己和前置相关步骤的上下文，避免了不必要的数据传递。
+   - 每个 `Step` 可以存储自己的数据，并访问与其相关的步骤设置的数据。`Step` 只能访问到自己和前置步骤的`Context`，避免了不必要的数据传递。
 
 ```mermaid
 %%{init: {'theme': 'neutral', 'themeVariables': { 'primaryColor': '#333', 'lineColor': '#333', 'textColor': 'black' } } }%%
@@ -134,23 +134,23 @@ func main() {
 
 ### **4. 极端情况处理**
 
-`Context` 提供了针对复杂场景的数据管理工具，包括 `Restrict` 和 `EndValues` 两种特性，帮助用户处理多路径和数据冲突的情况。
+为了应对复杂场景，`Context` 提供了针对多路径和数据冲突的管理工具，包括 `Restrict` 和 `EndValues` 两个方法。
 
 #### 4.1 Restrict
 
-`Restrict` 用于指定某个 `Step` 只能从特定的前置步骤中获取指定键，避免数据冲突。
+使用 `Restrict` 指定某个 `Step` 只能从特定前置步骤中获取指定键，以避免数据冲突。
 
 **示例**：
 
 ```go
-// GetKey 优先从 SetName1 获取 "name" 键，若不存在则按常规方式获取
+// 优先从 [Step: SetName1] 获取 "name" 键，若不存在则按常规方式获取。
 process.CustomStep(GetKey, "GetKey", SetName1, SetName2).
 		Restrict(map[string]any{"name": SetName1})
 ```
 
 #### 4.2 EndValues
 
-`EndValues` 提供了一种机制来获取当前路径中“末端”步骤设置的键值，特别适合在合并路径中处理多个步骤设置相同键的情况。
+使用 `EndValues` 获取当前路径中“末端”步骤设置的键值，特别适合在合并路径中处理多个步骤设置相同键的情况。
 
 **示例**：
 
@@ -165,5 +165,4 @@ func GetKey(step flow.Step) (any, error) {
 ```
 
 - **末端值**：在执行路径中，未被后续步骤覆盖的键值即为末端值。
-- **多值支持**：合并路径中，若多个步骤设置相同键，`EndValues` 会返回所有这些步骤的末端值。
-
+- **多值支持**：在执行路径中，如果多个步骤设置了相同的键，`EndValues` 将返回所有这些步骤的末端值。这意味着你可以获取到所有相关步骤的结果，而不仅仅是最后一个设置的值。
