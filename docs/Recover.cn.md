@@ -4,7 +4,7 @@
 
 断点恢复功能允许任务在执行失败时，从上次中断的地方继续执行。恢复过程涉及任务的主要逻辑以及 `Context` 和 `Resource` 的状态恢复，以确保任务在恢复后能够与最初执行时保持一致。
 
-[Context文档](./Context.cn.md)[Resource文档](./Resource.cn.md)
+[Context文档](./Context.cn.md)|[Resource文档](./Resource.cn.md)
 
 ---
 

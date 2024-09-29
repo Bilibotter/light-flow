@@ -1,73 +1,123 @@
-# LightFlow
+# LightFlow: A Task Orchestration Framework Based on Functional Programming
 
-**[English](README.md),  [中文](README.cn.md)**
+[English](./README.md) | [中文](./README.cn.md)
 
-LightFlow is a declarative task arrage framework.
+LightFlow is a task orchestration framework built in Go, designed to make managing complex task flows easier. It lets you define task flows directly in code using functional programming, **focusing on execution timing** instead of dealing with complicated configuration files or rules.
 
-Users only need to focus on the timing of task execution, while the framework automatically handles the orchestration of tasks.
+**Benefits of LightFlow**
 
-- **Declarative** : Focus on execution timing using functional programming.
-- **[Mergeable Processes](./merge.md)**: Seamlessly integrate registered processes into the current workflow being constructed.
-- **[Multilevel Callbacks](./callback.md)**: Support callbacks at various levels, allowing flexible inclusion of callback logic.
-- **[Multilevel Configuration](./config.md)**: Each level can be configured with priorities for smaller-level configurations.
-- **[Unique Context Mechanism](./context.md)**: Connect step contexts with direct or indirect dependencies and isolate step contexts without dependencies.
-- **Maximum Execution Coverage**: Even if a step fails, other steps that do not depend on it will continue to execute.
+1. **Simplified Task Management**: You don’t need external rule languages or orchestration files; all task dependencies are defined in your code, reducing context switching.
+2. **Focus on Execution Timing**: Just specify the tasks that need to be completed first; the framework automatically manages the order of execution, making dependency management simpler.
+3. **Better Maintainability and Scalability**: Even as task flows grow, determining when tasks should run remains straightforward.
+
+## Core Features
+
+- [**Isolated Contexts**](./docs/Context.en.md): Each `Step` is linked through isolated contexts, allowing access only to relevant data and preventing global confusion.
+- [**Orchestration Based on Timing**](./docs/Arrange.en.md): Define task flows with functional programming, flexibly specifying when tasks should run for efficient management.
+- [**Mergeable Flows**](./docs/Merge.en.md): Combine existing flows into new ones, making process management smoother.
+- [**Resource Management**](./docs/Resource.en.md): Automatically handles resource allocation, release, and recovery from checkpoints.
+- [**Checkpoint Recovery**](./docs/Recover.en.md): Supports resuming tasks from where they failed, avoiding repeated runs.
+- [**Conditional Execution**](./docs/Condition.en.md): Control task execution based on specific conditions.
+- [**Multi-Level Callbacks**](./docs/Callback.en.md): Set callbacks at various levels to manage task status flexibly.
+- [**Event Handling**](./docs/Event.en.md): Handle errors outside of task execution, allowing for event handlers to be set for each phase.
+
+---
+
+## Quick Start
 
 ### Installation
 
-```
-go get github.com/Bilibotter/light-flow
+```sh
+go get github.com/Bilibotter/light-flow/flow
 ```
 
-### Usage
+### Example
+
+Here’s a simple example showing how to use LightFlow for task orchestration:
 
 ```go
+package main
+
 import (
 	"fmt"
-	flow "github.com/Bilibotter/light-flow"
-	"strings"
+	"github.com/Bilibotter/light-flow/flow"
 )
 
-func Step1(ctx flow.StepCtx) (result interface{}, err error) {
-	// Context can get value set by workflow input
-	if input, exists := ctx.Get("flow-input"); exists {
-		fmt.Printf("%s get workflow input, value = '%s'\n", ctx.ContextName(), input.(string))
+func First(step flow.Step) (any, error) {
+	if input, exists := step.Get("input"); exists {
+		fmt.Printf("[Step: %s] got input: %v\n", step.Name(), input)
 	}
-	ctx.Set("step1-key", 1)
-	result = "Step1 Result"
-	return
+	step.Set("key", "value")
+	return "result", nil
 }
 
-func Step2(ctx flow.StepCtx) (result interface{}, err error) {
-	if value, exists := ctx.Get("step1-key"); exists {
-		fmt.Printf("%s get Step1 key, value = '%d'\n", ctx.ContextName(), value.(int))
+func Second(step flow.Step) (any, error) {
+	if value, exists := step.Get("key"); exists {
+		fmt.Printf("[Step: %s] got key: %v\n", step.Name(), value)
 	}
-	// Context can get related step's execute result by step name
-	if step1Result, exists := ctx.GetResult("Step1"); exists {
-		fmt.Printf("%s get Step1 result, value = `%s`\n", ctx.ContextName(), step1Result.(string))
+	if result, exists := step.Result(step.Dependents()[0]); exists {
+		fmt.Printf("[Step: %s] got result: %v\n", step.Name(), result)
 	}
-	return
+	return nil, nil
 }
 
-func AfterStepCallback(step *flow.Step) (keepOn bool, err error) {
-	if step.Exceptions() != nil {
-		fmt.Printf("%s executed faield %s occur\n", step.Name, strings.Join(step.Exceptions(), ","))
+func ErrorStep(step flow.Step) (any, error) {
+	if value, exists := step.Get("key"); exists {
+		fmt.Printf("[Step: %s] got key: %v\n", step.Name(), value)
+	} else {
+		fmt.Printf("[Step: %s] cannot get key \n", step.Name())
+	}
+	return nil, fmt.Errorf("execution failed")
+}
+
+func ErrorHandler(step flow.Step) (bool, error) {
+	if step.Has(flow.Failed) {
+		fmt.Printf("[Step: %s] has failed\n", step.Name())
+	} else {
+		fmt.Printf("[Step: %s] succeeded\n", step.Name())
 	}
 	return true, nil
 }
 
 func init() {
-	workflow := flow.RegisterFlow("WorkFlow")
-	process := workflow.Process("Process")
-	process.Step(Step1)
-	// Step2 depends on Step1
-	process.Step(Step2, Step1)
-	// Use the callback function to handle errors during step execution
-	workflow.AfterStep(false, AfterStepCallback)
+	process := flow.FlowWithProcess("Example")
+	process.Follow(First, Second)
+	process.Follow(ErrorStep)
+	process.AfterStep(true, ErrorHandler)
 }
 
 func main() {
-	// Complete the workflow with initial input values
-	flow.DoneFlow("WorkFlow", map[string]interface{}{"flow-input": "Hello world!"})
+	flow.DoneFlow("Example", map[string]any{"input": "Hello world"})
 }
 ```
+
+### Output
+
+When you run this code, you will see:
+
+```shell
+[Step: First] got input: Hello world
+[Step: First] succeeded
+[Step: Second] got key: value
+[Step: Second] got result: result
+[Step: Second] succeeded
+[Step: ErrorStep] cannot get key 
+[Step: ErrorStep] has failed
+```
+
+### Steps to Use
+
+1. **Define Steps**: Write your `Step` functions, using `step.Get` and `step.Set` to interact with the context. [See Context Documentation](./docs/Context.en.md)
+2. **Create Flows**: Set up a flow and add steps in the `init` function. [See Orchestration Documentation](./docs/Arrange.en.md)
+3. **Error Handling**: Use callbacks to manage different error cases. [See Callback Documentation](./docs/Callback.en.md)
+4. **Start Execution**: Call the `flow.DoneFlow` method to run the flow, passing in the required input data.
+
+> LightFlow is designed to try to run all tasks, even if one fails. Only the tasks that depend on a failed task will be skipped, while unrelated tasks will continue running. 
+>
+> This approach supports checkpoint recovery, ensuring that the system can still execute parts that are unaffected by errors.
+
+---
+
+## Contribution and Support
+
+If you have any suggestions or questions about LightFlow, please feel free to submit an issue or pull request. We welcome your input!

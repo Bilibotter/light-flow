@@ -137,7 +137,7 @@ func PasswordInit(res flow.Resource, initParam any) (any, error) {
 }
 
 func PasswordSuspend(res flow.Resource) error {
-	// Save userId; Clear will remove the userId from the resource
+	// Save userId; Clear will remove userId from resource
 	userId, exist := res.Fetch("userId")
 	if !exist {
 		return fmt.Errorf("userId not exist") // Error if userId not found
@@ -153,14 +153,16 @@ func PasswordRecover(res flow.Resource) error {
 		return fmt.Errorf("userId not exist") // Error if userId not found
 	}
 	pwd := GetPassWordByUserID(userId.(string)) // Fetch password again
-	res.Update(pwd) // Update the resource with new password
+	res.Update(pwd) // Update resource with new password
 	return nil
 }
 
-flow.AddResource("Password").
-    OnInitialize(PasswordInit). // Set initialization for password
-    OnSuspend(PasswordSuspend).   // Set the suspend method
-    OnRelease(PasswordRecover)     // Set the recovery method
+func init() {
+	flow.AddResource(PasswordR).
+		OnInitialize(PasswordInit).
+		OnSuspend(PasswordSuspend).
+		OnRelease(PasswordRecover)
+}
 ```
 
 ---
