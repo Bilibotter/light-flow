@@ -63,6 +63,19 @@ func RegisterFlow(name string) *FlowMeta {
 	return &flow
 }
 
+func FlowWithProcess(name string) *ProcessMeta {
+	if !isValidIdentifier(name) {
+		panic(patternHint)
+	}
+	flow := FlowMeta{
+		name:         name,
+		init:         sync.Once{},
+		flowCallback: buildFlowCallback(flowScope),
+	}
+	flow.register()
+	return flow.Process(name)
+}
+
 func AsyncFlow(name string, input map[string]any) FlowController {
 	factory, ok := allFlows.Load(name)
 	if !ok {

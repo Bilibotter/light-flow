@@ -9,34 +9,41 @@ import (
 	"time"
 )
 
-type InputA struct {
-	Name string
-}
-
-type InputB struct {
-	Name string
+func CheckCurrent(t *testing.T, expect int64) func(ctx flow.Step) (bool, error) {
+	return func(ctx flow.Step) (bool, error) {
+		if atomic.LoadInt64(&current) != expect {
+			t.Errorf("[Step: %s] check failed, current should be %d, but %d", ctx.Name(), expect, atomic.LoadInt64(&current))
+		}
+		return true, nil
+	}
 }
 
 func ErrorResultPrinter(info flow.Step) (bool, error) {
 	if !info.Success() {
-		fmt.Printf("[Step: %s ] error, explain=%v, err=%v\n", info.Name(), info.ExplainStatus(), info.Err())
+		fmt.Printf("[Step: %s] error, explain=%v, err=%v\n", info.Name(), info.ExplainStatus(), info.Err())
 	}
 	return true, nil
 }
 
-func NormalStep3(ctx flow.Step) (any, error) {
+func NormalStep4(_ flow.Step) (any, error) {
+	atomic.AddInt64(&current, 1)
+	fmt.Printf("4.normal step finish\n")
+	return 4, nil
+}
+
+func NormalStep3(_ flow.Step) (any, error) {
 	atomic.AddInt64(&current, 1)
 	fmt.Printf("3.normal step finish\n")
 	return 3, nil
 }
 
-func NormalStep2(ctx flow.Step) (any, error) {
+func NormalStep2(_ flow.Step) (any, error) {
 	atomic.AddInt64(&current, 1)
 	fmt.Printf("2.normal step finish\n")
 	return 2, nil
 }
 
-func NormalStep1(ctx flow.Step) (any, error) {
+func NormalStep1(_ flow.Step) (any, error) {
 	atomic.AddInt64(&current, 1)
 	fmt.Printf("1.normal step finish\n")
 	return 1, nil
@@ -95,9 +102,9 @@ func TestMultipleExceptionStatus(t *testing.T) {
 	atomic.StoreInt64(&letGo, 0)
 	workflow := flow.RegisterFlow("TestMultipleExceptionStatus")
 	process := workflow.Process("TestMultipleExceptionStatus")
-	process.NameStep(Fn(t).Errors(), "1")
-	process.NameStep(Fn(t).Panic(), "2")
-	step := process.NameStep(Fn(t).WaitLetGO(1), "3")
+	process.CustomStep(Fn(t).Errors(), "1")
+	process.CustomStep(Fn(t).Panic(), "2")
+	step := process.CustomStep(Fn(t).WaitLetGO(1), "3")
 	step.StepTimeout(time.Nanosecond)
 	workflow.AfterStep(false, func(step flow.Step) (keepOn bool, err error) {
 		e := step.Err()
@@ -133,7 +140,7 @@ func TestSinglePanicStep(t *testing.T) {
 	t.Parallel()
 	workflow := flow.RegisterFlow("TestSinglePanicStep")
 	process := workflow.Process("TestSinglePanicStep")
-	process.NameStep(GeneratePanicStep(1), "1")
+	process.CustomStep(GeneratePanicStep(1), "1")
 	flow.DoneFlow("TestSinglePanicStep", nil)
 	workflow.AfterFlow(false, CheckResult(t, 1, flow.Panic))
 }
@@ -142,13 +149,13 @@ func TestGoAheadWithoutDependPanicStep(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestGoAheadWithoutDependPanicStep")
 	process := workflow.Process("TestGoAheadWithoutDependPanicStep")
-	process.NameStep(GeneratePanicStep(1), "1")
-	process.NameStep(GenerateStep(2), "2", "1")
-	process.NameStep(GenerateStep(3), "3", "2")
-	process.NameStep(GenerateStep(11), "11")
-	process.NameStep(GenerateStep(12), "12", "11")
-	process.NameStep(GenerateStep(13), "13", "12")
-	process.NameStep(GenerateStep(14), "14", "13")
+	process.CustomStep(GeneratePanicStep(1), "1")
+	process.CustomStep(GenerateStep(2), "2", "1")
+	process.CustomStep(GenerateStep(3), "3", "2")
+	process.CustomStep(GenerateStep(11), "11")
+	process.CustomStep(GenerateStep(12), "12", "11")
+	process.CustomStep(GenerateStep(13), "13", "12")
+	process.CustomStep(GenerateStep(14), "14", "13")
 	workflow.AfterFlow(false, CheckResult(t, 5, flow.Panic))
 	flow.DoneFlow("TestGoAheadWithoutDependPanicStep", nil)
 }
@@ -157,7 +164,7 @@ func TestSingleErrorStep(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestSingleErrorStep")
 	process := workflow.Process("TestSingleErrorStep")
-	process.NameStep(GenerateErrorStep(1), "1")
+	process.CustomStep(GenerateErrorStep(1), "1")
 	flow.DoneFlow("TestSingleErrorStep", nil)
 	workflow.AfterFlow(false, CheckResult(t, 1, flow.Error))
 }
@@ -166,13 +173,13 @@ func TestGoAheadWithoutDependErrorStep(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestGoAheadWithoutDependErrorStep")
 	process := workflow.Process("TestGoAheadWithoutDependErrorStep")
-	process.NameStep(GenerateErrorStep(1), "1")
-	process.NameStep(GenerateStep(2), "2", "1")
-	process.NameStep(GenerateStep(3), "3", "2")
-	process.NameStep(GenerateStep(11), "11")
-	process.NameStep(GenerateStep(12), "12", "11")
-	process.NameStep(GenerateStep(13), "13", "12")
-	process.NameStep(GenerateStep(14), "14", "13")
+	process.CustomStep(GenerateErrorStep(1), "1")
+	process.CustomStep(GenerateStep(2), "2", "1")
+	process.CustomStep(GenerateStep(3), "3", "2")
+	process.CustomStep(GenerateStep(11), "11")
+	process.CustomStep(GenerateStep(12), "12", "11")
+	process.CustomStep(GenerateStep(13), "13", "12")
+	process.CustomStep(GenerateStep(14), "14", "13")
 	workflow.AfterFlow(false, CheckResult(t, 5, flow.Error))
 	flow.DoneFlow("TestGoAheadWithoutDependErrorStep", nil)
 }
@@ -181,7 +188,7 @@ func TestSingleNormalStep(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestSingleNormalStep")
 	process := workflow.Process("TestSingleNormalStep")
-	process.NameStep(GenerateStep(1), "1")
+	process.CustomStep(GenerateStep(1), "1")
 	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
 	flow.DoneFlow("TestSingleNormalStep", nil)
 }
@@ -189,11 +196,11 @@ func TestTestMultipleNormalStepWithoutAlias(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestTestMultipleNormalStepWithoutAlias")
 	process := workflow.Process("TestTestMultipleNormalStepWithoutAlias")
-	process.Step(NormalStep1)
-	process.Step(NormalStep2)
-	process.Step(NormalStep3)
-	process.NameStep(NormalStep1, "4", NormalStep1)
-	process.NameStep(NormalStep1, "5", "NormalStep1")
+	process.Follow(NormalStep1)
+	process.Follow(NormalStep2)
+	process.Follow(NormalStep3)
+	process.CustomStep(NormalStep1, "4", NormalStep1)
+	process.CustomStep(NormalStep1, "5", "NormalStep1")
 	workflow.AfterFlow(false, CheckResult(t, 5, flow.Success))
 	flow.DoneFlow("TestTestMultipleNormalStepWithoutAlias", nil)
 }
@@ -202,12 +209,12 @@ func TestMultipleNormalStepWithMultipleBranches(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestMultipleNormalStepWithMultipleBranches")
 	process := workflow.Process("TestMultipleNormalStepWithMultipleBranches")
-	process.NameStep(GenerateStep(1), "1")
-	process.NameStep(GenerateStep(2), "2", "1")
-	process.NameStep(GenerateStep(3), "3", "2")
-	process.NameStep(GenerateStep(4), "4", "2")
-	process.NameStep(GenerateStep(5), "5", "2")
-	process.Then(GenerateStep(6), "6")
+	process.CustomStep(GenerateStep(1), "1")
+	process.CustomStep(GenerateStep(2), "2", "1")
+	process.CustomStep(GenerateStep(3), "3", "2")
+	process.CustomStep(GenerateStep(4), "4", "2")
+	process.CustomStep(GenerateStep(5), "5", "2")
+	process.SyncAll(GenerateStep(6), "6")
 	workflow.AfterFlow(false, CheckResult(t, 6, flow.Success))
 	flow.DoneFlow("TestMultipleNormalStepWithMultipleBranches", nil)
 }
@@ -216,10 +223,10 @@ func TestMultipleNormalStepsWithWaitBefore(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestMultipleNormalStepsWithWaitBefore")
 	process := workflow.Process("TestMultipleNormalStepsWithWaitBefore")
-	process.NameStep(GenerateStep(1), "1").
+	process.CustomStep(GenerateStep(1), "1").
 		Next(GenerateStep(2), "2").
 		Next(GenerateStep(3), "3")
-	process.NameStep(GenerateStep(11), "11").
+	process.CustomStep(GenerateStep(11), "11").
 		Next(GenerateStep(12), "12").
 		Next(GenerateStep(13), "13")
 	workflow.AfterFlow(false, CheckResult(t, 6, flow.Success))
@@ -230,12 +237,12 @@ func TestMultipleNormalSteps(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestMultipleNormalSteps")
 	process := workflow.Process("TestMultipleNormalSteps")
-	process.NameStep(GenerateStep(1), "1")
-	process.NameStep(GenerateStep(2), "2", "1")
-	process.NameStep(GenerateStep(3), "3", "2")
-	process.NameStep(GenerateStep(11), "11")
-	process.NameStep(GenerateStep(12), "12", "11")
-	process.NameStep(GenerateStep(13), "13", "12")
+	process.CustomStep(GenerateStep(1), "1")
+	process.CustomStep(GenerateStep(2), "2", "1")
+	process.CustomStep(GenerateStep(3), "3", "2")
+	process.CustomStep(GenerateStep(11), "11")
+	process.CustomStep(GenerateStep(12), "12", "11")
+	process.CustomStep(GenerateStep(13), "13", "12")
 	workflow.AfterFlow(false, CheckResult(t, 6, flow.Success))
 	flow.DoneFlow("TestMultipleNormalSteps", nil)
 }
@@ -245,12 +252,12 @@ func TestWorkFlowPause(t *testing.T) {
 	atomic.StoreInt64(&letGo, 0)
 	workflow := flow.RegisterFlow("TestWorkFlowPause")
 	process := workflow.Process("TestWorkFlowPause")
-	process.NameStep(Fn(t).WaitLetGO(), "1w1")
-	process.NameStep(Fn(t).WaitLetGO(), "1w2", "1w1")
-	process.NameStep(Fn(t).WaitLetGO(), "1w3", "1w2")
-	process.NameStep(Fn(t).WaitLetGO(), "2w1")
-	process.NameStep(Fn(t).WaitLetGO(), "2w2", "2w1")
-	process.NameStep(Fn(t).WaitLetGO(), "2w3", "2w2")
+	process.CustomStep(Fn(t).WaitLetGO(), "1w1")
+	process.CustomStep(Fn(t).WaitLetGO(), "1w2", "1w1")
+	process.CustomStep(Fn(t).WaitLetGO(), "1w3", "1w2")
+	process.CustomStep(Fn(t).WaitLetGO(), "2w1")
+	process.CustomStep(Fn(t).WaitLetGO(), "2w2", "2w1")
+	process.CustomStep(Fn(t).WaitLetGO(), "2w3", "2w2")
 	workflow.AfterFlow(false, CheckResult(t, 6, flow.Success))
 	wf := flow.AsyncFlow("TestWorkFlowPause", nil)
 	waitCurrent(2)
@@ -280,12 +287,12 @@ func TestProcessPause(t *testing.T) {
 	workflow := flow.RegisterFlow("TestProcessPause")
 	process := workflow.Process("TestProcessPause")
 	fn := Fn(t)
-	process.NameStep(fn.WaitLetGO(), "1w1")
-	process.NameStep(fn.Normal(), "1w2", "1w1")
-	process.NameStep(fn.Normal(), "1w3", "1w2")
-	process.NameStep(fn.WaitLetGO(), "2w1")
-	process.NameStep(fn.Normal(), "2w2", "2w1")
-	process.NameStep(fn.Normal(), "2w3", "2w2")
+	process.CustomStep(fn.WaitLetGO(), "1w1")
+	process.CustomStep(fn.Normal(), "1w2", "1w1")
+	process.CustomStep(fn.Normal(), "1w3", "1w2")
+	process.CustomStep(fn.WaitLetGO(), "2w1")
+	process.CustomStep(fn.Normal(), "2w2", "2w1")
+	process.CustomStep(fn.Normal(), "2w3", "2w2")
 	workflow.AfterFlow(false, CheckResult(t, 6, flow.Success))
 	c := flow.AsyncFlow("TestProcessPause", nil)
 	waitCurrent(2)
@@ -308,10 +315,10 @@ func TestCopyDepend(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestCopyDepend")
 	process := workflow.Process("TestCopyDepend")
-	process.NameStep(GenerateStep(1), "1").
+	process.CustomStep(GenerateStep(1), "1").
 		Next(GenerateStep(2), "2").
 		Same(GenerateStep(3), "3")
-	process.NameStep(GenerateStep(11), "11").
+	process.CustomStep(GenerateStep(11), "11").
 		Next(GenerateStep(12), "12").
 		Same(GenerateStep(13), "13")
 	workflow.AfterFlow(false, CheckResult(t, 6, flow.Success))
@@ -322,7 +329,7 @@ func TestNewFlowReturn(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestNewFlowReturn")
 	process := workflow.Process("TestNewFlowReturn")
-	process.NameStep(GenerateStep(1), "1")
+	process.CustomStep(GenerateStep(1), "1")
 	workflow.AfterFlow(false, CheckResult(t, 1, flow.Success))
 	flow.DoneFlow("TestNewFlowReturn", nil)
 }
@@ -331,7 +338,7 @@ func TestPanicStepLook(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestPanicStepLook")
 	process := workflow.Process("TestPanicStepLook")
-	process.NameStep(Fn(t).Panic(), "1")
+	process.CustomStep(Fn(t).Panic(), "1")
 	workflow.AfterStep(false, ErrorResultPrinter)
 	flow.DoneFlow("TestPanicStepLook", nil)
 }
@@ -340,9 +347,9 @@ func TestStop(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestStop")
 	process := workflow.Process("TestStop")
-	process.NameStep(Fn(t).WaitLetGO(), "1")
-	process.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
-	process.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "2")
+	process.CustomStep(Fn(t).WaitLetGO(), "1")
+	process.CustomStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	process.CustomStep(Fx[flow.Step](t).Inc().Step(), "3", "2")
 	af := flow.AsyncFlow("TestStop", nil)
 	waitCurrent(1)
 	atomic.StoreInt64(&letGo, 1)
@@ -353,13 +360,135 @@ func TestStop(t *testing.T) {
 	resetCurrent()
 	workflow = flow.RegisterFlow("TestStop0")
 	process = workflow.Process("TestStop0")
-	process.NameStep(Fn(t).WaitLetGO(), "1")
-	process.NameStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
-	process.NameStep(Fx[flow.Step](t).Inc().Step(), "3", "2")
+	process.CustomStep(Fn(t).WaitLetGO(), "1")
+	process.CustomStep(Fx[flow.Step](t).Inc().Step(), "2", "1")
+	process.CustomStep(Fx[flow.Step](t).Inc().Step(), "3", "2")
 	af = flow.AsyncFlow("TestStop0", nil)
 	waitCurrent(1)
 	fp, _ := af.Process("TestStop0")
 	fp.Stop()
 	ff = af.Done()
 	CheckResult(t, 1, flow.Stop)(any(ff).(flow.WorkFlow))
+}
+
+func TestSerial(t *testing.T) {
+	defer resetCurrent()
+	workflow := flow.RegisterFlow("TestSerial0")
+	process := workflow.Process("TestSerial0")
+	process.Follow(NormalStep1, NormalStep2, NormalStep3)
+	process.AfterStep(true, CheckCurrent(t, 1)).OnlyFor("NormalStep1")
+	process.AfterStep(true, CheckCurrent(t, 2)).OnlyFor("NormalStep2")
+	process.AfterStep(true, CheckCurrent(t, 3)).OnlyFor("NormalStep3")
+	workflow.AfterFlow(true, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestSerial0", nil)
+
+	resetCurrent()
+	workflow = flow.RegisterFlow("TestSerial1")
+	process = workflow.Process("TestSerial1")
+	process.CustomStep(Fx[flow.Step](t).Inc().Step(), "01")
+	process.CustomStep(Fx[flow.Step](t).Inc().Step(), "02")
+	process.Follow(NormalStep1)
+	process.Follow(NormalStep2, NormalStep3).After("01", "02", NormalStep1)
+	process.AfterStep(true, CheckCurrent(t, 4)).OnlyFor("NormalStep2")
+	process.AfterStep(true, CheckCurrent(t, 5)).OnlyFor("NormalStep3")
+	workflow.AfterFlow(true, CheckResult(t, 5, flow.Success))
+	flow.DoneFlow("TestSerial1", nil)
+
+	resetCurrent()
+	workflow = flow.RegisterFlow("TestSerial2")
+	process = workflow.Process("TestSerial2")
+	process.CustomStep(Fx[flow.Step](t).Inc().Step(), "01")
+	process.CustomStep(Fx[flow.Step](t).Inc().Step(), "02")
+	process.Follow(NormalStep1)
+	process.Follow(NormalStep2, NormalStep3).After("01", "02", NormalStep1)
+	process.SyncAll(Fx[flow.Step](t).Inc().Step(), "6")
+	workflow.AfterFlow(true, CheckResult(t, 6, flow.Success))
+
+	workflow = flow.RegisterFlow("TestSerial3")
+	process = workflow.Process("TestSerial3")
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("TestSerial3 should panic")
+		}
+	}()
+	process.Follow()
+}
+
+func TestParallel(t *testing.T) {
+	defer resetCurrent()
+	workflow := flow.RegisterFlow("TestParallel0")
+	process := workflow.Process("TestParallel0")
+	process.Parallel(NormalStep1, NormalStep2, NormalStep3)
+	workflow.AfterFlow(true, CheckResult(t, 3, flow.Success))
+	flow.DoneFlow("TestParallel0", nil)
+
+	resetCurrent()
+	workflow = flow.RegisterFlow("TestParallel1")
+	process = workflow.Process("TestParallel1")
+	process.CustomStep(Fx[flow.Step](t).Inc().Step(), "01")
+	process.CustomStep(Fx[flow.Step](t).Inc().Step(), "02")
+	process.Follow(NormalStep1)
+	process.Parallel(NormalStep2, NormalStep3).After("01", "02", NormalStep1)
+	workflow.AfterFlow(true, CheckResult(t, 5, flow.Success))
+	flow.DoneFlow("TestParallel1", nil)
+
+	resetCurrent()
+	workflow = flow.RegisterFlow("TestParallel2")
+	process = workflow.Process("TestParallel2")
+	process.CustomStep(Fx[flow.Step](t).Inc().Step(), "01")
+	process.CustomStep(Fx[flow.Step](t).Inc().Step(), "02")
+	process.Follow(NormalStep1)
+	process.Parallel(NormalStep2, NormalStep3).After("01", "02", NormalStep1)
+	process.SyncAll(Fx[flow.Step](t).Inc().Step(), "6")
+	workflow.AfterFlow(true, CheckResult(t, 6, flow.Success))
+	flow.DoneFlow("TestParallel2", nil)
+
+	workflow = flow.RegisterFlow("TestParallel3")
+	process = workflow.Process("TestParallel3")
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("TestParallel3 should panic")
+		}
+	}()
+	process.Parallel()
+}
+
+func TestSyncPoint(t *testing.T) {
+	defer resetCurrent()
+	process := flow.FlowWithProcess("TestSyncPoint")
+	process.CustomStep(Fx[flow.Step](t).Inc().Step(), "NormalStep0")
+	point := process.Parallel(NormalStep1, NormalStep2, NormalStep3).After("NormalStep0")
+	process.CustomStep(Fx[flow.Step](t).Inc().Step(), "NormalStep4", point)
+	process.AfterStep(true, CheckCurrent(t, 5)).OnlyFor("NormalStep5")
+	process.Flow().AfterFlow(true, CheckResult(t, 5, flow.Success))
+	flow.DoneFlow("TestSyncPoint", nil)
+
+	resetCurrent()
+	process = flow.FlowWithProcess("TestSyncPoint1")
+	process.CustomStep(Fx[flow.Step](t).Inc().Step(), "NormalStep0")
+	point = process.Parallel(NormalStep1, NormalStep2).After("NormalStep0")
+	point = process.Parallel(NormalStep3, NormalStep4).After(point)
+	process.CustomStep(Fx[flow.Step](t).Inc().Step(), "NormalStep5", point)
+	process.AfterStep(true, CheckCurrent(t, 6)).OnlyFor("NormalStep6")
+	process.Flow().AfterFlow(true, CheckResult(t, 6, flow.Success))
+	flow.DoneFlow("TestSyncPoint1", nil)
+
+	resetCurrent()
+	process = flow.FlowWithProcess("TestSyncPoint2")
+	process.CustomStep(Fx[flow.Step](t).Inc().Step(), "NormalStep0")
+	point = process.Parallel(NormalStep1, NormalStep2).After("NormalStep0")
+	point = process.Parallel(NormalStep3, NormalStep4).After(point, NormalStep1, NormalStep2)
+	process.CustomStep(Fx[flow.Step](t).Inc().Step(), "NormalStep5", point, NormalStep3, NormalStep4)
+	process.AfterStep(true, CheckCurrent(t, 6)).OnlyFor("NormalStep6")
+	process.Flow().AfterFlow(true, CheckResult(t, 6, flow.Success))
+	flow.DoneFlow("TestSyncPoint2", nil)
+
+	resetCurrent()
+	process = flow.FlowWithProcess("TestSyncPoint3")
+	point = process.Parallel(NormalStep1, NormalStep2)
+	point = process.Parallel(NormalStep3, NormalStep4).After(point, NormalStep1, NormalStep2)
+	process.CustomStep(Fx[flow.Step](t).Inc().Step(), "NormalStep5", point, NormalStep3, NormalStep4)
+	process.AfterStep(true, CheckCurrent(t, 5)).OnlyFor("NormalStep6")
+	process.Flow().AfterFlow(true, CheckResult(t, 5, flow.Success))
+	flow.DoneFlow("TestSyncPoint3", nil)
 }

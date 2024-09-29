@@ -64,6 +64,7 @@ type FlowController interface {
 
 type WorkFlow interface {
 	flowRuntime
+	context
 	proto
 }
 
@@ -420,7 +421,7 @@ func (ctx *dependentContext) EndValues(key string) map[string]any {
 	}
 	m := make(map[string]any)
 	exist := uint64(0)
-	for current.Next != nil {
+	for current != nil {
 		if ctx.visible()&current.Path != current.Path || exist|current.Path == exist {
 			current = current.Next
 			continue
@@ -496,7 +497,7 @@ func (ctx *dependentContext) GetByStepName(stepName, key string) (value any, exi
 	defer ctx.RUnlock()
 	index, ok := ctx.getIndex(stepName)
 	if !ok {
-		panic(fmt.Sprintf("[Step: %s ] not found.", stepName))
+		panic(fmt.Sprintf("[Step: %s] not found.", stepName))
 	}
 	return ctx.matchByIndex(index, key)
 }

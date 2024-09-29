@@ -114,14 +114,6 @@ func createSetBySliceFunc[T any, K comparable](src []T, transfer func(T) K) *set
 	return result
 }
 
-func (s *set[T]) Slice() []T {
-	result := make([]T, 0, len(s.Data))
-	for key := range s.Data {
-		result = append(result, key)
-	}
-	return result
-}
-
 func (s *set[T]) Add(item T) {
 	s.Data[item] = empty{}
 }

@@ -36,7 +36,7 @@ func TestQuickStepConcurrent(t *testing.T) {
 	}
 	for i := 0; i < 62; i++ {
 		for _, p := range proc {
-			p.NameStep(func(ctx flow.Step) (any, error) {
+			p.CustomStep(func(ctx flow.Step) (any, error) {
 				return nil, nil
 			}, strconv.Itoa(i))
 		}
@@ -51,9 +51,9 @@ func TestTestMultipleConcurrentDependContext(t *testing.T) {
 	defer resetCurrent()
 	workflow := flow.RegisterFlow("TestTestMultipleConcurrentDependContext")
 	process := workflow.Process("TestTestMultipleConcurrentDependContext")
-	process.NameStep(ChangeCtxStepFunc(&current), "111")
+	process.CustomStep(ChangeCtxStepFunc(&current), "111")
 	for i := 0; i < 61; i++ {
-		process.NameStep(NoDelayContextStep, strconv.Itoa(i), "111")
+		process.CustomStep(NoDelayContextStep, strconv.Itoa(i), "111")
 	}
 	workflow.AfterFlow(false, CheckResult(t, 62, flow.Success))
 	flow.DoneFlow("TestTestMultipleConcurrentDependContext", map[string]any{addrKey: &current})
@@ -64,7 +64,7 @@ func TestMultipleConcurrentContext(t *testing.T) {
 	workflow := flow.RegisterFlow("TestMultipleConcurrentContext")
 	process := workflow.Process("TestMultipleConcurrentContext")
 	for i := 0; i < 62; i++ {
-		process.NameStep(NoDelayContextStep, strconv.Itoa(i))
+		process.CustomStep(NoDelayContextStep, strconv.Itoa(i))
 	}
 	workflow.AfterFlow(false, CheckResult(t, 62, flow.Success))
 	flow.DoneFlow("TestMultipleConcurrentContext", map[string]any{addrKey: &current})
@@ -79,7 +79,7 @@ func TestMultipleConcurrentProcess(t *testing.T) {
 		process.AfterStep(true, GenerateNoDelayProcessor)
 		for j := 0; j < 62; j++ {
 			key := strconv.Itoa(i) + "a" + strconv.Itoa(j)
-			process.NameStep(GenerateNoDelayStep(i*1000+j), key)
+			process.CustomStep(GenerateNoDelayStep(i*1000+j), key)
 		}
 	}
 	workflow.AfterFlow(false, CheckResult(t, 62*100*3, flow.Success))
@@ -93,7 +93,7 @@ func TestMultipleConcurrentStepWithProcessor(t *testing.T) {
 	process.BeforeStep(true, GenerateNoDelayProcessor)
 	process.AfterStep(true, GenerateNoDelayProcessor)
 	for i := 0; i < 62; i++ {
-		process.NameStep(GenerateNoDelayStep(i), strconv.Itoa(i))
+		process.CustomStep(GenerateNoDelayStep(i), strconv.Itoa(i))
 	}
 	workflow.AfterFlow(false, CheckResult(t, 62*3, flow.Success))
 	flow.DoneFlow("TestMultipleConcurrentStepWithProcessor", nil)
@@ -104,7 +104,7 @@ func TestMultipleConcurrentStep(t *testing.T) {
 	workflow := flow.RegisterFlow("TestMultipleConcurrentStep")
 	process := workflow.Process("TestMultipleConcurrentStep")
 	for i := 0; i < 62; i++ {
-		process.NameStep(GenerateNoDelayStep(i), strconv.Itoa(i))
+		process.CustomStep(GenerateNoDelayStep(i), strconv.Itoa(i))
 	}
 	workflow.AfterFlow(false, CheckResult(t, 62, flow.Success))
 	flow.DoneFlow("TestMultipleConcurrentStep", nil)
@@ -119,9 +119,9 @@ func TestMultipleConcurrentDependStep(t *testing.T) {
 		for j := 0; j < 3; j++ {
 			key := strconv.Itoa(i) + "a" + strconv.Itoa(j)
 			if len(prev) == 0 {
-				process.NameStep(GenerateNoDelayStep(i*1000+j), key)
+				process.CustomStep(GenerateNoDelayStep(i*1000+j), key)
 			} else {
-				process.NameStep(GenerateNoDelayStep(i*1000+j), key, prev)
+				process.CustomStep(GenerateNoDelayStep(i*1000+j), key, prev)
 			}
 			prev = key
 		}
@@ -135,7 +135,7 @@ func TestConcurrentSameFlow(t *testing.T) {
 	workflow := flow.RegisterFlow("TestConcurrentSameFlow")
 	process := workflow.Process("TestConcurrentSameFlow")
 	for i := 0; i < 62; i++ {
-		process.NameStep(GenerateNoDelayStep(i), strconv.Itoa(i))
+		process.CustomStep(GenerateNoDelayStep(i), strconv.Itoa(i))
 	}
 	flows := make([]flow.FlowController, 0, 1000)
 	for i := 0; i < 1000; i++ {

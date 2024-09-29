@@ -17,6 +17,7 @@ var resourceLock = new(sync.RWMutex)
 
 type Resource interface {
 	nameI
+	statusI
 	ProcessName() string
 	ProcessID() string
 	Entity() any
@@ -27,6 +28,7 @@ type Resource interface {
 }
 
 type boundProc interface {
+	statusI
 	nameI
 	identifierI
 	sync.Locker

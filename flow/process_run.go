@@ -363,7 +363,7 @@ func (process *runProcess) runStep(step *runStep) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Errorf("[Step: %s ] execute panic;\nID=%s;\nPanic=%v\n%s\n", step.name, step.id, r, stack())
+			logger.Errorf("[Step: %s] execute panic;\nID=%s;\nPanic=%v\n%s\n", step.name, step.id, r, stack())
 			step.append(Panic)
 			step.composeError(execStage, fmt.Errorf("execute panic: %v", r))
 		}
@@ -450,14 +450,14 @@ func (process *runProcess) Attach(resName string, initParam any) (_ Resource, er
 		return nil, err
 	}
 	res.entity = instance
-	// DCL
-	if foo, find := process.Acquire(resName); find {
-		return foo, nil
-	}
 	process.Lock()
 	defer process.Unlock()
 	if process.resources == nil {
 		process.resources = make(map[string]*resource, 1)
+	}
+	// DCL
+	if ret, find := process.resources[resName]; find {
+		return ret, nil
 	}
 	process.resources[resName] = res
 	return res, nil

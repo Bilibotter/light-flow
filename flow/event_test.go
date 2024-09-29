@@ -398,7 +398,7 @@ func TestEventHandlerDiscardPanic(t *testing.T) {
 		MaxHandler(1).Capacity(1)
 	wf := RegisterFlow("TestEventHandlerDiscardPanic")
 	proc := wf.Process("TestEventHandlerDiscardPanic")
-	proc.NameStep(func(ctx Step) (any, error) {
+	proc.CustomStep(func(ctx Step) (any, error) {
 		atomic.AddInt64(&current, 1)
 		return nil, nil
 	}, "1")
@@ -428,7 +428,7 @@ func TestEventHandlerPanic(t *testing.T) {
 	}).MaxHandler(1).Capacity(1)
 	wf := RegisterFlow("TestEventHandlerPanic")
 	proc := wf.Process("TestEventHandlerPanic")
-	proc.NameStep(func(ctx Step) (any, error) {
+	proc.CustomStep(func(ctx Step) (any, error) {
 		atomic.AddInt64(&current, 1)
 		return nil, nil
 	}, "1")
