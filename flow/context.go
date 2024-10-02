@@ -244,7 +244,7 @@ type outcome struct {
 type nodeRouter struct {
 	toName   map[uint64]string // index to name
 	toIndex  map[string]uint64 // name to toIndex
-	restrict map[string]uint64 // specify the  key to index
+	restrict map[string]string // specify the  key to index
 	index    uint64
 	nodePath uint64
 }
@@ -562,9 +562,12 @@ func (n *node) search(path uint64) (any, bool) {
 	return n.Next.search(path)
 }
 
-func (router *nodeRouter) specify(key string) (index uint64, exist bool) {
-	index, exist = router.restrict[key]
-	return
+func (router *nodeRouter) specify(key string) (uint64, bool) {
+	if name, exist := router.restrict[key]; !exist {
+		return 0, false
+	} else {
+		return router.toIndex[name], true
+	}
 }
 
 func (router *nodeRouter) visible() uint64 {

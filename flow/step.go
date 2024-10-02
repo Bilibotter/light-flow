@@ -29,7 +29,6 @@ type StepMeta struct {
 	position *state              // used to record the position of the step
 	depends  sliceSet[*StepMeta] // prev
 	waiters  sliceSet[*StepMeta] // next
-	restrict map[string]uint64   // used to limit the Context to get certain keys only in the specified step
 	run      func(ctx Step) (any, error)
 }
 
@@ -69,14 +68,14 @@ func (meta *StepMeta) Same(run func(ctx Step) (any, error), name string) *StepMe
 
 func (meta *StepMeta) Restrict(restrict map[string]any) {
 	if meta.restrict == nil {
-		meta.restrict = make(map[string]uint64, len(restrict))
+		meta.restrict = make(map[string]string, len(restrict))
 	}
 	for key, stepName := range restrict {
 		step, exist := meta.belong.steps[toStepName(stepName)]
 		if !exist {
 			panic(fmt.Sprintf("[Step: %s] can't matchByHighest ", stepName))
 		}
-		meta.restrict[key] = step.index
+		meta.restrict[key] = step.name
 	}
 	meta.checkRestrict()
 }
@@ -111,12 +110,11 @@ func (meta *StepMeta) wireDepends() {
 // checkRestrict checks if the restrict key corresponds to an existing step.
 // If not it will panic.
 func (meta *StepMeta) checkRestrict() {
-	for _, index := range meta.restrict {
-		stepName := meta.toName[index]
-		if meta.backSearch(stepName) {
+	for _, name := range meta.restrict {
+		if meta.backSearch(name) {
 			continue
 		}
-		panic(fmt.Sprintf("[Step: %s] can't be back tracking by the current step", stepName))
+		panic(fmt.Sprintf("[Step: %s] can't be back tracking by the current step", name))
 	}
 }
 

@@ -241,7 +241,7 @@ func (rf *runFlow) buildRunProcess(meta *ProcessMeta) *runProcess {
 		running:     sync.WaitGroup{},
 	}
 
-	for _, stepMeta := range meta.sortedSteps() {
+	for _, stepMeta := range meta.steps {
 		step := process.buildRunStep(stepMeta)
 		process.runSteps[stepMeta.name] = step
 	}

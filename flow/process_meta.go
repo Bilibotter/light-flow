@@ -152,6 +152,7 @@ func (pm *ProcessMeta) Merge(name string) {
 			depends = append(depends, depend.name)
 		}
 		step := pm.CustomStep(merged.run, merged.name, depends...)
+		step.restrict = merged.restrict
 		step.condition = merged.condition
 		step.position.append(mergedE)
 		if merged.stepCfgInit {

@@ -1,8 +1,10 @@
 package test
 
 import (
+	"errors"
 	"github.com/Bilibotter/light-flow/flow"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -394,4 +396,65 @@ func TestParallelMerge(t *testing.T) {
 	resetCurrent()
 	ff := flow.DoneFlow("TestParallelMerge1", nil)
 	CheckResult(t, 4, flow.Success)(any(ff).(flow.WorkFlow))
+}
+
+func TestRestrictMerge(t *testing.T) {
+	defer resetCurrent()
+	process := flow.FlowWithProcess("TestRestrictMerge1")
+	process.CustomStep(func(ctx flow.Step) (any, error) {
+		ctx.Set("name", "1")
+		atomic.AddInt64(&current, 1)
+		return nil, nil
+	}, "1")
+	process.CustomStep(func(ctx flow.Step) (any, error) {
+		ctx.Set("name", "2")
+		atomic.AddInt64(&current, 1)
+		return nil, nil
+	}, "2", "1")
+	process.CustomStep(func(ctx flow.Step) (any, error) {
+		if wrap, exist := ctx.Get("name"); exist {
+			if wrap.(string) != "1" {
+				return nil, errors.New("restrict unmatched")
+			}
+			atomic.AddInt64(&current, 1)
+			return nil, nil
+		}
+		return nil, errors.New("key not exist")
+	}, "3", "2").Restrict(map[string]any{"name": "1"})
+
+	process = flow.FlowWithProcess("TestRestrictMerge2")
+	process.Merge("TestRestrictMerge1")
+	process.CustomStep(func(ctx flow.Step) (any, error) {
+		if wrap, exist := ctx.Get("name"); exist {
+			if wrap.(string) != "1" {
+				return nil, errors.New("restrict unmatched")
+			}
+			atomic.AddInt64(&current, 1)
+			return nil, nil
+		}
+		return nil, errors.New("key not exist")
+	}, "3")
+	process.AfterStep(false, ErrorResultPrinter)
+	ff := flow.DoneFlow("TestRestrictMerge1", nil)
+	CheckResult(t, 3, flow.Success)(any(ff).(flow.WorkFlow))
+	resetCurrent()
+	ff = flow.DoneFlow("TestRestrictMerge2", nil)
+	CheckResult(t, 3, flow.Success)(any(ff).(flow.WorkFlow))
+
+	resetCurrent()
+	process = flow.FlowWithProcess("TestRestrictMerge3")
+	process.Merge("TestRestrictMerge1")
+	process.CustomStep(func(ctx flow.Step) (any, error) {
+		if wrap, exist := ctx.Get("name"); exist {
+			if wrap.(string) != "2" {
+				return nil, errors.New("restrict unmatched")
+			}
+			atomic.AddInt64(&current, 1)
+			return nil, nil
+		}
+		return nil, errors.New("key not exist")
+	}, "3").Restrict(map[string]any{"name": "2"})
+
+	ff = flow.DoneFlow("TestRestrictMerge3", nil)
+	CheckResult(t, 3, flow.Success)(any(ff).(flow.WorkFlow))
 }
