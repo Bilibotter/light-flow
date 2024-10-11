@@ -1,5 +1,17 @@
 package flow
 
+/*
+ *
+ *   Copyright (c) 2024 Bilibotter
+ *
+ *   This software is licensed under the MIT License.
+ *   For more details, see the LICENSE file or visit:
+ *   https://opensource.org/licenses/MIT
+ *
+ *   Project: https://github.com/Bilibotter/light-flow
+ *
+ */
+
 import (
 	"fmt"
 	"strconv"
