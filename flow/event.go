@@ -290,6 +290,7 @@ func (el *handlerLifecycle) tryUnattached() bool {
 		return false
 	}
 	timer := time.NewTimer(waitEventTimeout)
+	defer timer.Stop()
 	select {
 	case event := <-el.eventBus:
 		handlerRegistry.handle(event)

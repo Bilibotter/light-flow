@@ -215,6 +215,7 @@ func (process *runProcess) startStep(step *runStep) {
 	}
 
 	timer := time.NewTimer(timeout)
+	defer timer.Stop()
 	defer step.finalize()
 	step.start = time.Now().UTC()
 	stepPersist.onInsert(step)
@@ -252,6 +253,7 @@ func (process *runProcess) waitFinish() {
 	}
 
 	timer := time.NewTimer(timeout)
+	defer timer.Stop()
 	finish := make(chan bool, 1)
 	go func() {
 		process.running.Wait()
